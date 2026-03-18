@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
-import { matchesSparkboxAdvertisement } from './src/bleDiscovery';
+import { buildScanCandidate, matchesSparkboxAdvertisement, type ScanCandidate } from './src/bleDiscovery';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -291,6 +291,7 @@ function App() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
   const [nearbyDevices, setNearbyDevices] = useState<NearbyDevice[]>([]);
+  const [scanCandidates, setScanCandidates] = useState<ScanCandidate[]>([]);
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
   const [bleStatus, setBleStatus] = useState<ProvisionStatus | null>(null);
   const [bleError, setBleError] = useState('');
@@ -386,6 +387,7 @@ function App() {
     setPairingToken('');
     setClaimError('');
     setNearbyDevices([]);
+    setScanCandidates([]);
     setConnectedDevice(null);
     setBleStatus(null);
     setBleError('');
@@ -441,6 +443,7 @@ function App() {
     setScanBusy(true);
     setBleError('');
     setNearbyDevices([]);
+    setScanCandidates([]);
     setConnectedDevice(null);
     const allowed = await requestBlePermissions();
     if (!allowed) {
@@ -452,6 +455,7 @@ function App() {
     try {
       await waitForBluetoothReady(bleManager);
       const found = new Map<string, NearbyDevice>();
+      const seenCandidates = new Map<string, ScanCandidate>();
       bleManager.startDeviceScan(null, null, (error, device) => {
         if (error) {
           setBleError(error.message);
@@ -462,6 +466,9 @@ function App() {
         if (!device) {
           return;
         }
+        const candidate = buildScanCandidate(device);
+        seenCandidates.set(candidate.id, candidate);
+        setScanCandidates(Array.from(seenCandidates.values()).slice(0, 12));
         if (!matchesSparkboxAdvertisement(device)) {
           return;
         }
@@ -474,7 +481,7 @@ function App() {
       });
       await sleep(8000);
       if (found.size === 0) {
-        setBleError('No nearby Sparkbox was found. Keep your phone close, turn on location services, and try Scan nearby Sparkbox again.');
+        setBleError('No nearby Sparkbox was found. Keep your phone close, turn on location services, and check the scan details below before trying again.');
       }
     } catch (error) {
       setBleError(error instanceof Error ? error.message : 'Bluetooth is unavailable.');
@@ -767,6 +774,25 @@ function App() {
                 <Text style={styles.linkText}>Connect</Text>
               </Pressable>
             ))}
+            {scanCandidates.length ? (
+              <View style={styles.debugCard}>
+                <Text style={styles.debugTitle}>Bluetooth scan details</Text>
+                <Text style={styles.debugCopy}>
+                  This shows what your phone actually sees nearby. If Sparkbox does not appear here, the issue is below the app layer.
+                </Text>
+                {scanCandidates.map((candidate) => (
+                  <View key={candidate.id} style={styles.debugRow}>
+                    <View style={styles.networkLeft}>
+                      <Text style={styles.networkName}>{candidate.label}</Text>
+                      <Text style={styles.networkMeta}>{candidate.id}</Text>
+                    </View>
+                    <Text style={candidate.matched ? styles.tag : styles.tagMuted}>
+                      {candidate.matched ? 'Sparkbox match' : 'Other device'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <Pressable style={styles.secondaryButton} onPress={() => void scanNearbySparkboxes()} disabled={scanBusy}>
               <Text style={styles.secondaryButtonText}>Scan again</Text>
             </Pressable>
@@ -1157,6 +1183,33 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#0b6e4f',
     fontWeight: '800',
+  },
+  debugCard: {
+    backgroundColor: '#f3f7f4',
+    borderRadius: 18,
+    padding: 14,
+    gap: 10,
+  },
+  debugTitle: {
+    color: '#17352a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  debugCopy: {
+    color: '#5a6b62',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  debugRow: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#fff',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   successBox: {
     backgroundColor: '#e7f5ee',

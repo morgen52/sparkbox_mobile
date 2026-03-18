@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchesSparkboxAdvertisement } from './bleDiscovery';
+import { buildScanCandidate, matchesSparkboxAdvertisement } from './bleDiscovery';
 
 describe('matchesSparkboxAdvertisement', () => {
   it('accepts Jetson advertisements that only expose the Sparkbox local name', () => {
@@ -31,5 +31,21 @@ describe('matchesSparkboxAdvertisement', () => {
         serviceUUIDs: ['180f'],
       }),
     ).toBe(false);
+  });
+
+  it('builds a visible scan candidate for unrelated devices so the debug panel can show what the phone actually sees', () => {
+    expect(
+      buildScanCandidate({
+        id: 'dev-1',
+        localName: 'HUAWEI FreeBuds',
+        name: null,
+        serviceUUIDs: ['180f'],
+      }),
+    ).toEqual({
+      id: 'dev-1',
+      label: 'HUAWEI FreeBuds',
+      matched: false,
+      reason: 'other-device',
+    });
   });
 });

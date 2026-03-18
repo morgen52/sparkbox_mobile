@@ -30,6 +30,27 @@ npx expo start
 
 BLE requires a development build. `Expo Go` is not enough because `react-native-ble-plx` uses native modules.
 
+## Fast debug mode
+
+Use this as the default iteration loop after the first install:
+
+```bash
+npm run dev
+```
+
+Workflow:
+
+- install a `development` build on the phone once
+- keep using `expo start --dev-client` for most UI, copy, flow, and BLE scan logic changes
+- rely on hot reload / manual reload instead of shipping a new APK for every tweak
+
+Only create a new APK when one of these changes happens:
+
+- new native dependency
+- Bluetooth / camera permission changes
+- `app.json` native configuration changes
+- a stable milestone needs to be published through `familyapp`
+
 Build profiles live in `eas.json`:
 
 - `development`: internal development client
