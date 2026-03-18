@@ -30,6 +30,12 @@ npx expo start
 
 BLE requires a development build. `Expo Go` is not enough because `react-native-ble-plx` uses native modules.
 
+Build profiles live in `eas.json`:
+
+- `development`: internal development client
+- `preview`: internal test build
+- `production`: store-ready release profile
+
 ## Key configuration
 
 `app.json` includes:
