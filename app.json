@@ -1,20 +1,32 @@
 {
   "expo": {
-    "name": "sparkbox_mobile",
-    "slug": "sparkbox_mobile",
+    "name": "Sparkbox",
+    "slug": "sparkbox-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "sparkbox",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "site.morgen.sparkbox.mobile",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Sparkbox uses Bluetooth to find your nearby device and send Wi-Fi settings during setup."
+      }
     },
     "android": {
+      "package": "site.morgen.sparkbox.mobile",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,6 +37,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Sparkbox uses your camera to scan the QR code printed on the device label."
+        }
+      ],
+      "react-native-ble-plx"
+    ],
+    "extra": {
+      "cloudApiBase": "https://morgen52.site/familyserver"
     }
   }
 }
