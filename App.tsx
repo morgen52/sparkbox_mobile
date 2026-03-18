@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
+import { matchesSparkboxAdvertisement } from './src/bleDiscovery';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -451,7 +452,7 @@ function App() {
     try {
       await waitForBluetoothReady(bleManager);
       const found = new Map<string, NearbyDevice>();
-      bleManager.startDeviceScan([SERVICE_UUID], null, (error, device) => {
+      bleManager.startDeviceScan(null, null, (error, device) => {
         if (error) {
           setBleError(error.message);
           bleManager.stopDeviceScan();
@@ -461,10 +462,10 @@ function App() {
         if (!device) {
           return;
         }
-        const name = device.localName || device.name || '';
-        if (!name && !device.serviceUUIDs?.includes(SERVICE_UUID)) {
+        if (!matchesSparkboxAdvertisement(device)) {
           return;
         }
+        const name = device.localName || device.name || '';
         found.set(device.id, {
           id: device.id,
           name: name || 'Nearby Sparkbox',
@@ -472,6 +473,9 @@ function App() {
         setNearbyDevices(Array.from(found.values()));
       });
       await sleep(8000);
+      if (found.size === 0) {
+        setBleError('No nearby Sparkbox was found. Keep your phone close, turn on location services, and try Scan nearby Sparkbox again.');
+      }
     } catch (error) {
       setBleError(error instanceof Error ? error.message : 'Bluetooth is unavailable.');
     } finally {
