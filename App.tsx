@@ -25,6 +25,7 @@ import {
   shouldProbeSparkboxAdvertisement,
   type ScanCandidate,
 } from './src/bleDiscovery';
+import { getNearbyDeviceButtonState } from './src/nearbyDeviceUi';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -301,6 +302,7 @@ function App() {
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
   const [bleStatus, setBleStatus] = useState<ProvisionStatus | null>(null);
   const [bleError, setBleError] = useState('');
+  const [connectingDeviceId, setConnectingDeviceId] = useState<string | null>(null);
 
   const [networks, setNetworks] = useState<BleNetwork[]>([]);
   const [selectedSsid, setSelectedSsid] = useState('');
@@ -395,6 +397,7 @@ function App() {
     setNearbyDevices([]);
     setScanCandidates([]);
     setConnectedDevice(null);
+    setConnectingDeviceId(null);
     setBleStatus(null);
     setBleError('');
     setNetworks([]);
@@ -508,6 +511,7 @@ function App() {
       setNearbyDevices(Array.from(found.values()));
       if (found.size === 0) {
         setBleError('No nearby Sparkbox was found. Keep your phone close, turn on location services, and check the scan details below before trying again.');
+        setProvisionMessage('No nearby Sparkbox was found yet. Keep your phone close and try again.');
       }
     } catch (error) {
       setBleError(error instanceof Error ? error.message : 'Bluetooth is unavailable.');
@@ -544,8 +548,20 @@ function App() {
   }
 
   async function connectToSparkbox(deviceId: string): Promise<void> {
+    if (connectingDeviceId) {
+      return;
+    }
     setBleError('');
+    bleManager.stopDeviceScan();
+    setScanBusy(false);
+    setConnectingDeviceId(deviceId);
     setNetworksBusy(true);
+    const selectedDevice = nearbyDevices.find((device) => device.id === deviceId);
+    setProvisionMessage(
+      selectedDevice?.probe
+        ? 'Checking this nearby Bluetooth device for Sparkbox setup...'
+        : `Connecting to ${selectedDevice?.name || 'Sparkbox'} over Bluetooth...`,
+    );
     try {
       const nextDevice = await bleManager.connectToDevice(deviceId, { timeout: 15000 });
       await nextDevice.discoverAllServicesAndCharacteristics();
@@ -560,9 +576,15 @@ function App() {
       setNetworks(networkPayload?.networks ?? []);
       setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
     } catch (error) {
-      setBleError(error instanceof Error ? error.message : 'Could not connect to Sparkbox over Bluetooth.');
+      const message = error instanceof Error ? error.message : 'Could not connect to Sparkbox over Bluetooth.';
+      setBleError(
+        /cancel/i.test(message)
+          ? 'Bluetooth setup was interrupted before Sparkbox finished opening. Try Connect once more after the device list settles.'
+          : message,
+      );
     } finally {
       setNetworksBusy(false);
+      setConnectingDeviceId(null);
     }
   }
 
@@ -813,19 +835,24 @@ function App() {
               </View>
             ) : null}
             {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
-            {nearbyDevices.map((device) => (
-              <Pressable
-                key={device.id}
-                style={styles.networkRow}
-                onPress={() => void connectToSparkbox(device.id)}
-              >
-                <View>
-                  <Text style={styles.networkName}>{device.name}</Text>
-                  <Text style={styles.networkMeta}>{device.id}</Text>
-                </View>
-                <Text style={styles.linkText}>{device.probe ? 'Probe' : 'Connect'}</Text>
-              </Pressable>
-            ))}
+            {nearbyDevices.map((device) => {
+              const buttonState = getNearbyDeviceButtonState(device, connectingDeviceId);
+              return (
+                <Pressable
+                  key={device.id}
+                  style={[styles.networkRow, buttonState.disabled ? styles.networkRowDisabled : null]}
+                  onPress={() => void connectToSparkbox(device.id)}
+                  disabled={buttonState.disabled}
+                >
+                  <View>
+                    <Text style={styles.networkName}>{device.name}</Text>
+                    <Text style={styles.networkMeta}>{device.id}</Text>
+                    {buttonState.status ? <Text style={styles.networkMeta}>{buttonState.status}</Text> : null}
+                  </View>
+                  <Text style={styles.linkText}>{buttonState.label}</Text>
+                </Pressable>
+              );
+            })}
             {scanCandidates.length ? (
               <View style={styles.debugCard}>
                 <Text style={styles.debugTitle}>Bluetooth scan details</Text>
@@ -849,7 +876,7 @@ function App() {
                 ))}
               </View>
             ) : null}
-            <Pressable style={styles.secondaryButton} onPress={() => void scanNearbySparkboxes()} disabled={scanBusy}>
+            <Pressable style={styles.secondaryButton} onPress={() => void scanNearbySparkboxes()} disabled={scanBusy || !!connectingDeviceId}>
               <Text style={styles.secondaryButtonText}>Scan again</Text>
             </Pressable>
           </View>
@@ -1155,6 +1182,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  networkRowDisabled: {
+    opacity: 0.55,
   },
   networkLeft: {
     flex: 1,
