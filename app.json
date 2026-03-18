@@ -25,7 +25,10 @@
         "android.permission.CAMERA",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -48,7 +51,11 @@
       "react-native-ble-plx"
     ],
     "extra": {
-      "cloudApiBase": "https://morgen52.site/familyserver"
-    }
+      "cloudApiBase": "https://morgen52.site/familyserver",
+      "eas": {
+        "projectId": "aeabd579-045e-45bd-9ccd-fd00cdfc1369"
+      }
+    },
+    "owner": "morgen52"
   }
 }
