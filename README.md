@@ -57,11 +57,40 @@ Build profiles live in `eas.json`:
 - `preview`: internal test build
 - `production`: store-ready release profile
 
+## OTA preview updates
+
+This repo now uses Expo OTA updates for the `preview` lane:
+
+- preview and development builds are pinned to the `preview` channel
+- production builds are pinned to the `production` channel
+- `runtimeVersion.policy=appVersion` keeps JS-only updates compatible with the installed native shell
+
+Typical workflow:
+
+```bash
+npm run build:preview
+npm run update:preview -- --message "Describe the JS-only fix"
+```
+
+Use `build:preview` when the native shell changes, for example after:
+
+- adding a native dependency such as `expo-updates`
+- changing Bluetooth, camera, or location permissions
+- changing `app.json` native config
+
+Use `update:preview` for JS-only fixes such as:
+
+- UI and copy changes
+- BLE scan filtering logic
+- onboarding flow and retry logic
+- diagnostics screens
+
 ## Key configuration
 
 `app.json` includes:
 
 - `extra.cloudApiBase`
+- `runtimeVersion` and `updates.url` for Expo OTA delivery
 - Bluetooth permissions for iOS and Android
 - camera permission text for QR scanning
 
