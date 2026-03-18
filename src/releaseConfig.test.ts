@@ -26,5 +26,6 @@ describe('release config', () => {
   it('exposes scripts for OTA publishing and preview builds', () => {
     expect(packageJson.scripts['build:preview']).toBe('npx eas-cli build --profile preview');
     expect(packageJson.scripts['update:preview']).toBe('npx eas-cli update --channel preview');
+    expect(packageJson.scripts['build:android:local']).toBe('./scripts/build-android-local.sh');
   });
 });

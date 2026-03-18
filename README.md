@@ -85,6 +85,30 @@ Use `update:preview` for JS-only fixes such as:
 - onboarding flow and retry logic
 - diagnostics screens
 
+## Local Android builds
+
+Use this when Expo cloud queues are too slow and you only need an installable Android test APK from this Mac:
+
+```bash
+npm run build:android:local
+```
+
+What it does:
+
+- uses Homebrew `openjdk@17`
+- uses Android command-line tools under `/opt/homebrew/share/android-commandlinetools`
+- ensures the required Android 36 SDK pieces are installed
+- forwards `http_proxy` / `https_proxy` into Java proxy flags when this Mac is behind a local proxy
+- runs `expo prebuild --platform android` if the local `android/` folder does not exist
+- builds `android/app/build/outputs/apk/debug/app-debug.apk`
+
+Current local prerequisites on this Mac:
+
+- `brew install openjdk@17`
+- `brew install --cask android-commandlinetools android-platform-tools`
+
+The generated `android/` folder is already ignored by git in this repo.
+
 ## Key configuration
 
 `app.json` includes:

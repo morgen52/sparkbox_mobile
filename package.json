@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "build:android:local": "./scripts/build-android-local.sh",
     "build:preview": "npx eas-cli build --profile preview",
     "update:preview": "npx eas-cli update --channel preview"
   },
