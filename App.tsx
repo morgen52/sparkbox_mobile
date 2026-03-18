@@ -19,7 +19,12 @@ import {
 } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
-import { buildScanCandidate, matchesSparkboxAdvertisement, type ScanCandidate } from './src/bleDiscovery';
+import {
+  buildScanCandidate,
+  matchesSparkboxAdvertisement,
+  shouldProbeSparkboxAdvertisement,
+  type ScanCandidate,
+} from './src/bleDiscovery';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -85,6 +90,7 @@ type HouseholdDevice = {
 type NearbyDevice = {
   id: string;
   name: string;
+  probe?: boolean;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -455,6 +461,7 @@ function App() {
     try {
       await waitForBluetoothReady(bleManager);
       const found = new Map<string, NearbyDevice>();
+      const probeCandidates = new Map<string, NearbyDevice>();
       const seenCandidates = new Map<string, ScanCandidate>();
       bleManager.startDeviceScan(null, null, (error, device) => {
         if (error) {
@@ -470,6 +477,13 @@ function App() {
         seenCandidates.set(candidate.id, candidate);
         setScanCandidates(Array.from(seenCandidates.values()).slice(0, 12));
         if (!matchesSparkboxAdvertisement(device)) {
+          if (shouldProbeSparkboxAdvertisement(device)) {
+            probeCandidates.set(device.id, {
+              id: device.id,
+              name: candidate.label,
+              probe: true,
+            });
+          }
           return;
         }
         const name = device.localName || device.name || '';
@@ -480,6 +494,18 @@ function App() {
         setNearbyDevices(Array.from(found.values()));
       });
       await sleep(8000);
+      bleManager.stopDeviceScan();
+      if (found.size === 0 && probeCandidates.size > 0) {
+        setProvisionMessage('Sparkbox did not advertise a readable name. Probing nearby unnamed Bluetooth devices now...');
+        for (const candidate of Array.from(probeCandidates.values()).slice(0, 6)) {
+          const match = await probeNearbySparkbox(candidate.id);
+          if (match) {
+            found.set(match.id, match);
+            break;
+          }
+        }
+      }
+      setNearbyDevices(Array.from(found.values()));
       if (found.size === 0) {
         setBleError('No nearby Sparkbox was found. Keep your phone close, turn on location services, and check the scan details below before trying again.');
       }
@@ -488,6 +514,32 @@ function App() {
     } finally {
       bleManager.stopDeviceScan();
       setScanBusy(false);
+    }
+  }
+
+  async function probeNearbySparkbox(deviceId: string): Promise<NearbyDevice | null> {
+    let device: Device | null = null;
+    try {
+      device = await bleManager.connectToDevice(deviceId, { timeout: 8000 });
+      await device.discoverAllServicesAndCharacteristics();
+      const info = await readJsonCharacteristic<{ device_id?: string; local_name?: string }>(device, INFO_CHAR_UUID);
+      if (!info?.device_id) {
+        return null;
+      }
+      if (claimPayload && info.device_id !== claimPayload.deviceId) {
+        return null;
+      }
+      return {
+        id: device.id,
+        name: info.local_name || `Sparkbox ${info.device_id.slice(-4).toUpperCase()}`,
+        probe: true,
+      };
+    } catch {
+      return null;
+    } finally {
+      if (device) {
+        await device.cancelConnection().catch(() => undefined);
+      }
     }
   }
 
@@ -771,7 +823,7 @@ function App() {
                   <Text style={styles.networkName}>{device.name}</Text>
                   <Text style={styles.networkMeta}>{device.id}</Text>
                 </View>
-                <Text style={styles.linkText}>Connect</Text>
+                <Text style={styles.linkText}>{device.probe ? 'Probe' : 'Connect'}</Text>
               </Pressable>
             ))}
             {scanCandidates.length ? (
@@ -787,7 +839,11 @@ function App() {
                       <Text style={styles.networkMeta}>{candidate.id}</Text>
                     </View>
                     <Text style={candidate.matched ? styles.tag : styles.tagMuted}>
-                      {candidate.matched ? 'Sparkbox match' : 'Other device'}
+                      {candidate.matched
+                        ? 'Sparkbox match'
+                        : candidate.reason === 'probe-candidate'
+                          ? 'Probe candidate'
+                          : 'Other device'}
                     </Text>
                   </View>
                 ))}

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildScanCandidate, matchesSparkboxAdvertisement } from './bleDiscovery';
+import {
+  buildScanCandidate,
+  matchesSparkboxAdvertisement,
+  shouldProbeSparkboxAdvertisement,
+} from './bleDiscovery';
 
 describe('matchesSparkboxAdvertisement', () => {
   it('accepts Jetson advertisements that only expose the Sparkbox local name', () => {
@@ -47,5 +51,40 @@ describe('matchesSparkboxAdvertisement', () => {
       matched: false,
       reason: 'other-device',
     });
+  });
+
+  it('marks unnamed nearby bluetooth devices as probe candidates when Sparkbox naming is missing', () => {
+    expect(
+      shouldProbeSparkboxAdvertisement({
+        id: 'dev-2',
+        localName: null,
+        name: null,
+        serviceUUIDs: null,
+      }),
+    ).toBe(true);
+    expect(
+      buildScanCandidate({
+        id: 'dev-2',
+        localName: null,
+        name: null,
+        serviceUUIDs: null,
+      }),
+    ).toEqual({
+      id: 'dev-2',
+      label: 'Unnamed Bluetooth device',
+      matched: false,
+      reason: 'probe-candidate',
+    });
+  });
+
+  it('does not probe named unrelated devices', () => {
+    expect(
+      shouldProbeSparkboxAdvertisement({
+        id: 'dev-3',
+        localName: 'HUAWEI FreeBuds',
+        name: null,
+        serviceUUIDs: ['180f'],
+      }),
+    ).toBe(false);
   });
 });
