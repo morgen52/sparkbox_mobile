@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
+import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -35,23 +36,6 @@ const INFO_CHAR_UUID = '7f92f5d8-5d55-4f0d-93fa-1ac4b7811c11';
 const STATUS_CHAR_UUID = '7f92f5d8-5d55-4f0d-93fa-1ac4b7811c12';
 const NETWORKS_CHAR_UUID = '7f92f5d8-5d55-4f0d-93fa-1ac4b7811c13';
 const COMMAND_CHAR_UUID = '7f92f5d8-5d55-4f0d-93fa-1ac4b7811c14';
-
-type AuthMode = 'login' | 'register';
-
-type Session = {
-  token: string;
-  user: {
-    id: string;
-    email: string;
-    display_name: string;
-    role: string;
-    household_id: string;
-  };
-  household: {
-    id: string;
-    name: string;
-  };
-};
 
 type ClaimPayload = {
   deviceId: string;
@@ -354,15 +338,22 @@ function App() {
     setAuthBusy(true);
     setAuthError('');
     try {
-      const path = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
-      const payload =
-        authMode === 'login'
-          ? { email, password }
-          : { email, password, display_name: displayName };
-      const nextSession = await apiJson<Session>(path, {
-        method: 'POST',
-        body: payload,
-      });
+      const nextSession = await authenticateWithCloud(
+        {
+          login: (payload) =>
+            apiJson<Session>('/api/auth/login', {
+              method: 'POST',
+              body: payload,
+            }),
+          register: (payload) =>
+            apiJson('/api/auth/register', {
+              method: 'POST',
+              body: payload,
+            }),
+        },
+        authMode,
+        { email, password, displayName },
+      );
       setSession(nextSession);
       await persistSession(nextSession);
     } catch (error) {
