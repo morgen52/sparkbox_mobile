@@ -32,14 +32,14 @@ export function getNearbyDeviceButtonState(
   if (device.probe) {
     return {
       disabled: true,
-      label: 'Probing…',
+      label: 'Checking…',
       status: 'Checking whether this nearby Bluetooth device is your Sparkbox…',
     };
   }
 
   return {
     disabled: true,
-    label: 'Connecting…',
+    label: 'Opening…',
     status: 'Opening Sparkbox over Bluetooth…',
   };
 }

@@ -25,6 +25,7 @@ import {
   shouldProbeSparkboxAdvertisement,
   type ScanCandidate,
 } from './src/bleDiscovery';
+import { connectWithRetry, formatBleConnectError } from './src/bleConnect';
 import { getNearbyDeviceButtonState } from './src/nearbyDeviceUi';
 
 
@@ -556,6 +557,7 @@ function App() {
     setScanBusy(false);
     setConnectingDeviceId(deviceId);
     setNetworksBusy(true);
+    setConnectedDevice(null);
     const selectedDevice = nearbyDevices.find((device) => device.id === deviceId);
     setProvisionMessage(
       selectedDevice?.probe
@@ -563,8 +565,19 @@ function App() {
         : `Connecting to ${selectedDevice?.name || 'Sparkbox'} over Bluetooth...`,
     );
     try {
-      const nextDevice = await bleManager.connectToDevice(deviceId, { timeout: 15000 });
-      await nextDevice.discoverAllServicesAndCharacteristics();
+      if (connectedDevice && connectedDevice.id !== deviceId) {
+        await connectedDevice.cancelConnection().catch(() => undefined);
+      }
+      const nextDevice = await connectWithRetry(
+        async () => {
+          await bleManager.cancelDeviceConnection(deviceId).catch(() => undefined);
+          await sleep(250);
+          const openedDevice = await bleManager.connectToDevice(deviceId, { timeout: 15000 });
+          await openedDevice.discoverAllServicesAndCharacteristics();
+          return openedDevice;
+        },
+        { maxAttempts: 2, delayMs: 700 },
+      );
       setConnectedDevice(nextDevice);
       const info = await readJsonCharacteristic<{ device_id?: string }>(nextDevice, INFO_CHAR_UUID);
       const status = await readJsonCharacteristic<ProvisionStatus>(nextDevice, STATUS_CHAR_UUID);
@@ -576,12 +589,7 @@ function App() {
       setNetworks(networkPayload?.networks ?? []);
       setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not connect to Sparkbox over Bluetooth.';
-      setBleError(
-        /cancel/i.test(message)
-          ? 'Bluetooth setup was interrupted before Sparkbox finished opening. Try Connect once more after the device list settles.'
-          : message,
-      );
+      setBleError(formatBleConnectError(error));
     } finally {
       setNetworksBusy(false);
       setConnectingDeviceId(null);
@@ -849,7 +857,11 @@ function App() {
                     <Text style={styles.networkMeta}>{device.id}</Text>
                     {buttonState.status ? <Text style={styles.networkMeta}>{buttonState.status}</Text> : null}
                   </View>
-                  <Text style={styles.linkText}>{buttonState.label}</Text>
+                  <View style={[styles.rowAction, buttonState.disabled ? styles.rowActionDisabled : null]}>
+                    <Text style={[styles.linkText, buttonState.disabled ? styles.linkTextDisabled : null]}>
+                      {buttonState.label}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -1189,6 +1201,7 @@ const styles = StyleSheet.create({
   networkLeft: {
     flex: 1,
     gap: 4,
+    minWidth: 0,
   },
   networkName: {
     color: '#17352a',
@@ -1269,6 +1282,26 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#0b6e4f',
     fontWeight: '800',
+    fontSize: 13,
+  },
+  linkTextDisabled: {
+    color: '#6d7d74',
+  },
+  rowAction: {
+    flexShrink: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#e8f5ee',
+    borderWidth: 1,
+    borderColor: '#c4ded1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 88,
+  },
+  rowActionDisabled: {
+    backgroundColor: '#edf1ef',
+    borderColor: '#d6dfd9',
   },
   debugCard: {
     backgroundColor: '#f3f7f4',
