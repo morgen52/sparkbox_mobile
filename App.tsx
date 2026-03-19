@@ -647,32 +647,46 @@ function App() {
   }
 
   async function waitForActivation(deviceId: string, device: Device): Promise<boolean> {
-    const deadline = Date.now() + 45000;
+    // 90 s gives enough headroom for: nmcli connect (≤30 s) + single-radio adapter
+    // settling (≤15 s) + BLE re-advertisement (≤15 s) + cloud pairing (≤10 s).
+    const deadline = Date.now() + 90000;
     while (Date.now() < deadline) {
+      // Read BLE status in its own try-catch so a transient BLE read failure
+      // (common during the WiFi adapter mode transition) does not swallow an
+      // intentional error thrown for wifi_failed_retryable.
+      let bleStatus: ProvisionStatus | null = null;
       try {
-        const status = await readJsonCharacteristic<ProvisionStatus>(device, STATUS_CHAR_UUID);
-        if (status) {
-          setBleStatus(status);
-          if (status.status === 'bound_online') {
-            return true;
-          }
-          if (status.status === 'wifi_failed_retryable' || status.status === 'binding_failed_retryable') {
-            throw new Error(
-              status.pairing?.last_error ||
-                status.last_command?.message ||
-                'Sparkbox could not finish setup.',
-            );
-          }
-        }
+        bleStatus = await readJsonCharacteristic<ProvisionStatus>(device, STATUS_CHAR_UUID);
       } catch {
-        // Sparkbox may briefly drop BLE while switching Wi-Fi. Fall through to cloud verification.
+        // BLE may be briefly unreachable while the Sparkbox WiFi adapter transitions
+        // from AP mode to station mode on single-radio Realtek/Intel combo hardware.
+      }
+
+      if (bleStatus) {
+        setBleStatus(bleStatus);
+        if (bleStatus.status === 'bound_online') {
+          return true;
+        }
+        // Surface provisioning failures immediately so the user can retry with
+        // different credentials.  These are NOT BLE read errors and must not be caught.
+        if (bleStatus.status === 'wifi_failed_retryable' || bleStatus.status === 'binding_failed_retryable') {
+          throw new Error(
+            bleStatus.pairing?.last_error ||
+              bleStatus.last_command?.message ||
+              'Sparkbox could not finish setup.',
+          );
+        }
       }
 
       if (session?.token) {
-        const devices = await apiJson<HouseholdDevice[]>('/api/devices', { token: session.token });
-        const matched = devices.find((item) => item.device_id === deviceId);
-        if (matched?.online) {
-          return true;
+        try {
+          const devices = await apiJson<HouseholdDevice[]>('/api/devices', { token: session.token });
+          const matched = devices.find((item) => item.device_id === deviceId);
+          if (matched?.online) {
+            return true;
+          }
+        } catch {
+          // Cloud poll may fail while the device is switching networks; keep waiting.
         }
       }
       await sleep(2500);
