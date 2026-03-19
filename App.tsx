@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -68,6 +69,7 @@ type ProvisionStatus = {
     ssid?: string;
     connection_name?: string;
     network_apply_mode?: string;
+    portal_url?: string | null;
   };
   pairing?: {
     device_id?: string;
@@ -314,6 +316,7 @@ function App() {
 
   const [provisionBusy, setProvisionBusy] = useState(false);
   const [provisionMessage, setProvisionMessage] = useState('Scan the QR code to attach Sparkbox, then bring your phone nearby.');
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [completedDeviceId, setCompletedDeviceId] = useState('');
 
   useEffect(() => {
@@ -408,6 +411,7 @@ function App() {
     setManualEntry(false);
     setProvisionBusy(false);
     setProvisionMessage('Scan the QR code to attach Sparkbox, then bring your phone nearby.');
+    setPortalUrl(null);
     setCompletedDeviceId('');
   }
 
@@ -604,7 +608,17 @@ function App() {
     setBleError('');
     try {
       await writeJsonCharacteristic(connectedDevice, { type: 'scan_networks' });
-      const networkPayload = await readJsonCharacteristic<{ networks?: BleNetwork[] }>(connectedDevice, NETWORKS_CHAR_UUID);
+      // The device dispatches the scan to a background thread and immediately returns a
+      // {"scan_mode":"scanning"} placeholder while the scan runs.  Poll until we get
+      // real results (scan_mode !== "scanning") or give up after ~7.5 s.
+      let networkPayload: { networks?: BleNetwork[]; scan_mode?: string } | null = null;
+      for (let attempt = 0; attempt < 15; attempt += 1) {
+        networkPayload = await readJsonCharacteristic<{ networks?: BleNetwork[]; scan_mode?: string }>(connectedDevice, NETWORKS_CHAR_UUID);
+        if (networkPayload?.scan_mode !== 'scanning') {
+          break;
+        }
+        await sleep(500);
+      }
       const status = await readJsonCharacteristic<ProvisionStatus>(connectedDevice, STATUS_CHAR_UUID);
       setNetworks(networkPayload?.networks ?? []);
       setBleStatus(status);
@@ -649,7 +663,8 @@ function App() {
   async function waitForActivation(deviceId: string, device: Device): Promise<boolean> {
     // 90 s gives enough headroom for: nmcli connect (≤30 s) + single-radio adapter
     // settling (≤15 s) + BLE re-advertisement (≤15 s) + cloud pairing (≤10 s).
-    const deadline = Date.now() + 90000;
+    let deadline = Date.now() + 90000;
+    let portalDeadlineExtended = false;
     while (Date.now() < deadline) {
       // Read BLE status in its own try-catch so a transient BLE read failure
       // (common during the WiFi adapter mode transition) does not swallow an
@@ -664,8 +679,31 @@ function App() {
 
       if (bleStatus) {
         setBleStatus(bleStatus);
+        if (bleStatus.status !== 'wifi_portal_required') {
+          // Clear portal UI the moment we move past the portal state.
+          setPortalUrl(null);
+        }
         if (bleStatus.status === 'bound_online') {
           return true;
+        }
+        if (bleStatus.status === 'wifi_portal_required') {
+          const url = bleStatus.wifi?.portal_url ?? null;
+          setPortalUrl(url);
+          setProvisionMessage(
+            url
+              ? 'This Wi-Fi requires a browser sign-in. Open the link below, authenticate, then tap "Done authenticating".'
+              : 'This Wi-Fi requires a browser sign-in. Once you\'ve authenticated, tap "Done authenticating".',
+          );
+          // Extend the deadline once to give the user time to complete portal auth
+          // (may take several minutes on slow captive portal pages).
+          if (!portalDeadlineExtended) {
+            deadline = Date.now() + 300000; // 5 minutes from first portal detection
+            portalDeadlineExtended = true;
+          }
+          // Keep polling — when the user taps "Done" we'll send check_connectivity
+          // and the status will advance to pairing_pending.
+          await sleep(2500);
+          continue;
         }
         // Surface provisioning failures immediately so the user can retry with
         // different credentials.  These are NOT BLE read errors and must not be caught.
@@ -692,6 +730,24 @@ function App() {
       await sleep(2500);
     }
     return false;
+  }
+
+  async function checkConnectivity(): Promise<void> {
+    if (!connectedDevice) {
+      return;
+    }
+    try {
+      await writeJsonCharacteristic(connectedDevice, { type: 'check_connectivity' });
+      const status = await readJsonCharacteristic<ProvisionStatus>(connectedDevice, STATUS_CHAR_UUID);
+      if (status) {
+        setBleStatus(status);
+        if (status.status !== 'wifi_portal_required') {
+          setPortalUrl(null);
+        }
+      }
+    } catch (error) {
+      setBleError(error instanceof Error ? error.message : 'Could not check connectivity.');
+    }
   }
 
   function chooseNetwork(network: BleNetwork): void {
@@ -995,7 +1051,23 @@ function App() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>4. Activation</Text>
             <Text style={styles.cardCopy}>{provisionMessage}</Text>
-            {provisionBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+            {provisionBusy && !portalUrl ? <ActivityIndicator color="#0b6e4f" /> : null}
+            {portalUrl ? (
+              <View style={styles.portalBox}>
+                <Pressable
+                  style={styles.primaryButton}
+                  onPress={() => void Linking.openURL(portalUrl)}
+                >
+                  <Text style={styles.primaryButtonText}>Open sign-in page</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() => void checkConnectivity()}
+                >
+                  <Text style={styles.secondaryButtonText}>Done authenticating</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {completedDeviceId ? (
               <View style={styles.successBox}>
                 <Text style={styles.successTitle}>Sparkbox is ready</Text>
@@ -1349,6 +1421,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     gap: 8,
+  },
+  portalBox: {
+    backgroundColor: '#fff8e6',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#f0d98a',
+    padding: 16,
+    gap: 10,
   },
   successTitle: {
     color: '#0b6e4f',
