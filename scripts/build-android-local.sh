@@ -6,6 +6,7 @@ ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/opt/homebrew/share/android-commandlinetoo
 ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
 JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
+BUILD_VARIANT="${1:-release}"
 export ANDROID_SDK_ROOT ANDROID_HOME JAVA_HOME PATH
 
 proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
@@ -51,8 +52,24 @@ if [[ ! -d android ]]; then
 fi
 
 cd android
-./gradlew --no-daemon --console=plain assembleDebug
+
+case "$BUILD_VARIANT" in
+  release)
+    GRADLE_TASK="assembleRelease"
+    APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+    ;;
+  debug)
+    GRADLE_TASK="assembleDebug"
+    APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    ;;
+  *)
+    echo "Unsupported build variant: $BUILD_VARIANT (expected: release or debug)" >&2
+    exit 1
+    ;;
+esac
+
+./gradlew --no-daemon --console=plain "$GRADLE_TASK"
 
 echo
 echo "APK built at:"
-echo "$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+echo "$APK_PATH"
