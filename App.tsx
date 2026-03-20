@@ -5092,6 +5092,13 @@ function App() {
                 <Text style={styles.successCopy}>
                   {completedDeviceId} is online in {householdName}. You can now go back to the household app and chat normally.
                 </Text>
+                {canReturnToShell ? (
+                  <View style={styles.inlineActions}>
+                    <Pressable style={styles.primaryButtonSmall} onPress={returnToShell}>
+                      <Text style={styles.primaryButtonText}>Back to household</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
