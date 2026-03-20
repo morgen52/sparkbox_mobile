@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  captureSpaceSummaryFromSession,
   clearChatSessionMessages,
   clearHouseholdChat,
   controlDeviceService,
   createHouseholdSpace,
+  createSpaceMemory,
   createHouseholdInvitation,
   createHouseholdChatSession,
+  deleteSpaceMemory,
+  deleteSpaceSummary,
   deleteHouseholdChatSession,
   enableSpaceFamilyApp,
   getFamilyAppCatalog,
@@ -18,6 +22,7 @@ import {
   getDeviceProviderConfig,
   getDeviceProviders,
   getHouseholdChat,
+  getSpaceLibrary,
   getHouseholdChatSession,
   getHouseholdChatSessions,
   getHouseholdSpaceDetail,
@@ -35,6 +40,7 @@ import {
   streamHouseholdChatSessionMessage,
   startDeviceReprovision,
   sendHouseholdChat,
+  updateSpaceMemory,
   updateHouseholdChatSession,
   updateDeviceProviderConfig,
   updateHouseholdMemberRole,
@@ -371,6 +377,151 @@ describe('space and family app API', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'https://morgen52.site/familyserver/api/spaces/space-parents',
       expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('loads library memories and summaries, then mutates them', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          memories: [
+            {
+              id: 'memory-1',
+              title: 'Dad prefers early dinners',
+              content: 'Try to arrange dinner before 6:30 pm.',
+              pinned: true,
+              created_at: '2026-03-20T10:00:00Z',
+              updated_at: '2026-03-20T10:00:00Z',
+            },
+          ],
+          summaries: [
+            {
+              id: 'summary-1',
+              title: 'Weekend plan',
+              content: 'You agreed to visit parents on Sunday afternoon.',
+              source_label: '近况与问候',
+              created_at: '2026-03-20T10:10:00Z',
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'memory-2',
+          title: 'Medicine drawer',
+          content: 'Cold medicine is in the second drawer.',
+          pinned: false,
+          created_at: '2026-03-20T10:20:00Z',
+          updated_at: '2026-03-20T10:20:00Z',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'memory-2',
+          title: 'Medicine drawer',
+          content: 'Cold medicine is in the second drawer, left side.',
+          pinned: true,
+          created_at: '2026-03-20T10:20:00Z',
+          updated_at: '2026-03-20T10:25:00Z',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'summary-2',
+          title: 'Parents check-in',
+          content: 'You asked about scheduling dinner next week.',
+          source_label: '想和爸妈说的话',
+          created_at: '2026-03-20T10:30:00Z',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response);
+
+    global.fetch = fetchMock;
+
+    const library = await getSpaceLibrary('token-1', 'space-parents');
+    const createdMemory = await createSpaceMemory('token-1', 'space-parents', {
+      title: 'Medicine drawer',
+      content: 'Cold medicine is in the second drawer.',
+    });
+    const updatedMemory = await updateSpaceMemory('token-1', 'space-parents', 'memory-2', {
+      content: 'Cold medicine is in the second drawer, left side.',
+      pinned: true,
+    });
+    const removedMemory = await deleteSpaceMemory('token-1', 'space-parents', 'memory-2');
+    const capturedSummary = await captureSpaceSummaryFromSession('token-1', 'space-parents', {
+      chatSessionId: 'chat-thread-1',
+      title: 'Parents check-in',
+    });
+    const removedSummary = await deleteSpaceSummary('token-1', 'space-parents', 'summary-2');
+
+    expect(library.memories[0]?.pinned).toBe(true);
+    expect(library.summaries[0]?.sourceLabel).toBe('近况与问候');
+    expect(createdMemory.id).toBe('memory-2');
+    expect(updatedMemory.pinned).toBe(true);
+    expect(removedMemory).toEqual({ ok: true });
+    expect(capturedSummary.id).toBe('summary-2');
+    expect(removedSummary).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/library',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/memories',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Medicine drawer',
+          content: 'Cold medicine is in the second drawer.',
+          pinned: false,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/memories/memory-2',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: undefined,
+          content: 'Cold medicine is in the second drawer, left side.',
+          pinned: true,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/memories/memory-2',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/summaries/from-session',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          source_id: 'chat-thread-1',
+          title: 'Parents check-in',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/summaries/summary-2',
+      expect.objectContaining({ method: 'DELETE' }),
     );
   });
 });

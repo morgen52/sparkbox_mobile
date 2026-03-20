@@ -41,11 +41,15 @@ import {
   clearChatSessionMessages,
   controlDeviceService,
   buildHouseholdFileDownloadUrl,
+  captureSpaceSummaryFromSession,
   createHouseholdDirectory,
   createHouseholdChatSession,
   createHouseholdTask,
   createHouseholdInvitation,
+  createSpaceMemory,
   deleteHouseholdChatSession,
+  deleteSpaceMemory,
+  deleteSpaceSummary,
   deleteHouseholdPath,
   deleteHouseholdTask,
   getDeviceConfigStatus,
@@ -56,6 +60,7 @@ import {
   getDeviceProviderConfig,
   getDeviceProviders,
   getHouseholdFiles,
+  getSpaceLibrary,
   getHouseholdSpaceDetail,
   getInstalledFamilyApps,
   getHouseholdSpaces,
@@ -77,11 +82,15 @@ import {
   removeHouseholdMember,
   revokeHouseholdInvitation,
   startDeviceReprovision,
+  type SpaceLibrary,
+  type SpaceMemory,
+  type SpaceSummary,
   type ChatSessionScope,
   type HouseholdChatSessionDetail,
   type HouseholdChatSessionSummary,
   streamHouseholdChatSessionMessage,
   triggerHouseholdTask,
+  updateSpaceMemory,
   updateDeviceProviderConfig,
   updateHouseholdChatSession,
   updateHouseholdMemberRole,
@@ -371,7 +380,7 @@ function App() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatSendPhase, setChatSendPhase] = useState<ChatSendPhase>('idle');
   const [chatPendingMessage, setChatPendingMessage] = useState<ChatTimelineMessage | null>(null);
-  const [, setChatPendingNoteIndex] = useState(0);
+  const [chatPendingNoteIndex, setChatPendingNoteIndex] = useState(0);
   const [chatError, setChatError] = useState('');
   const [chatDraft, setChatDraft] = useState('');
   const [chatSessionEditorOpen, setChatSessionEditorOpen] = useState(false);
@@ -381,6 +390,15 @@ function App() {
   const [chatSessionTemperature, setChatSessionTemperature] = useState('0.7');
   const [chatSessionMaxTokens, setChatSessionMaxTokens] = useState('2048');
   const [fileSpace, setFileSpace] = useState<HouseholdFileSpace>('family');
+  const [spaceLibrary, setSpaceLibrary] = useState<SpaceLibrary>({ memories: [], summaries: [] });
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryError, setLibraryError] = useState('');
+  const [libraryNotice, setLibraryNotice] = useState('');
+  const [memoryEditorOpen, setMemoryEditorOpen] = useState(false);
+  const [editingMemory, setEditingMemory] = useState<SpaceMemory | null>(null);
+  const [memoryTitle, setMemoryTitle] = useState('');
+  const [memoryContent, setMemoryContent] = useState('');
+  const [memoryPinned, setMemoryPinned] = useState(false);
   const [fileListing, setFileListing] = useState<HouseholdFileListing | null>(null);
   const [filesBusy, setFilesBusy] = useState(false);
   const [filesError, setFilesError] = useState('');
@@ -582,6 +600,7 @@ function App() {
   const activeChatTimelineMessages: ChatTimelineMessage[] = chatPendingMessage
     ? [...activeChatMessages, chatPendingMessage]
     : activeChatMessages;
+  const chatPendingIndicator = '.'.repeat((chatPendingNoteIndex % 3) + 1);
   const canManageActiveChat =
     !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
@@ -682,6 +701,162 @@ function App() {
     };
   }
 
+  function openMemoryEditor(memory?: SpaceMemory): void {
+    setEditingMemory(memory ?? null);
+    setMemoryTitle(memory?.title ?? '');
+    setMemoryContent(memory?.content ?? '');
+    setMemoryPinned(memory?.pinned ?? false);
+    setLibraryError('');
+    setMemoryEditorOpen(true);
+  }
+
+  function saveSummaryAsMemory(summary: SpaceSummary): void {
+    setEditingMemory(null);
+    setMemoryTitle(summary.title);
+    setMemoryContent(summary.content);
+    setMemoryPinned(false);
+    setLibraryError('');
+    setMemoryEditorOpen(true);
+  }
+
+  function closeMemoryEditor(): void {
+    setMemoryEditorOpen(false);
+    setEditingMemory(null);
+    setMemoryTitle('');
+    setMemoryContent('');
+    setMemoryPinned(false);
+  }
+
+  async function refreshLibrary(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      const nextLibrary = await getSpaceLibrary(session.token, activeSpaceId);
+      setSpaceLibrary(nextLibrary);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not load this space library.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function submitMemoryEditor(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const title = memoryTitle.trim();
+    const content = memoryContent.trim();
+    if (!title || !content) {
+      setLibraryError('Memory title and content are required.');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      if (editingMemory) {
+        await updateSpaceMemory(session.token, activeSpaceId, editingMemory.id, {
+          title,
+          content,
+          pinned: memoryPinned,
+        });
+        setLibraryNotice(`Updated ${title}.`);
+      } else {
+        await createSpaceMemory(session.token, activeSpaceId, {
+          title,
+          content,
+          pinned: memoryPinned,
+        });
+        setLibraryNotice(`Saved ${title} to Memories.`);
+      }
+      closeMemoryEditor();
+      await refreshLibrary();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not save this memory.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function removeMemory(memory: SpaceMemory): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      await deleteSpaceMemory(session.token, activeSpaceId, memory.id);
+      setLibraryNotice(`Deleted ${memory.title}.`);
+      await refreshLibrary();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not delete this memory.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function captureActiveSpaceSummary(): Promise<void> {
+    if (!session?.token || !activeSpaceId || !activeChatSessionId || !activeChatSession) {
+      setLibraryError('Pick an active topic chat before capturing a summary.');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      await captureSpaceSummaryFromSession(session.token, activeSpaceId, {
+        chatSessionId: activeChatSessionId,
+        title: `${activeChatSession.name} snapshot`,
+      });
+      setLibraryNotice(`Captured a summary from ${activeChatSession.name}.`);
+      await refreshLibrary();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not capture a summary right now.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function removeSpaceSummary(summaryId: string, title: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      await deleteSpaceSummary(session.token, activeSpaceId, summaryId);
+      setLibraryNotice(`Removed ${title}.`);
+      await refreshLibrary();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not remove this summary.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  function confirmRemoveMemory(memory: SpaceMemory): void {
+    Alert.alert(
+      'Delete this memory?',
+      `${memory.title} will stop shaping Sparkbox responses in this space.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void removeMemory(memory) },
+      ],
+    );
+  }
+
+  function confirmRemoveSummary(summary: SpaceSummary): void {
+    Alert.alert(
+      'Delete this summary?',
+      `${summary.title} will be removed from this space library.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void removeSpaceSummary(summary.id, summary.title) },
+      ],
+    );
+  }
+
   async function refreshHouseholdSummary(options: { silent?: boolean } = {}): Promise<void> {
     if (!session?.token) {
       return;
@@ -776,6 +951,9 @@ function App() {
       setChatSessions([]);
       setActiveChatSessionId('');
       setActiveChatSession(null);
+      setSpaceLibrary({ memories: [], summaries: [] });
+      setLibraryError('');
+      setLibraryNotice('');
       setFileListing(null);
       setFilesError('');
       setFilesNotice('');
@@ -862,6 +1040,12 @@ function App() {
     setRelayMessage('');
     setRelayError('');
     setRelayNotice('');
+    setMemoryEditorOpen(false);
+    setEditingMemory(null);
+    setMemoryTitle('');
+    setMemoryContent('');
+    setMemoryPinned(false);
+    setLibraryNotice('');
   }, [activeSpaceId]);
 
   useEffect(() => {
@@ -960,6 +1144,38 @@ function App() {
     }, 2400);
     return () => clearInterval(interval);
   }, [chatPendingMessage?.pending, chatSendPhase]);
+
+  useEffect(() => {
+    if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token || !activeSpaceId) {
+      setSpaceLibrary({ memories: [], summaries: [] });
+      setLibraryBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setLibraryBusy(true);
+    setLibraryError('');
+    void (async () => {
+      try {
+        const nextLibrary = await getSpaceLibrary(session.token, activeSpaceId);
+        if (cancelled) {
+          return;
+        }
+        setSpaceLibrary(nextLibrary);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setLibraryError(error instanceof Error ? error.message : 'Could not load this space library.');
+      } finally {
+        if (!cancelled) {
+          setLibraryBusy(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSpaceId, session?.token, shellSurface, shellTab]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
@@ -1263,6 +1479,15 @@ function App() {
     setChatSessionSystemPrompt('');
     setChatSessionTemperature('0.7');
     setChatSessionMaxTokens('2048');
+    setSpaceLibrary({ memories: [], summaries: [] });
+    setLibraryBusy(false);
+    setLibraryError('');
+    setLibraryNotice('');
+    setMemoryEditorOpen(false);
+    setEditingMemory(null);
+    setMemoryTitle('');
+    setMemoryContent('');
+    setMemoryPinned(false);
     setTasks([]);
     setTasksBusy(false);
     setTasksError('');
@@ -1801,7 +2026,7 @@ function App() {
               current?.pending
                 ? {
                     ...current,
-                    content: current.content || event.message,
+                    content: event.message,
                   }
                 : current,
             );
@@ -2692,6 +2917,13 @@ function App() {
                         >
                           {message.content}
                         </Text>
+                        {message.pending ? (
+                          <Text style={styles.cardCopy}>
+                            {chatSendPhase === 'streaming'
+                              ? `Sparkbox is replying${chatPendingIndicator}`
+                              : `Sparkbox is preparing${chatPendingIndicator}`}
+                          </Text>
+                        ) : null}
                       </View>
                     ))
                   )}
@@ -2734,6 +2966,9 @@ function App() {
                       ? `${activeSpace.name} (${activeSpaceKindLabel}) keeps its memories, summaries, photos, files, and tasks together.`
                       : 'Pick a space to browse its accumulated Sparkbox context.'}
                   </Text>
+                  {libraryNotice ? <Text style={styles.noticeText}>{libraryNotice}</Text> : null}
+                  {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
+                  {libraryBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                   <View style={styles.libraryGrid}>
                     {libraryOverviewSections.map((section) => (
                       <View key={section.title} style={styles.librarySectionCard}>
@@ -2745,6 +2980,117 @@ function App() {
                   <Text style={styles.cardCopy}>
                     Some sections still map to legacy storage and scheduler data, but they now live in one space library.
                   </Text>
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Memories in this space</Text>
+                  <Text style={styles.cardCopy}>
+                    Memories are the current long-term facts Sparkbox should keep for {activeSpace?.name || 'this space'}.
+                  </Text>
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
+                      onPress={() => void refreshLibrary()}
+                      disabled={!activeSpace || libraryBusy}
+                    >
+                      <Text style={styles.secondaryButtonText}>Refresh</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
+                      onPress={() => openMemoryEditor()}
+                      disabled={!activeSpace || libraryBusy}
+                    >
+                      <Text style={styles.primaryButtonText}>New memory</Text>
+                    </Pressable>
+                  </View>
+                  {spaceLibrary.memories.length === 0 && !libraryBusy ? (
+                    <Text style={styles.cardCopy}>Nothing has been saved to Memories yet.</Text>
+                  ) : null}
+                  {spaceLibrary.memories.map((memory) => (
+                    <View key={memory.id} style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{memory.title}</Text>
+                        <Text style={memory.pinned ? styles.statusTagOnline : styles.tagMuted}>
+                          {memory.pinned ? 'pinned' : 'memory'}
+                        </Text>
+                      </View>
+                      <Text style={styles.cardCopy}>{memory.content}</Text>
+                      <Text style={styles.cardCopy}>Updated {memory.updatedAt}</Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => openMemoryEditor(memory)}
+                          disabled={libraryBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Edit</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => confirmRemoveMemory(memory)}
+                          disabled={libraryBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Delete</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Summaries in this space</Text>
+                  <Text style={styles.cardCopy}>
+                    Summaries are read-only snapshots Sparkbox can generate from a topic so other family members can catch up quickly.
+                  </Text>
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
+                      onPress={() => void refreshLibrary()}
+                      disabled={!activeSpace || libraryBusy}
+                    >
+                      <Text style={styles.secondaryButtonText}>Refresh</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
+                      onPress={() => void captureActiveSpaceSummary()}
+                      disabled={!activeChatSessionId || libraryBusy}
+                    >
+                      <Text style={styles.primaryButtonText}>Capture active topic</Text>
+                    </Pressable>
+                  </View>
+                  {activeChatSession ? (
+                    <Text style={styles.cardCopy}>Current topic: {activeChatSession.name}</Text>
+                  ) : (
+                    <Text style={styles.cardCopy}>Pick a topic in Chats first if you want Sparkbox to snapshot that conversation.</Text>
+                  )}
+                  {spaceLibrary.summaries.length === 0 && !libraryBusy ? (
+                    <Text style={styles.cardCopy}>No summaries yet.</Text>
+                  ) : null}
+                  {spaceLibrary.summaries.map((summary) => (
+                    <View key={summary.id} style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{summary.title}</Text>
+                        <Text style={styles.tagMuted}>{summary.sourceLabel || 'summary'}</Text>
+                      </View>
+                      <Text style={styles.cardCopy}>{summary.content}</Text>
+                      <Text style={styles.cardCopy}>Created {summary.createdAt}</Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => saveSummaryAsMemory(summary)}
+                          disabled={libraryBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Save as memory</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => confirmRemoveSummary(summary)}
+                          disabled={libraryBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Delete</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
                 </View>
 
                 <View style={styles.card}>
@@ -3584,6 +3930,67 @@ function App() {
                     disabled={chatBusy}
                   >
                     {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingChatSession ? 'Save chat' : 'Create chat'}</Text>}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            animationType="slide"
+            transparent
+            visible={memoryEditorOpen}
+            onRequestClose={closeMemoryEditor}
+          >
+            <View style={styles.scannerOverlay}>
+              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
+                <Text style={styles.selectionLabel}>{editingMemory ? 'Edit memory' : 'New memory'}</Text>
+                <Text style={styles.selectionTitle}>
+                  {editingMemory ? 'Update what Sparkbox should remember' : 'Save a new memory for this space'}
+                </Text>
+                <Text style={styles.selectionCopy}>
+                  Memories are the long-term facts Sparkbox should treat as current for this space.
+                </Text>
+                <TextInput
+                  placeholder="Memory title"
+                  placeholderTextColor="#7e8a83"
+                  style={styles.input}
+                  value={memoryTitle}
+                  onChangeText={setMemoryTitle}
+                />
+                <TextInput
+                  placeholder="What should Sparkbox remember?"
+                  placeholderTextColor="#7e8a83"
+                  style={[styles.input, styles.textArea]}
+                  value={memoryContent}
+                  onChangeText={setMemoryContent}
+                  multiline
+                />
+                <View style={styles.inlineActions}>
+                  <Pressable
+                    style={[styles.secondaryButtonSmall, memoryPinned ? styles.scopePillActive : null]}
+                    onPress={() => setMemoryPinned((current) => !current)}
+                  >
+                    <Text style={[styles.secondaryButtonText, memoryPinned ? styles.scopePillLabelActive : null]}>
+                      {memoryPinned ? 'Pinned' : 'Pin memory'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
+                <View style={styles.inlineActions}>
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={closeMemoryEditor}
+                    disabled={libraryBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.primaryButtonSmall}
+                    onPress={() => void submitMemoryEditor()}
+                    disabled={libraryBusy}
+                  >
+                    {libraryBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingMemory ? 'Save memory' : 'Create memory'}</Text>}
                   </Pressable>
                 </View>
               </View>

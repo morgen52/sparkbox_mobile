@@ -94,6 +94,28 @@ export type HouseholdSpaceDetail = HouseholdSpaceSummary & {
   privateSideChannel?: HouseholdSpaceSideChannel | null;
 };
 
+export type SpaceMemory = {
+  id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SpaceSummary = {
+  id: string;
+  title: string;
+  content: string;
+  sourceLabel?: string | null;
+  createdAt: string;
+};
+
+export type SpaceLibrary = {
+  memories: SpaceMemory[];
+  summaries: SpaceSummary[];
+};
+
 export type HouseholdSpaceCreateInput = {
   name: string;
   template: Exclude<SpaceTemplate, 'private' | 'household'>;
@@ -116,6 +138,23 @@ export type FamilyAppInstallation = {
 export type SpaceFamilyAppEnableInput = {
   cadence?: string;
   entryCard?: boolean;
+};
+
+export type SpaceMemoryCreateInput = {
+  title: string;
+  content: string;
+  pinned?: boolean;
+};
+
+export type SpaceMemoryUpdateInput = {
+  title?: string;
+  content?: string;
+  pinned?: boolean;
+};
+
+export type SpaceSummaryCaptureInput = {
+  chatSessionId: string;
+  title?: string;
 };
 
 export type HouseholdSummary = {
@@ -433,6 +472,112 @@ export async function getHouseholdSpaceDetail(
     token,
   });
   return normalizeSpaceDetail(response);
+}
+
+export async function getSpaceLibrary(
+  token: string,
+  spaceId: string,
+): Promise<SpaceLibrary> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/library`,
+    { token },
+  );
+  return {
+    memories: Array.isArray(response.memories)
+      ? response.memories.map((memory) => normalizeSpaceMemory(memory as Record<string, unknown>))
+      : [],
+    summaries: Array.isArray(response.summaries)
+      ? response.summaries.map((summary) => normalizeSpaceLibrarySummary(summary as Record<string, unknown>))
+      : [],
+  };
+}
+
+export async function createSpaceMemory(
+  token: string,
+  spaceId: string,
+  input: SpaceMemoryCreateInput,
+): Promise<SpaceMemory> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/memories`,
+    {
+      method: 'POST',
+      token,
+      body: {
+        title: input.title,
+        content: input.content,
+        pinned: input.pinned ?? false,
+      },
+    },
+  );
+  return normalizeSpaceMemory(response);
+}
+
+export async function updateSpaceMemory(
+  token: string,
+  spaceId: string,
+  memoryId: string,
+  input: SpaceMemoryUpdateInput,
+): Promise<SpaceMemory> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: 'PATCH',
+      token,
+      body: {
+        title: input.title,
+        content: input.content,
+        pinned: input.pinned,
+      },
+    },
+  );
+  return normalizeSpaceMemory(response);
+}
+
+export async function deleteSpaceMemory(
+  token: string,
+  spaceId: string,
+  memoryId: string,
+): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
+}
+
+export async function captureSpaceSummaryFromSession(
+  token: string,
+  spaceId: string,
+  input: SpaceSummaryCaptureInput,
+): Promise<SpaceSummary> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/summaries/from-session`,
+    {
+      method: 'POST',
+      token,
+      body: {
+        source_id: input.chatSessionId,
+        title: input.title,
+      },
+    },
+  );
+  return normalizeSpaceLibrarySummary(response);
+}
+
+export async function deleteSpaceSummary(
+  token: string,
+  spaceId: string,
+  summaryId: string,
+): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/summaries/${encodeURIComponent(summaryId)}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
 }
 
 export async function openSpaceSideChannel(
@@ -1347,6 +1492,27 @@ function normalizeTask(task: Record<string, unknown>): HouseholdTaskSummary {
     lastRunAt: typeof task.last_run_at === 'string' ? task.last_run_at : null,
     lastStatus: typeof task.last_status === 'string' ? task.last_status : null,
     lastOutput: typeof task.last_output === 'string' ? task.last_output : null,
+  };
+}
+
+function normalizeSpaceMemory(memory: Record<string, unknown>): SpaceMemory {
+  return {
+    id: String(memory.id ?? ''),
+    title: String(memory.title ?? ''),
+    content: String(memory.content ?? ''),
+    pinned: Boolean(memory.pinned),
+    createdAt: String(memory.created_at ?? ''),
+    updatedAt: String(memory.updated_at ?? ''),
+  };
+}
+
+function normalizeSpaceLibrarySummary(summary: Record<string, unknown>): SpaceSummary {
+  return {
+    id: String(summary.id ?? ''),
+    title: String(summary.title ?? ''),
+    content: String(summary.content ?? ''),
+    sourceLabel: typeof summary.source_label === 'string' ? summary.source_label : null,
+    createdAt: String(summary.created_at ?? ''),
   };
 }
 
