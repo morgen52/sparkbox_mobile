@@ -4,9 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/opt/homebrew/share/android-commandlinetools}"
 ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
-PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
+JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home}"
+PATH="${JAVA_HOME%/libexec/openjdk.jdk/Contents/Home}/bin:$PATH"
 BUILD_VARIANT="${1:-release}"
+
+if [[ -f "$ROOT_DIR/.env.signing.local" ]]; then
+  set -a
+  source "$ROOT_DIR/.env.signing.local"
+  set +a
+fi
+
 export ANDROID_SDK_ROOT ANDROID_HOME JAVA_HOME PATH
 
 proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
@@ -57,6 +64,9 @@ case "$BUILD_VARIANT" in
   release)
     GRADLE_TASK="assembleRelease"
     APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/release/app-release.apk"
+    if [[ -z "${SPARKBOX_UPLOAD_STORE_FILE:-}" || -z "${SPARKBOX_UPLOAD_STORE_PASSWORD:-}" || -z "${SPARKBOX_UPLOAD_KEY_ALIAS:-}" || -z "${SPARKBOX_UPLOAD_KEY_PASSWORD:-}" ]]; then
+      echo "warning: release build is falling back to the debug keystore. Export SPARKBOX_UPLOAD_STORE_FILE, SPARKBOX_UPLOAD_STORE_PASSWORD, SPARKBOX_UPLOAD_KEY_ALIAS, and SPARKBOX_UPLOAD_KEY_PASSWORD for a production-signed APK." >&2
+    fi
     ;;
   debug)
     GRADLE_TASK="assembleDebug"

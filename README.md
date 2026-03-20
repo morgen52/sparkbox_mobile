@@ -1,69 +1,83 @@
 # Sparkbox Mobile
 
-Native mobile onboarding client for Sparkbox.
+Unified native client for Sparkbox.
 
-## Scope
+## Product scope
 
-- sign in to the Sparkbox cloud
-- scan the Sparkbox QR label
-- reserve the device with `POST /api/pairing/start`
-- connect to the nearby Sparkbox over BLE
-- send home Wi-Fi credentials plus the fresh pairing token
-- wait for `bound_online` either over BLE status reads or cloud verification
+This app now owns the full user journey in one place:
 
-This repo is the BLE-first replacement for the old hotspot-first onboarding path.
+- sign in, create a household, or join with an invite code
+- first-time QR claim and hotspot onboarding
+- later Wi-Fi reprovisioning from Settings without re-claiming the device
+- everyday use inside the same shell: `Home / Chat / Files / Tasks / Settings`
+- owner and member role management, including multi-owner households
+
+The retired BLE-only onboarding flow is no longer the primary product path. Setup is hotspot-first through `Sparkbox-Setup`, with the same native app handling onboarding and daily use.
 
 ## Stack
 
 - Expo
 - React Native
-- `react-native-ble-plx`
 - `expo-camera`
+- `expo-document-picker`
+- `expo-file-system`
+- `expo-sharing`
 
 ## Local development
 
 ```bash
 npm install
 npm run typecheck
-npx expo start
-```
-
-BLE requires a development build. `Expo Go` is not enough because `react-native-ble-plx` uses native modules.
-
-## Fast debug mode
-
-Use this as the default iteration loop after the first install:
-
-```bash
 npm run dev
 ```
 
-Workflow:
+Use a development build on the phone for normal iteration. Most UI and JS-only onboarding changes can be tested with reloads instead of rebuilding an APK every time.
 
-- install a `development` build on the phone once
-- keep using `expo start --dev-client` for most UI, copy, flow, and BLE scan logic changes
-- rely on hot reload / manual reload instead of shipping a new APK for every tweak
+## Main app surfaces
 
-Only create a new APK when one of these changes happens:
+- `Home`
+  Household summary, device state, members, recent activity
+- `Chat`
+  Family and private chat sessions with per-session settings
+- `Files`
+  Family and private file workspaces with upload, download, rename, and delete
+- `Tasks`
+  Family and private tasks plus run history
+- `Settings`
+  Reprovisioning, diagnostics, reset, provider defaults, onboarding, invites, and member management
 
-- new native dependency
-- Bluetooth / camera permission changes
-- `app.json` native configuration changes
-- a stable milestone needs to be published through `familyapp`
+## Onboarding model
 
-Build profiles live in `eas.json`:
+First-time onboarding:
 
-- `development`: internal development client
-- `preview`: internal test build
-- `production`: store-ready release profile
+1. create/sign in to the cloud account
+2. scan the Sparkbox QR code
+3. claim the device
+4. join `Sparkbox-Setup`
+5. choose home Wi-Fi in the native app
+6. wait for `bound_online`
 
-## OTA preview updates
+Reprovisioning:
 
-This repo now uses Expo OTA updates for the `preview` lane:
+- already claimed devices do not get scanned again
+- owners start this from `Settings -> Devices and Network -> Change Wi-Fi`
+- offline Jetson devices can fall back to `Sparkbox-Setup` automatically on startup if saved Wi-Fi does not recover
 
-- preview and development builds are pinned to the `preview` channel
-- production builds are pinned to the `production` channel
-- `runtimeVersion.policy=appVersion` keeps JS-only updates compatible with the installed native shell
+## Household roles
+
+- the first person who claims and sets up Sparkbox becomes an `owner`
+- households can have multiple `owner`s
+- `owner`s can invite `owner`s or `member`s
+- `owner`s can promote, demote, or remove other members
+- the last remaining `owner` cannot be removed or demoted
+
+## OTA updates
+
+This repo uses Expo OTA updates:
+
+- `development` and `preview` builds use the `preview` channel
+- production builds use the `production` channel
+- `runtimeVersion.policy=appVersion` keeps OTA compatibility tied to the installed native shell
 
 Typical workflow:
 
@@ -72,63 +86,55 @@ npm run build:preview
 npm run update:preview -- --message "Describe the JS-only fix"
 ```
 
-Use `build:preview` when the native shell changes, for example after:
-
-- adding a native dependency such as `expo-updates`
-- changing Bluetooth, camera, or location permissions
-- changing `app.json` native config
-
-Use `update:preview` for JS-only fixes such as:
-
-- UI and copy changes
-- BLE scan filtering logic
-- onboarding flow and retry logic
-- diagnostics screens
-
 ## Local Android builds
 
-Use this when Expo cloud queues are too slow and you only need an installable Android test APK from this Mac:
+Build locally when you want a side-loadable APK from this Mac:
 
 ```bash
 npm run build:android:local
 ```
 
-What it does:
+The helper script:
 
-- uses Homebrew `openjdk@17`
+- uses Homebrew `openjdk@21`
 - uses Android command-line tools under `/opt/homebrew/share/android-commandlinetools`
-- ensures the required Android 36 SDK pieces are installed
-- forwards `http_proxy` / `https_proxy` into Java proxy flags when this Mac is behind a local proxy
-- runs `expo prebuild --platform android` if the local `android/` folder does not exist
-- builds `android/app/build/outputs/apk/debug/app-debug.apk`
+- ensures Android 36 SDK components exist
+- forwards `http_proxy` / `https_proxy` into Java proxy flags when needed
+- builds `android/app/build/outputs/apk/release/app-release.apk` by default
 
-Current local prerequisites on this Mac:
+Debug build:
 
-- `brew install openjdk@17`
-- `brew install --cask android-commandlinetools android-platform-tools`
+```bash
+npm run build:android:local:debug
+```
 
-The generated `android/` folder is already ignored by git in this repo.
+## Android release signing
+
+Release builds support a dedicated keystore. Export these environment variables before building a production-signed APK:
+
+- `SPARKBOX_UPLOAD_STORE_FILE`
+- `SPARKBOX_UPLOAD_STORE_PASSWORD`
+- `SPARKBOX_UPLOAD_KEY_ALIAS`
+- `SPARKBOX_UPLOAD_KEY_PASSWORD`
+
+For this Mac, `./scripts/build-android-local.sh` also auto-loads `./.env.signing.local` when present.
+
+If those are missing, release builds fall back to the debug keystore so side-loading still works for internal testing.
 
 ## Key configuration
 
 `app.json` includes:
 
 - `extra.cloudApiBase`
-- `runtimeVersion` and `updates.url` for Expo OTA delivery
-- Bluetooth permissions for iOS and Android
+- Expo OTA runtime/update configuration
 - camera permission text for QR scanning
+- Android package and deep link scheme
 
-## BLE contract
+## Verification
 
-Service UUID:
+Common local checks:
 
-- `7f92f5d8-5d55-4f0d-93fa-1ac4b7811c10`
-
-Characteristics:
-
-- info: `7f92f5d8-5d55-4f0d-93fa-1ac4b7811c11`
-- status: `7f92f5d8-5d55-4f0d-93fa-1ac4b7811c12`
-- networks: `7f92f5d8-5d55-4f0d-93fa-1ac4b7811c13`
-- command: `7f92f5d8-5d55-4f0d-93fa-1ac4b7811c14`
-
-Payloads are compact UTF-8 JSON encoded as base64 for the BLE library write/read API.
+```bash
+npm run typecheck
+npx vitest run src/authFlow.test.ts src/householdApi.test.ts src/tasksApi.test.ts src/appShell.test.ts src/releaseConfig.test.ts
+```

@@ -1,4 +1,4 @@
-export type AuthMode = 'login' | 'register';
+export type AuthMode = 'login' | 'register' | 'join';
 
 export type Session = {
   token: string;
@@ -32,11 +32,13 @@ type LoginInput = {
 
 type RegisterInput = LoginInput & {
   displayName: string;
+  inviteCode?: string;
 };
 
 type AuthApi = {
   login: (payload: LoginInput) => Promise<Session>;
   register: (payload: { email: string; password: string; display_name: string }) => Promise<RegisterResponse>;
+  join: (payload: { email: string; password: string; display_name: string; invite_code: string }) => Promise<Session>;
 };
 
 export async function authenticateWithCloud(
@@ -44,6 +46,15 @@ export async function authenticateWithCloud(
   mode: AuthMode,
   input: RegisterInput,
 ): Promise<Session> {
+  if (mode === 'join') {
+    return api.join({
+      email: input.email,
+      password: input.password,
+      display_name: input.displayName,
+      invite_code: input.inviteCode ?? '',
+    });
+  }
+
   if (mode === 'register') {
     await api.register({
       email: input.email,
