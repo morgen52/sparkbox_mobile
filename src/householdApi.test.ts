@@ -791,10 +791,11 @@ describe('scoped chat session API', () => {
 
     global.fetch = fetchMock;
 
-    const listed = await getHouseholdChatSessions('token-1', 'family');
+    const listed = await getHouseholdChatSessions('token-1', 'family', { spaceId: 'space-parents' });
     const created = await createHouseholdChatSession('token-1', {
       name: 'Private notes',
       scope: 'private',
+      spaceId: 'space-parents',
       systemPrompt: 'Be concise',
       temperature: 0.4,
       maxTokens: 1024,
@@ -819,7 +820,7 @@ describe('scoped chat session API', () => {
     expect(removed).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://morgen52.site/familyserver/api/chat/sessions?scope=family',
+      'https://morgen52.site/familyserver/api/chat/sessions?scope=family&space_id=space-parents',
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -830,6 +831,7 @@ describe('scoped chat session API', () => {
         body: JSON.stringify({
           name: 'Private notes',
           scope: 'private',
+          space_id: 'space-parents',
           system_prompt: 'Be concise',
           temperature: 0.4,
           max_tokens: 1024,

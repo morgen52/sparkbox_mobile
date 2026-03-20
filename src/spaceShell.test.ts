@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildSpaceScopedFilePath,
+  buildSharedChatParticipantLabels,
+  canManageChatSession,
   describeChatAccess,
   describeChatSendPhase,
   describeSpaceKind,
@@ -69,6 +71,74 @@ describe('chat send state helpers', () => {
     expect(describeChatSendPhase('streaming')).toBe('Sparkbox 正在继续回答');
     expect(describeChatSendPhase('timed_out')).toBe('Sparkbox 这次准备得太久了');
     expect(describeChatSendPhase('failed')).toBe('Sparkbox 这次没有顺利回完');
+  });
+});
+
+describe('chat management permissions', () => {
+  it('allows owners to manage any active chat', () => {
+    expect(
+      canManageChatSession({
+        currentUserRole: 'owner',
+        currentUserId: 'user-owner',
+        sessionOwnerUserId: 'user-other',
+      }),
+    ).toBe(true);
+  });
+
+  it('allows members to manage only chats they own', () => {
+    expect(
+      canManageChatSession({
+        currentUserRole: 'member',
+        currentUserId: 'user-member',
+        sessionOwnerUserId: 'user-member',
+      }),
+    ).toBe(true);
+    expect(
+      canManageChatSession({
+        currentUserRole: 'member',
+        currentUserId: 'user-member',
+        sessionOwnerUserId: 'user-owner',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shared chat participant labels', () => {
+  const sharedSpace = {
+    id: 'space-shared',
+    name: 'qwer\'s Household',
+    kind: 'shared' as const,
+    template: 'parents' as const,
+    memberCount: 2,
+    threadCount: 1,
+    updatedAt: '2026-03-20T10:01:00Z',
+    members: [
+      { id: 'user-owner', displayName: 'qwer', role: 'owner' as const },
+      { id: 'user-member', displayName: 'morgen', role: 'member' as const },
+    ],
+    threads: [],
+    enabledFamilyApps: [],
+    privateSideChannel: null,
+  };
+
+  it('puts the current user first as You for shared chats', () => {
+    expect(buildSharedChatParticipantLabels(sharedSpace, 'user-member')).toEqual(['You', 'qwer']);
+    expect(buildSharedChatParticipantLabels(sharedSpace, 'user-owner')).toEqual(['You', 'morgen']);
+  });
+
+  it('returns no shared participant labels for private or missing spaces', () => {
+    expect(
+      buildSharedChatParticipantLabels(
+        {
+          ...sharedSpace,
+          id: 'space-private',
+          kind: 'private',
+          template: 'private',
+        },
+        'user-owner',
+      ),
+    ).toEqual([]);
+    expect(buildSharedChatParticipantLabels(null, 'user-owner')).toEqual([]);
   });
 });
 

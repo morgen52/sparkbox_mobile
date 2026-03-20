@@ -16,8 +16,8 @@ const androidManifest = readFileSync(
 const readme = readFileSync(join(repoRoot, 'README.md'), 'utf8');
 
 describe('release config', () => {
-  it('pins OTA updates to the Expo project runtime', () => {
-    expect(appConfig.expo.runtimeVersion).toEqual({ policy: 'appVersion' });
+  it('pins OTA updates to an explicit bare-workflow runtime string that matches the app version', () => {
+    expect(appConfig.expo.runtimeVersion).toBe(appConfig.expo.version);
     expect(appConfig.expo.updates.url).toBe(
       'https://u.expo.dev/aeabd579-045e-45bd-9ccd-fd00cdfc1369',
     );
@@ -50,6 +50,13 @@ describe('release config', () => {
   it('documents release signing verification instead of silent debug-signing fallback', () => {
     expect(readme).toContain('SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING=true');
     expect(readme).toContain('./scripts/build-android-local.sh release');
+  });
+
+  it('keeps the native splashscreen dependency required by Expo dev builds', () => {
+    expect(packageJson.dependencies['expo-dev-client']).toBeDefined();
+    expect(packageJson.dependencies['expo-splash-screen']).toBeDefined();
+    expect(appConfig.expo.splash).toBeDefined();
+    expect(androidManifest).toContain('Theme.App.SplashScreen');
   });
 
   it('does not require bluetooth permissions or plugins for the hotspot-first app shell', () => {

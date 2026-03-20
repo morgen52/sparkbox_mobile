@@ -3,9 +3,7 @@
     "name": "Sparkbox",
     "slug": "sparkbox-mobile",
     "version": "1.1.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.1.0",
     "updates": {
       "url": "https://u.expo.dev/aeabd579-045e-45bd-9ccd-fd00cdfc1369"
     },

@@ -118,12 +118,15 @@ import {
   type SpaceTemplate,
 } from './src/householdApi';
 import {
+  canReprovisionDeviceFromSettings,
   canManageHousehold,
   hasOnlineDevice,
   type ShellTab,
 } from './src/householdState';
 import {
   buildSpaceScopedFilePath,
+  buildSharedChatParticipantLabels,
+  canManageChatSession,
   describeChatAccess,
   describeChatSendPhase,
   describeSpaceKind,
@@ -609,6 +612,7 @@ function App() {
 
   const householdName = session?.household.name ?? 'your household';
   const canManage = canManageHousehold(session?.user.role ?? '');
+  const canReprovisionDevice = canReprovisionDeviceFromSettings(session?.user.role ?? '');
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
   const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
@@ -621,9 +625,17 @@ function App() {
     : activeChatMessages;
   const chatPendingIndicator = '.'.repeat((chatPendingNoteIndex % 3) + 1);
   const canManageActiveChat =
-    !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
+    !!activeChatSession &&
+    canManageChatSession({
+      currentUserRole: session?.user.role,
+      currentUserId: session?.user.id,
+      sessionOwnerUserId: activeChatSession.ownerUserId,
+    });
+  const activeSharedChatParticipantLabels = buildSharedChatParticipantLabels(activeSpaceDetail, session?.user.id);
+  const sharedChatIsVisible = Boolean(activeChatSession && activeSpaceDetail?.kind === 'shared');
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
+  const activeChatSpaceId = activeSpaceId || undefined;
   const activeFileSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
   const activeFileLegacyPrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
   const activeTaskSpaceId =
@@ -1160,7 +1172,9 @@ function App() {
     setChatError('');
     void (async () => {
       try {
-        const sessions = await getHouseholdChatSessions(session.token, chatScope);
+        const sessions = await getHouseholdChatSessions(session.token, chatScope, {
+          spaceId: activeChatSpaceId,
+        });
         if (cancelled) {
           return;
         }
@@ -1186,7 +1200,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [chatScope, session?.token, shellSurface, shellTab]);
+  }, [activeChatSpaceId, chatScope, session?.token, shellSurface, shellTab]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token || !activeChatSessionId) {
@@ -2068,7 +2082,9 @@ function App() {
     setChatBusy(true);
     setChatError('');
     try {
-      const sessions = await getHouseholdChatSessions(session.token, chatScope);
+      const sessions = await getHouseholdChatSessions(session.token, chatScope, {
+        spaceId: activeChatSpaceId,
+      });
       setChatSessions(sessions);
       setActiveChatSessionId((current) => {
         if (current && sessions.some((item) => item.id === current)) {
@@ -2104,7 +2120,9 @@ function App() {
       );
       setChatScope('private');
       setActiveChatSessionId(sideChannel.sessionId);
-      const sessions = await getHouseholdChatSessions(session.token, 'private');
+      const sessions = await getHouseholdChatSessions(session.token, 'private', {
+        spaceId: activeSpaceId,
+      });
       setChatSessions(sessions);
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not open the private chat right now.');
@@ -2166,7 +2184,9 @@ function App() {
       setChatScope(opened.scope);
       setActiveChatSessionId(opened.id);
       const [sessions, detail, refreshedSpace] = await Promise.all([
-        getHouseholdChatSessions(session.token, opened.scope),
+        getHouseholdChatSessions(session.token, opened.scope, {
+          spaceId: activeSpaceId,
+        }),
         getHouseholdChatSession(session.token, opened.id),
         getHouseholdSpaceDetail(session.token, activeSpaceId),
       ]);
@@ -2225,6 +2245,7 @@ function App() {
         const created = await createHouseholdChatSession(session.token, {
           name: trimmedName,
           scope: chatScope,
+          spaceId: activeChatSpaceId,
           systemPrompt: chatSessionSystemPrompt,
           temperature,
           maxTokens,
@@ -3116,13 +3137,23 @@ function App() {
                         <View style={styles.deviceRowHeadline}>
                           <Text style={styles.networkName}>{thread.title}</Text>
                           <Text style={styles.tagMuted}>
-                            {thread.chatSessionId && thread.chatSessionId === activeChatSessionId ? 'open' : 'topic'}
+                            {activeSpaceDetail.kind === 'shared'
+                              ? thread.chatSessionId && thread.chatSessionId === activeChatSessionId
+                                ? 'open group'
+                                : 'group topic'
+                              : thread.chatSessionId && thread.chatSessionId === activeChatSessionId
+                                ? 'open'
+                                : 'topic'}
                           </Text>
                         </View>
                         <Text style={styles.cardCopy}>
-                          {thread.chatSessionId
-                            ? 'Continue this topic.'
-                            : 'Start this topic with Sparkbox.'}
+                          {activeSpaceDetail.kind === 'shared'
+                            ? thread.chatSessionId
+                              ? 'Continue this shared group chat with everyone in the space.'
+                              : 'Start this shared group chat with everyone in the space.'
+                            : thread.chatSessionId
+                              ? 'Continue this topic.'
+                              : 'Start this topic with Sparkbox.'}
                         </Text>
                       </Pressable>
                     ))
@@ -3330,10 +3361,62 @@ function App() {
                   <Text style={styles.cardTitle}>{activeChatSession?.name || 'Active topic chat'}</Text>
                   <Text style={styles.cardCopy}>
                     {activeChatSession
-                      ? `This is where Sparkbox keeps the running context for ${activeChatSession.name}.`
+                      ? sharedChatIsVisible && activeSpaceDetail
+                        ? `${activeSpaceDetail.name} uses this topic as one shared group chat for everyone in the space, with AIBox carrying the running context forward.`
+                        : `This is where Sparkbox keeps the running context for ${activeChatSession.name}.`
                       : 'Pick or create a topic chat to keep this conversation grounded in one clear subject.'}
                   </Text>
-                  {activeChatSession ? (
+                  {sharedChatIsVisible && activeSpaceDetail ? (
+                    <View style={styles.selectionCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.selectionLabel}>Shared Group Chat</Text>
+                        <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
+                          {onlineDeviceAvailable ? 'AIBox online' : 'AIBox offline'}
+                        </Text>
+                      </View>
+                      <Text style={styles.selectionCopy}>
+                        Everyone in {activeSpaceDetail.name} is speaking in the same thread here, and Sparkbox replies back into that shared context.
+                      </Text>
+                      <View style={styles.scopeRow}>
+                        {activeSharedChatParticipantLabels.map((label) => {
+                          const isCurrentUser = label === 'You';
+                          return (
+                            <View
+                              key={`shared-chat-member-${label}`}
+                              style={[styles.groupParticipantPill, isCurrentUser ? styles.groupParticipantPillSelf : null]}
+                            >
+                              <Text
+                                style={[
+                                  styles.groupParticipantLabel,
+                                  isCurrentUser ? styles.groupParticipantLabelSelf : null,
+                                ]}
+                              >
+                                {label}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                        <View
+                          style={[
+                            styles.groupParticipantPill,
+                            onlineDeviceAvailable ? styles.groupParticipantPillOnline : styles.groupParticipantPillOffline,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.groupParticipantLabel,
+                              onlineDeviceAvailable
+                                ? styles.groupParticipantLabelOnline
+                                : styles.groupParticipantLabelOffline,
+                            ]}
+                          >
+                            {onlineDeviceAvailable ? 'AIBox' : 'AIBox offline'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : null}
+                  {activeChatSession && canManageActiveChat ? (
                     <View style={styles.inlineActions}>
                       <Pressable style={styles.secondaryButtonSmall} onPress={() => openChatSessionEditor(activeChatSession)}>
                         <Text style={styles.secondaryButtonText}>Edit settings</Text>
@@ -3341,7 +3424,7 @@ function App() {
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void clearCurrentChatSession()}
-                        disabled={chatBusy || !canManageActiveChat}
+                        disabled={chatBusy}
                       >
                         <Text style={styles.secondaryButtonText}>Clear messages</Text>
                       </Pressable>
@@ -3353,7 +3436,7 @@ function App() {
                             { text: 'Delete', style: 'destructive', onPress: () => void deleteCurrentChatSession() },
                           ])
                         }
-                        disabled={chatBusy || !canManageActiveChat}
+                        disabled={chatBusy}
                       >
                         <Text style={styles.secondaryButtonText}>Delete chat</Text>
                       </Pressable>
@@ -3416,9 +3499,15 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Send a message</Text>
+                  <Text style={styles.cardTitle}>{sharedChatIsVisible ? 'Message the group' : 'Send a message'}</Text>
                   <TextInput
-                    placeholder={activeChatSession ? 'Ask Sparkbox about this topic' : 'Pick a topic chat first'}
+                    placeholder={
+                      activeChatSession
+                        ? sharedChatIsVisible
+                          ? 'Send to everyone in this space'
+                          : 'Ask Sparkbox about this topic'
+                        : 'Pick a topic chat first'
+                    }
                     placeholderTextColor="#7e8a83"
                     style={[styles.input, styles.textArea]}
                     value={chatDraft}
@@ -3868,21 +3957,24 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Devices and Network</Text>
                   <Text style={styles.cardCopy}>
-                    Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through setup mode.
+                    {canReprovisionDevice
+                      ? 'Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through setup mode.'
+                      : 'Owners can change Wi-Fi from here. Members can still see which Box is currently attached to this household.'}
                   </Text>
                   {homeDevices.map((device) => (
                     <View key={device.device_id} style={styles.deviceRowCard}>
                       <Text style={styles.networkName}>{device.device_id}</Text>
                       <Text style={styles.cardCopy}>{device.status}</Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => void beginDeviceReprovision(device)}
-                          disabled={!canManage}
-                        >
-                          <Text style={styles.secondaryButtonText}>Change Wi-Fi</Text>
-                        </Pressable>
-                      </View>
+                      {canReprovisionDevice ? (
+                        <View style={styles.inlineActions}>
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => void beginDeviceReprovision(device)}
+                          >
+                            <Text style={styles.secondaryButtonText}>Change Wi-Fi</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -5709,6 +5801,40 @@ const styles = StyleSheet.create({
   },
   chatBubbleCopyPending: {
     color: '#4f6b5e',
+  },
+  groupParticipantPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d7dfda',
+    backgroundColor: '#fffdf8',
+  },
+  groupParticipantPillSelf: {
+    backgroundColor: '#17352a',
+    borderColor: '#17352a',
+  },
+  groupParticipantPillOnline: {
+    backgroundColor: '#e8f5ee',
+    borderColor: '#c4ded1',
+  },
+  groupParticipantPillOffline: {
+    backgroundColor: '#f8e7df',
+    borderColor: '#eccabc',
+  },
+  groupParticipantLabel: {
+    color: '#51665b',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  groupParticipantLabelSelf: {
+    color: '#ffffff',
+  },
+  groupParticipantLabelOnline: {
+    color: '#0b6e4f',
+  },
+  groupParticipantLabelOffline: {
+    color: '#7b4630',
   },
   networkRow: {
     borderRadius: 18,

@@ -89,6 +89,34 @@ export function describeChatSendPhase(phase: ChatSendPhase): string {
   }
 }
 
+export function canManageChatSession(options: {
+  currentUserRole: string | undefined;
+  currentUserId: string | undefined;
+  sessionOwnerUserId: string | null | undefined;
+}): boolean {
+  if (options.currentUserRole === 'owner') {
+    return true;
+  }
+  if (!options.currentUserId || !options.sessionOwnerUserId) {
+    return false;
+  }
+  return options.currentUserId === options.sessionOwnerUserId;
+}
+
+export function buildSharedChatParticipantLabels(
+  spaceDetail: HouseholdSpaceDetail | null,
+  currentUserId: string | undefined,
+): string[] {
+  if (!spaceDetail || spaceDetail.kind !== 'shared') {
+    return [];
+  }
+  const currentUser = currentUserId
+    ? spaceDetail.members.find((member) => member.id === currentUserId)
+    : null;
+  const otherMembers = spaceDetail.members.filter((member) => member.id !== currentUserId);
+  return [...(currentUser ? ['You'] : []), ...otherMembers.map((member) => member.displayName)];
+}
+
 export function getRelayTargets(
   spaceDetail: HouseholdSpaceDetail | null,
   currentUserId: string | undefined,

@@ -77,7 +77,7 @@ This repo uses Expo OTA updates:
 
 - `development` and `preview` builds use the `preview` channel
 - production builds use the `production` channel
-- `runtimeVersion.policy=appVersion` keeps OTA compatibility tied to the installed native shell
+- `runtimeVersion=1.1.0` keeps OTA compatibility pinned to the installed native shell for this bare workflow app
 
 Typical workflow:
 

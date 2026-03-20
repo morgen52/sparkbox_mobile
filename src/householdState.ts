@@ -23,3 +23,7 @@ export function hasOnlineDevice(devices: DeviceSummary[]): boolean {
 export function canManageHousehold(role: string): boolean {
   return role === 'owner';
 }
+
+export function canReprovisionDeviceFromSettings(role: string): boolean {
+  return canManageHousehold(role);
+}

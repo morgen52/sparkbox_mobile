@@ -201,6 +201,7 @@ export type HouseholdChatSessionDetail = HouseholdChatSessionSummary & {
 export type HouseholdChatSessionCreateInput = {
   name: string;
   scope: ChatSessionScope;
+  spaceId?: string | null;
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
@@ -735,8 +736,12 @@ export async function getHouseholdChat(token: string): Promise<HouseholdChatHist
 export async function getHouseholdChatSessions(
   token: string,
   scope: ChatSessionScope,
+  options: { spaceId?: string | null } = {},
 ): Promise<HouseholdChatSessionSummary[]> {
   const params = new URLSearchParams({ scope });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   const response = await cloudJson<Array<Record<string, unknown>>>(`/api/chat/sessions?${params.toString()}`, {
     token,
   });
@@ -753,6 +758,7 @@ export async function createHouseholdChatSession(
     body: {
       name: input.name,
       scope: input.scope,
+      space_id: input.spaceId,
       system_prompt: input.systemPrompt,
       temperature: input.temperature,
       max_tokens: input.maxTokens,
