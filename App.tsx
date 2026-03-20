@@ -653,6 +653,9 @@ function App() {
   const recommendedFamilyApps = activeSpace
     ? availableFamilyApps.filter((app) => app.spaceTemplates.includes(activeSpace.template))
     : [];
+  const chatSpotlightEnabledApps = enabledFamilyAppCards.slice(0, 2);
+  const chatSpotlightRecommendedInstalledApps = installedFamilyAppsAvailableForActiveSpace.slice(0, 2);
+  const chatSpotlightRecommendedCatalogApps = recommendedFamilyApps.slice(0, 2);
   const authCardTitle =
     authMode === 'login'
       ? 'Sign in'
@@ -814,7 +817,7 @@ function App() {
 
   async function captureActiveSpaceSummary(): Promise<void> {
     if (!session?.token || !activeSpaceId || !activeChatSessionId || !activeChatSession) {
-      setLibraryError('Pick an active topic chat before capturing a summary.');
+      setLibraryError('Open a topic chat first so Sparkbox knows what to summarize.');
       return;
     }
     setLibraryBusy(true);
@@ -2007,7 +2010,7 @@ function App() {
     try {
       const sideChannel = await openSpaceSideChannel(session.token, activeSpaceId);
       if (!sideChannel.sessionId) {
-        throw new Error('Sparkbox has not prepared a private side channel for this space yet.');
+        throw new Error('Sparkbox has not opened the private chat for this space yet.');
       }
       setActiveSpaceDetail((current) =>
         current
@@ -2022,7 +2025,7 @@ function App() {
       const sessions = await getHouseholdChatSessions(session.token, 'private');
       setChatSessions(sessions);
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not open the private side channel.');
+      setChatError(error instanceof Error ? error.message : 'Could not open the private chat right now.');
     } finally {
       setChatBusy(false);
     }
@@ -2903,7 +2906,7 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Spaces</Text>
                   <Text style={styles.cardCopy}>
-                    Pick a space first. Each space keeps its own topics and chat history.
+                    Start with the people and context. Every space keeps its own topics, memory, and shared history.
                   </Text>
                   {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
                   {spacesBusy && spaces.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
@@ -2971,7 +2974,7 @@ function App() {
                   {chatBusy && chatSessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {chatSessions.length === 0 ? (
                     <Text style={styles.cardCopy}>
-                      No chats in this space yet.
+                      No topic chats yet. Start one when this space needs Sparkbox.
                     </Text>
                   ) : (
                     chatSessions.map((sessionItem) => {
@@ -2993,7 +2996,7 @@ function App() {
                           </Text>
                           {sessionItem.systemPrompt ? (
                             <Text numberOfLines={2} style={styles.cardCopy}>
-                              Prompt: {sessionItem.systemPrompt}
+                              Focus: {sessionItem.systemPrompt}
                             </Text>
                           ) : null}
                         </Pressable>
@@ -3006,8 +3009,8 @@ function App() {
                   <Text style={styles.cardTitle}>Topics</Text>
                   <Text style={styles.cardCopy}>
                     {activeSpaceDetail
-                      ? `${activeSpaceDetail.name} is organized around topics, not one endless chat.`
-                      : 'Pick a space to see its default topics.'}
+                      ? `${activeSpaceDetail.name} stays easier to follow when each conversation has its own topic.`
+                      : 'Pick a space to see the topics Sparkbox keeps ready for it.'}
                   </Text>
                   {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
                   {activeSpaceDetail?.threads.length ? (
@@ -3025,8 +3028,8 @@ function App() {
                         </View>
                         <Text style={styles.cardCopy}>
                           {thread.chatSessionId
-                            ? 'Tap to continue this topic.'
-                            : 'Tap to start this topic with Sparkbox.'}
+                            ? 'Continue this topic.'
+                            : 'Start this topic with Sparkbox.'}
                         </Text>
                       </Pressable>
                     ))
@@ -3036,7 +3039,7 @@ function App() {
                   {activeSpaceDetail?.kind === 'shared' ? (
                     <>
                       <Text style={styles.cardCopy}>
-                        Pick one other member and ask Sparkbox to relay a note privately.
+                        If something is hard to phrase, Sparkbox can help you relay it privately to one other person in this space.
                       </Text>
                       <View style={styles.inlineActions}>
                         <Pressable
@@ -3059,7 +3062,7 @@ function App() {
                         <Text style={styles.tagMuted}>private</Text>
                       </View>
                       <Text style={styles.cardCopy}>
-                        Ask Sparkbox privately about this shared space before you bring anything back into the group.
+                        Use this private chat when you want Sparkbox to help you think first, before you bring anything back to the shared space.
                       </Text>
                       <View style={styles.inlineActions}>
                         <Pressable
@@ -3068,7 +3071,7 @@ function App() {
                             void openCurrentSpaceSideChannel();
                           }}
                         >
-                          <Text style={styles.primaryButtonText}>Open private side chat</Text>
+                          <Text style={styles.primaryButtonText}>Talk privately with Sparkbox</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -3141,12 +3144,101 @@ function App() {
                   ) : null}
                 </View>
 
+                {activeSpace ? (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Inspiration for {activeSpace.name}</Text>
+                    <Text style={styles.cardCopy}>
+                      Family apps help Sparkbox feel more useful in everyday life. Install them once on this Box, then turn them on only in the spaces where they fit.
+                    </Text>
+                    {chatSpotlightEnabledApps.length > 0 ? (
+                      <>
+                        <Text style={styles.selectionLabel}>Already helping here</Text>
+                        {chatSpotlightEnabledApps.map((app) => (
+                          <View key={`chat-enabled-${app.slug}`} style={styles.deviceRowCard}>
+                            <View style={styles.deviceRowHeadline}>
+                              <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
+                              <Text style={styles.statusTagOnline}>enabled</Text>
+                            </View>
+                            <Text style={styles.cardCopy}>
+                              {app.meta?.entryCopy || app.meta?.description || 'Sparkbox is already using this family app in the active space.'}
+                            </Text>
+                            {app.meta?.starterPrompts?.length ? (
+                              <View style={styles.scopeRow}>
+                                {app.meta.starterPrompts.map((prompt) => (
+                                  <Pressable
+                                    key={`chat-spotlight-${app.slug}-${prompt}`}
+                                    style={styles.scopePill}
+                                    onPress={() => void openFamilyAppStarter(app.slug, prompt)}
+                                  >
+                                    <Text style={styles.scopePillLabel}>{prompt}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            ) : null}
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
+                    {canManage && chatSpotlightRecommendedInstalledApps.length > 0 ? (
+                      <>
+                        <Text style={styles.selectionLabel}>Ready to turn on here</Text>
+                        {chatSpotlightRecommendedInstalledApps.map((app) => (
+                          <View key={`chat-ready-${app.slug}`} style={styles.deviceRowCard}>
+                            <View style={styles.deviceRowHeadline}>
+                              <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
+                              <Text style={styles.tagMuted}>installed</Text>
+                            </View>
+                            <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.primaryButtonSmall}
+                                onPress={() => void enableInstalledFamilyAppForActiveSpace(app.slug)}
+                                disabled={settingsBusy}
+                              >
+                                <Text style={styles.primaryButtonText}>Turn on in this space</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
+                    {canManage && chatSpotlightRecommendedCatalogApps.length > 0 ? (
+                      <>
+                        <Text style={styles.selectionLabel}>Worth adding next</Text>
+                        {chatSpotlightRecommendedCatalogApps.map((app) => (
+                          <View key={`chat-catalog-${app.slug}`} style={styles.deviceRowCard}>
+                            <View style={styles.deviceRowHeadline}>
+                              <Text style={styles.networkName}>{app.title}</Text>
+                              <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
+                            </View>
+                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.primaryButtonSmall}
+                                onPress={() => void installSelectedFamilyApp(app.slug)}
+                                disabled={settingsBusy}
+                              >
+                                <Text style={styles.primaryButtonText}>Install on this Box</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
+                    <View style={styles.inlineActions}>
+                      <Pressable style={styles.secondaryButtonSmall} onPress={() => setShellTab('settings')}>
+                        <Text style={styles.secondaryButtonText}>Open all family apps</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>{activeChatSession?.name || 'Active topic chat'}</Text>
                   <Text style={styles.cardCopy}>
                     {activeChatSession
-                      ? `Scope: ${describeChatAccess(activeChatSession.scope)}. Temperature ${activeChatSession.temperature}, max ${activeChatSession.maxTokens} tokens.`
-                      : 'Pick or create a topic chat to continue.'}
+                      ? `This is where Sparkbox keeps the running context for ${activeChatSession.name}.`
+                      : 'Pick or create a topic chat to keep this conversation grounded in one clear subject.'}
                   </Text>
                   {activeChatSession ? (
                     <View style={styles.inlineActions}>
@@ -3233,7 +3325,7 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Send a message</Text>
                   <TextInput
-                    placeholder={activeChatSession ? 'Ask this topic what happens next' : 'Pick a topic chat first'}
+                    placeholder={activeChatSession ? 'Ask Sparkbox about this topic' : 'Pick a topic chat first'}
                     placeholderTextColor="#7e8a83"
                     style={[styles.input, styles.textArea]}
                     value={chatDraft}
@@ -3397,7 +3489,7 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Photos in this space</Text>
                   <Text style={styles.cardCopy}>
-                    Photos still use Jetson's compatibility file layer, but this space now treats them as shared moments instead of generic files.
+                    Photos belong to this space as shared moments, not just as generic uploads.
                   </Text>
                   <View style={styles.inlineActions}>
                     <Pressable
@@ -3454,7 +3546,7 @@ function App() {
                   <Text style={styles.cardTitle}>Files in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Files are isolated inside ${activeSpace ? activeSpace.name : 'the active space'}, even though Jetson still stores them through the compatibility layer.`
+                      ? `Files stay inside ${activeSpace ? activeSpace.name : 'the active space'} so each space can keep its own working materials separate.`
                       : 'Sparkbox needs to be online before files can be browsed or changed.'}
                   </Text>
                   {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
@@ -3563,7 +3655,7 @@ function App() {
                   <Text style={styles.cardTitle}>Tasks in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Tasks are isolated inside ${activeSpace ? activeSpace.name : 'the active space'}, even though Jetson still schedules them through the compatibility layer.`
+                      ? `Tasks stay attached to ${activeSpace ? activeSpace.name : 'the active space'} so routines and reminders do not spill into the wrong people context.`
                       : 'Sparkbox needs to be online before tasks can be loaded or changed.'}
                   </Text>
                   {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
@@ -3586,7 +3678,7 @@ function App() {
                   </View>
                   {!canManage && taskScope === 'family' ? (
                     <Text style={styles.cardCopy}>
-                      Members can run shared ZeroClaw family tasks, but only owners can create or edit them.
+                      Members can run shared routines here, but only owners can create or edit them.
                     </Text>
                   ) : null}
                 </View>
@@ -3611,7 +3703,7 @@ function App() {
                       </View>
                       <Text style={styles.cardCopy}>Schedule: {task.cronExpr}</Text>
                       <Text style={styles.cardCopy}>
-                        Type: {task.commandType} · Scope: {task.scope}
+                        Runs as: {task.commandType} · Visibility: {task.scope}
                       </Text>
                       {task.lastStatus ? (
                         <Text style={styles.cardCopy}>
@@ -3704,9 +3796,9 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Inspiration Square</Text>
+                    <Text style={styles.cardTitle}>Manage family apps</Text>
                     <Text style={styles.cardCopy}>
-                      Install a family app once on this Box, then enable it in the spaces where it belongs. This is where Box learns new family-friendly behaviors.
+                      Install a family app once on this Box, then decide which spaces should actually use it. This is the owner control room for Box behaviors.
                     </Text>
                     {familyAppsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                     {activeSpace && recommendedFamilyApps.length > 0 ? (
@@ -3720,10 +3812,10 @@ function App() {
                             </View>
                             {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                             <Text style={styles.cardCopy}>
-                              Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                              Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                             </Text>
                             {app.capabilities.length > 0 ? (
-                              <Text style={styles.cardCopy}>Capabilities: {app.capabilities.join(' · ')}</Text>
+                              <Text style={styles.cardCopy}>What it helps with: {app.capabilities.join(' · ')}</Text>
                             ) : null}
                             <View style={styles.inlineActions}>
                               <Pressable
@@ -3749,12 +3841,12 @@ function App() {
                             </View>
                             {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                             <Text style={styles.cardCopy}>
-                              Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                              Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                             </Text>
                             <Text style={styles.cardCopy}>
-                              {app.supportsProactiveMessages ? 'Proactive' : 'On demand only'}
-                              {app.supportsPrivateRelay ? ' · Private relay' : ''}
-                              {app.requiresOwnerConfirmation ? ' · Owner confirmation' : ''}
+                              {app.supportsProactiveMessages ? 'Can take initiative' : 'Only speaks when asked'}
+                              {app.supportsPrivateRelay ? ' · Helps with private relay' : ''}
+                              {app.requiresOwnerConfirmation ? ' · Needs owner confirmation' : ''}
                             </Text>
                             <View style={styles.inlineActions}>
                               <Pressable
@@ -3778,10 +3870,10 @@ function App() {
                           </View>
                           {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                           <Text style={styles.cardCopy}>
-                            Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                            Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                           </Text>
                           {app.capabilities.length > 0 ? (
-                            <Text style={styles.cardCopy}>Capabilities: {app.capabilities.join(' · ')}</Text>
+                            <Text style={styles.cardCopy}>What it helps with: {app.capabilities.join(' · ')}</Text>
                           ) : null}
                           <View style={styles.inlineActions}>
                             <Pressable

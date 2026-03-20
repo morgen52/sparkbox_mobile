@@ -47,18 +47,18 @@ describe('resolveActiveSpaceId', () => {
 
 describe('space identity helpers', () => {
   it('describes private and shared spaces with explicit labels', () => {
-    expect(describeSpaceKind('private')).toBe('Private Box space');
-    expect(describeSpaceKind('shared')).toBe('Family space');
+    expect(describeSpaceKind('private')).toBe('Just you + Sparkbox');
+    expect(describeSpaceKind('shared')).toBe('Shared space');
   });
 
   it('describes family chat access using space language', () => {
-    expect(describeChatAccess('family')).toBe('Family space');
-    expect(describeChatAccess('private')).toBe('Private space');
+    expect(describeChatAccess('family')).toBe('Shared here');
+    expect(describeChatAccess('private')).toBe('Just you');
   });
 
   it('formats space templates into friendly labels', () => {
     expect(formatSpaceTemplateList(['partner', 'parents', 'household_ops'])).toBe(
-      'Partner · Parents · Household ops',
+      'Partner · Parents · Home routines',
     );
   });
 });

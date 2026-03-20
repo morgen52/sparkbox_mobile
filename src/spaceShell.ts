@@ -41,19 +41,19 @@ export function mapSpaceKindToLegacyScope(kind: SpaceKind): {
 export type ChatSendPhase = 'idle' | 'sending' | 'streaming' | 'timed_out' | 'failed';
 
 export function describeSpaceKind(kind: SpaceKind): string {
-  return kind === 'private' ? 'Private Box space' : 'Family space';
+  return kind === 'private' ? 'Just you + Sparkbox' : 'Shared space';
 }
 
 export function describeChatAccess(scope: ChatSessionScope): string {
-  return scope === 'private' ? 'Private space' : 'Family space';
+  return scope === 'private' ? 'Just you' : 'Shared here';
 }
 
 export function describeSpaceTemplate(template: SpaceTemplate | string): string {
   switch (template) {
     case 'private':
-      return 'Private space';
+      return 'Just you + Sparkbox';
     case 'household':
-      return 'Household space';
+      return 'Shared home';
     case 'partner':
       return 'Partner';
     case 'parents':
@@ -61,7 +61,7 @@ export function describeSpaceTemplate(template: SpaceTemplate | string): string 
     case 'child':
       return 'Child';
     case 'household_ops':
-      return 'Household ops';
+      return 'Home routines';
     default:
       return String(template)
         .replace(/_/g, ' ')

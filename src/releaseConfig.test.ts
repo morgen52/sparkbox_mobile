@@ -38,12 +38,18 @@ describe('release config', () => {
   it('supports a dedicated Android release keystore instead of only the debug signing config', () => {
     expect(buildGradle).toContain('SPARKBOX_UPLOAD_STORE_FILE');
     expect(buildGradle).toContain('signingConfigs.release');
+    expect(buildGradle).toContain('SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING');
   });
 
   it('documents the hotspot-first unified native app instead of the retired BLE-only flow', () => {
     expect(readme).toContain('Home / Chat / Files / Tasks / Settings');
     expect(readme).toContain('hotspot');
     expect(readme).not.toContain('BLE-first replacement');
+  });
+
+  it('documents release signing verification instead of silent debug-signing fallback', () => {
+    expect(readme).toContain('SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING=true');
+    expect(readme).toContain('./scripts/build-android-local.sh release');
   });
 
   it('does not require bluetooth permissions or plugins for the hotspot-first app shell', () => {

@@ -65,7 +65,13 @@ case "$BUILD_VARIANT" in
     GRADLE_TASK="assembleRelease"
     APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/release/app-release.apk"
     if [[ -z "${SPARKBOX_UPLOAD_STORE_FILE:-}" || -z "${SPARKBOX_UPLOAD_STORE_PASSWORD:-}" || -z "${SPARKBOX_UPLOAD_KEY_ALIAS:-}" || -z "${SPARKBOX_UPLOAD_KEY_PASSWORD:-}" ]]; then
-      echo "warning: release build is falling back to the debug keystore. Export SPARKBOX_UPLOAD_STORE_FILE, SPARKBOX_UPLOAD_STORE_PASSWORD, SPARKBOX_UPLOAD_KEY_ALIAS, and SPARKBOX_UPLOAD_KEY_PASSWORD for a production-signed APK." >&2
+      if [[ "${SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING:-false}" != "true" ]]; then
+        echo "release build requires production signing credentials." >&2
+        echo "Set SPARKBOX_UPLOAD_STORE_FILE, SPARKBOX_UPLOAD_STORE_PASSWORD, SPARKBOX_UPLOAD_KEY_ALIAS, and SPARKBOX_UPLOAD_KEY_PASSWORD." >&2
+        echo "If you intentionally want a local test release signed with the debug keystore, set SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING=true." >&2
+        exit 1
+      fi
+      echo "warning: release build is intentionally using the debug keystore because SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING=true." >&2
     fi
     ;;
   debug)

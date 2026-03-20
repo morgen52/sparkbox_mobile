@@ -119,7 +119,7 @@ Release builds support a dedicated keystore. Export these environment variables 
 
 For this Mac, `./scripts/build-android-local.sh` also auto-loads `./.env.signing.local` when present.
 
-If those are missing, release builds fall back to the debug keystore so side-loading still works for internal testing.
+Release builds now fail closed by default if signing variables are missing. If you intentionally want a locally side-loaded release signed with the debug keystore, set `SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING=true`.
 
 ## Key configuration
 
@@ -137,4 +137,5 @@ Common local checks:
 ```bash
 npm run typecheck
 npx vitest run src/authFlow.test.ts src/householdApi.test.ts src/tasksApi.test.ts src/appShell.test.ts src/releaseConfig.test.ts
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./scripts/build-android-local.sh release
 ```
