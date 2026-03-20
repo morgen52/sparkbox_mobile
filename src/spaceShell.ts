@@ -104,3 +104,30 @@ export function resolveRelayTargetUserId(
   }
   return relayTargets[0]?.id ?? '';
 }
+
+export function buildSpaceScopedFilePath(spacePrefix: string, displayPath: string): string {
+  const normalizedPrefix = spacePrefix.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  const normalizedDisplayPath = displayPath.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!normalizedPrefix) {
+    return normalizedDisplayPath;
+  }
+  if (!normalizedDisplayPath) {
+    return normalizedPrefix;
+  }
+  return `${normalizedPrefix}/${normalizedDisplayPath}`;
+}
+
+export function stripSpaceScopedFilePath(spacePrefix: string, devicePath: string | null | undefined): string {
+  const normalizedPrefix = spacePrefix.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  const normalizedDevicePath = String(devicePath ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!normalizedPrefix) {
+    return normalizedDevicePath;
+  }
+  if (normalizedDevicePath === normalizedPrefix) {
+    return '';
+  }
+  if (normalizedDevicePath.startsWith(`${normalizedPrefix}/`)) {
+    return normalizedDevicePath.slice(normalizedPrefix.length + 1);
+  }
+  return normalizedDevicePath;
+}

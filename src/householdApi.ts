@@ -213,6 +213,7 @@ export type HouseholdTaskSummary = {
   commandType: 'shell' | 'zeroclaw';
   enabled: boolean;
   scope: HouseholdTaskScope;
+  spaceId?: string | null;
   ownerUserId?: string | null;
   updatedAt?: string | null;
   lastRunAt?: string | null;
@@ -238,6 +239,10 @@ export type HouseholdTaskRunSummary = {
   output?: string | null;
   startedAt: string;
   finishedAt?: string | null;
+};
+
+export type HouseholdTaskQueryOptions = {
+  spaceId?: string | null;
 };
 
 export type HouseholdFileSpace = 'family' | 'private';
@@ -765,8 +770,12 @@ export async function deleteHouseholdChatSession(
 export async function getHouseholdTasks(
   token: string,
   scope: HouseholdTaskScope,
+  options: HouseholdTaskQueryOptions = {},
 ): Promise<HouseholdTaskSummary[]> {
   const params = new URLSearchParams({ scope });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   const response = await cloudJson<Array<Record<string, unknown>>>(`/api/tasks?${params.toString()}`, {
     token,
   });
@@ -777,8 +786,12 @@ export async function createHouseholdTask(
   token: string,
   scope: HouseholdTaskScope,
   input: HouseholdTaskCreateInput,
+  options: HouseholdTaskQueryOptions = {},
 ): Promise<HouseholdTaskSummary> {
   const params = new URLSearchParams({ scope });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   const response = await cloudJson<Record<string, unknown>>(`/api/tasks?${params.toString()}`, {
     method: 'POST',
     token,
@@ -1328,6 +1341,7 @@ function normalizeTask(task: Record<string, unknown>): HouseholdTaskSummary {
     commandType: (task.command_type === 'zeroclaw' ? 'zeroclaw' : 'shell'),
     enabled: Boolean(task.enabled),
     scope: task.scope === 'private' ? 'private' : 'family',
+    spaceId: typeof task.space_id === 'string' ? task.space_id : null,
     ownerUserId: typeof task.owner_user_id === 'string' ? task.owner_user_id : null,
     updatedAt: typeof task.updated_at === 'string' ? task.updated_at : null,
     lastRunAt: typeof task.last_run_at === 'string' ? task.last_run_at : null,

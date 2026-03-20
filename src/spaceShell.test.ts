@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildSpaceScopedFilePath,
   describeChatAccess,
   describeChatSendPhase,
   describeSpaceKind,
@@ -9,6 +10,7 @@ import {
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
   resolveRelayTargetUserId,
+  stripSpaceScopedFilePath,
 } from './spaceShell';
 
 
@@ -115,5 +117,24 @@ describe('relay target helpers', () => {
     expect(resolveRelayTargetUserId(targets, '')).toBe('user-2');
     expect(resolveRelayTargetUserId(targets, 'missing')).toBe('user-2');
     expect(resolveRelayTargetUserId(targets, 'user-3')).toBe('user-3');
+  });
+});
+
+describe('space-scoped file path helpers', () => {
+  it('builds compatibility-layer paths for shared spaces', () => {
+    expect(buildSpaceScopedFilePath('spaces/space-1', '')).toBe('spaces/space-1');
+    expect(buildSpaceScopedFilePath('spaces/space-1', 'photos')).toBe('spaces/space-1/photos');
+    expect(buildSpaceScopedFilePath('/spaces/space-1/', '/photos/family/')).toBe('spaces/space-1/photos/family');
+  });
+
+  it('strips compatibility-layer prefixes for shared spaces', () => {
+    expect(stripSpaceScopedFilePath('spaces/space-1', 'spaces/space-1')).toBe('');
+    expect(stripSpaceScopedFilePath('spaces/space-1', 'spaces/space-1/photos/family')).toBe('photos/family');
+    expect(stripSpaceScopedFilePath('/spaces/space-1/', '/spaces/space-1/photos/')).toBe('photos');
+  });
+
+  it('keeps non-prefixed paths unchanged', () => {
+    expect(stripSpaceScopedFilePath('spaces/space-1', 'legacy/family')).toBe('legacy/family');
+    expect(stripSpaceScopedFilePath('', 'family/docs')).toBe('family/docs');
   });
 });

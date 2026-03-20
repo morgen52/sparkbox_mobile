@@ -109,6 +109,7 @@ import {
   type ShellTab,
 } from './src/householdState';
 import {
+  buildSpaceScopedFilePath,
   describeChatAccess,
   describeChatSendPhase,
   describeSpaceKind,
@@ -118,6 +119,7 @@ import {
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
   resolveRelayTargetUserId,
+  stripSpaceScopedFilePath,
   type ChatSendPhase,
 } from './src/spaceShell';
 import {
@@ -584,6 +586,9 @@ function App() {
     !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
+  const activeFileSpacePrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
+  const activeTaskSpaceId =
+    activeSpace?.kind === 'shared' && activeSpace.template !== 'household' ? activeSpace.id : '';
   const libraryOverviewSections = [
     {
       title: 'Memories',
@@ -652,6 +657,29 @@ function App() {
       return true;
     }
     return entry.uploadedByUserId === session?.user.id;
+  }
+
+  function toDeviceFilePath(displayPath: string): string {
+    return buildSpaceScopedFilePath(activeFileSpacePrefix, displayPath);
+  }
+
+  function fromDeviceFilePath(devicePath: string | null | undefined): string {
+    return stripSpaceScopedFilePath(activeFileSpacePrefix, devicePath);
+  }
+
+  function mapListingToActiveSpace(listing: HouseholdFileListing): HouseholdFileListing {
+    if (!activeFileSpacePrefix) {
+      return listing;
+    }
+    return {
+      ...listing,
+      path: fromDeviceFilePath(listing.path),
+      parent: listing.parent ? fromDeviceFilePath(listing.parent) : '',
+      entries: listing.entries.map((entry) => ({
+        ...entry,
+        path: fromDeviceFilePath(entry.path),
+      })),
+    };
   }
 
   async function refreshHouseholdSummary(options: { silent?: boolean } = {}): Promise<void> {
@@ -942,7 +970,9 @@ function App() {
     setTasksError('');
     void (async () => {
       try {
-        const nextTasks = await getHouseholdTasks(session.token, taskScope);
+        const nextTasks = await getHouseholdTasks(session.token, taskScope, {
+          spaceId: activeTaskSpaceId,
+        });
         if (cancelled) {
           return;
         }
@@ -962,14 +992,14 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [session?.token, shellSurface, shellTab, taskScope]);
+  }, [session?.token, shellSurface, shellTab, taskScope, activeTaskSpaceId]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
       return;
     }
     void refreshFiles();
-  }, [session?.token, shellSurface, shellTab, fileSpace]);
+  }, [session?.token, shellSurface, shellTab, fileSpace, activeFileSpacePrefix]);
 
   useEffect(() => {
     if (!canManage || homeDevices.length === 0) {
@@ -1883,7 +1913,9 @@ function App() {
     setTasksBusy(true);
     setTasksError('');
     try {
-      const nextTasks = await getHouseholdTasks(session.token, taskScope);
+      const nextTasks = await getHouseholdTasks(session.token, taskScope, {
+        spaceId: activeTaskSpaceId,
+      });
       setTasks(nextTasks);
     } catch (error) {
       setTasksError(error instanceof Error ? error.message : 'Could not load household tasks.');
@@ -1938,13 +1970,20 @@ function App() {
         });
         setTasksNotice(`Updated ${taskName.trim()}.`);
       } else {
-        await createHouseholdTask(session.token, taskScope, {
-          name: taskName.trim(),
-          cronExpr: taskCronExpr.trim(),
-          command: taskCommand.trim(),
-          commandType: effectiveCommandType,
-          enabled: taskEnabled,
-        });
+        await createHouseholdTask(
+          session.token,
+          taskScope,
+          {
+            name: taskName.trim(),
+            cronExpr: taskCronExpr.trim(),
+            command: taskCommand.trim(),
+            commandType: effectiveCommandType,
+            enabled: taskEnabled,
+          },
+          {
+            spaceId: activeTaskSpaceId,
+          },
+        );
         setTasksNotice(`Created ${taskName.trim()}.`);
       }
       setTaskEditorOpen(false);
@@ -2000,8 +2039,12 @@ function App() {
     setFilesBusy(true);
     setFilesError('');
     try {
-      const listing = await getHouseholdFiles(session.token, fileSpace, nextPath ?? currentFilePath);
-      setFileListing(listing);
+      const listing = await getHouseholdFiles(
+        session.token,
+        fileSpace,
+        toDeviceFilePath(nextPath ?? currentFilePath),
+      );
+      setFileListing(mapListingToActiveSpace(listing));
     } catch (error) {
       setFilesError(error instanceof Error ? error.message : 'Could not load files right now.');
     } finally {
@@ -2031,13 +2074,13 @@ function App() {
     try {
       if (fileEditorMode === 'mkdir') {
         const nextPath = currentFilePath ? `${currentFilePath}/${trimmed}` : trimmed;
-        await createHouseholdDirectory(session.token, fileSpace, nextPath);
+        await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(nextPath));
         setFilesNotice(`Created ${trimmed}.`);
       } else if (fileTargetEntry) {
         const src = fileTargetEntry.path;
         const parent = src.includes('/') ? src.slice(0, src.lastIndexOf('/')) : '';
         const dst = parent ? `${parent}/${trimmed}` : trimmed;
-        await renameHouseholdPath(session.token, fileSpace, src, dst);
+        await renameHouseholdPath(session.token, fileSpace, toDeviceFilePath(src), toDeviceFilePath(dst));
         setFilesNotice(`Renamed to ${trimmed}.`);
       }
       setFileEditorOpen(false);
@@ -2056,7 +2099,7 @@ function App() {
     setFilesBusy(true);
     setFilesError('');
     try {
-      await deleteHouseholdPath(session.token, fileSpace, entry.path);
+      await deleteHouseholdPath(session.token, fileSpace, toDeviceFilePath(entry.path));
       setFilesNotice(`Removed ${entry.name}.`);
       await refreshFiles();
     } catch (error) {
@@ -2092,7 +2135,7 @@ function App() {
           };
         }),
       );
-      const response = await uploadHouseholdFiles(session.token, fileSpace, currentFilePath, uploads);
+      const response = await uploadHouseholdFiles(session.token, fileSpace, toDeviceFilePath(currentFilePath), uploads);
       setFilesNotice(`Uploaded ${response.saved.map((item) => item.name).join(', ')}.`);
       await refreshFiles();
     } catch (error) {
@@ -2114,7 +2157,7 @@ function App() {
         throw new Error('No writable file cache is available on this phone.');
       }
       const result = await FileSystem.downloadAsync(
-        buildHouseholdFileDownloadUrl(fileSpace, entry.path),
+        buildHouseholdFileDownloadUrl(fileSpace, toDeviceFilePath(entry.path)),
         `${destinationRoot}${entry.name}`,
         {
           headers: {
@@ -2708,29 +2751,13 @@ function App() {
                   <Text style={styles.cardTitle}>Files in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Files are currently mapped from ${activeSpace ? activeSpaceKindLabel : 'the active space'} while the Jetson storage layer migrates.`
+                      ? `Files are isolated inside ${activeSpace ? activeSpace.name : 'the active space'}, even though Jetson still stores them through the compatibility layer.`
                       : 'Sparkbox needs to be online before files can be browsed or changed.'}
                   </Text>
                   {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
                   {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
-                  <View style={styles.scopeRow}>
-                    {(['family', 'private'] as HouseholdFileSpace[]).map((space) => {
-                      const active = fileSpace === space;
-                      return (
-                        <Pressable
-                          key={space}
-                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                          onPress={() => setFileSpace(space)}
-                        >
-                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {describeChatAccess(space)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
                   <Text style={styles.cardCopy}>
-                    Location: /{currentFilePath || (fileSpace === 'family' ? 'family' : 'private')}
+                    Location: /{currentFilePath || activeSpace?.name || (fileSpace === 'family' ? 'family' : 'private')}
                   </Text>
                   <View style={styles.inlineActions}>
                     <Pressable
@@ -2830,10 +2857,10 @@ function App() {
             {shellTab === 'library' ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Household Tasks</Text>
+                  <Text style={styles.cardTitle}>Tasks in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Tasks are currently mapped from ${activeSpace ? activeSpaceKindLabel : 'the active space'} while the Jetson scheduler stays on the legacy scope model.`
+                      ? `Tasks are isolated inside ${activeSpace ? activeSpace.name : 'the active space'}, even though Jetson still schedules them through the compatibility layer.`
                       : 'Sparkbox needs to be online before tasks can be loaded or changed.'}
                   </Text>
                   {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
@@ -2853,22 +2880,6 @@ function App() {
                     >
                       <Text style={styles.primaryButtonText}>New task</Text>
                     </Pressable>
-                  </View>
-                  <View style={styles.scopeRow}>
-                    {(['family', 'private'] as HouseholdTaskScope[]).map((scope) => {
-                      const active = taskScope === scope;
-                      return (
-                        <Pressable
-                          key={scope}
-                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                          onPress={() => setTaskScope(scope)}
-                        >
-                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {describeChatAccess(scope)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
                   </View>
                   {!canManage && taskScope === 'family' ? (
                     <Text style={styles.cardCopy}>
@@ -4173,7 +4184,13 @@ function App() {
           <View style={styles.networkSheetCard}>
             <Text style={styles.selectionLabel}>{editingTask ? 'Edit task' : 'New task'}</Text>
             <Text style={styles.selectionTitle}>
-              {editingTask ? editingTask.name : taskScope === 'family' ? 'Shared Sparkbox routine' : 'Private Sparkbox routine'}
+              {editingTask
+                ? editingTask.name
+                : activeSpace
+                  ? `${activeSpace.name} routine`
+                  : taskScope === 'family'
+                    ? 'Shared Sparkbox routine'
+                    : 'Private Sparkbox routine'}
             </Text>
             <Text style={styles.selectionCopy}>
               Use cron syntax like `0 19 * * *`. Members can only create private ZeroClaw tasks.

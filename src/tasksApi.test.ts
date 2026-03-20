@@ -47,14 +47,14 @@ describe('household tasks API', () => {
 
     global.fetch = fetchMock;
 
-    const listed = await getHouseholdTasks('token-1', 'family');
+    const listed = await getHouseholdTasks('token-1', 'family', { spaceId: 'space-home' });
     const created = await createHouseholdTask('token-1', 'family', {
       name: 'Dinner',
       cronExpr: '0 19 * * *',
       command: 'dinner',
       commandType: 'zeroclaw',
       enabled: true,
-    });
+    }, { spaceId: 'space-home' });
     const updated = await updateHouseholdTask('token-1', 'task-2', {
       enabled: false,
     });
@@ -70,12 +70,12 @@ describe('household tasks API', () => {
     expect(removed).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://morgen52.site/familyserver/api/tasks?scope=family',
+      'https://morgen52.site/familyserver/api/tasks?scope=family&space_id=space-home',
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://morgen52.site/familyserver/api/tasks?scope=family',
+      'https://morgen52.site/familyserver/api/tasks?scope=family&space_id=space-home',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
