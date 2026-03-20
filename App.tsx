@@ -573,6 +573,34 @@ function App() {
     !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
+  const libraryOverviewSections = [
+    {
+      title: 'Memories',
+      copy: activeSpace ? `Things Sparkbox remembers for ${activeSpace.name}.` : 'Things Sparkbox remembers for the active space.',
+    },
+    {
+      title: 'Summaries',
+      copy: 'Quick recaps that help you catch up without opening every thread.',
+    },
+    {
+      title: 'Photos',
+      copy: 'Shared moments and visual context saved with this space.',
+    },
+    {
+      title: 'Files',
+      copy: 'Documents, uploads, and practical materials for this space.',
+    },
+    {
+      title: 'Tasks',
+      copy: 'Routines, reminders, and scheduled work attached to this space.',
+    },
+  ];
+  const availableFamilyApps = familyAppsCatalog.filter(
+    (app) => !installedFamilyApps.some((installed) => installed.slug === app.slug),
+  );
+  const recommendedFamilyApps = activeSpace
+    ? availableFamilyApps.filter((app) => app.spaceTemplates.includes(activeSpace.template))
+    : [];
   const authCardTitle =
     authMode === 'login'
       ? 'Sign in'
@@ -2527,19 +2555,23 @@ function App() {
             {shellTab === 'library' ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Library</Text>
+                  <Text style={styles.cardTitle}>Space library</Text>
                   <Text style={styles.cardCopy}>
                     {activeSpace
-                      ? `${activeSpace.name} (${activeSpaceKindLabel}) will accumulate Memories, Summaries, Photos, Files, and Tasks here.`
+                      ? `${activeSpace.name} (${activeSpaceKindLabel}) keeps its memories, summaries, photos, files, and tasks together.`
                       : 'Pick a space to browse its accumulated Sparkbox context.'}
                   </Text>
-                  <View style={styles.scopeRow}>
-                    {['Memories', 'Summaries', 'Photos', 'Files', 'Tasks'].map((section) => (
-                      <View key={section} style={styles.scopePill}>
-                        <Text style={styles.scopePillLabel}>{section}</Text>
+                  <View style={styles.libraryGrid}>
+                    {libraryOverviewSections.map((section) => (
+                      <View key={section.title} style={styles.librarySectionCard}>
+                        <Text style={styles.librarySectionTitle}>{section.title}</Text>
+                        <Text style={styles.librarySectionCopy}>{section.copy}</Text>
                       </View>
                     ))}
                   </View>
+                  <Text style={styles.cardCopy}>
+                    Some sections still map to legacy storage and scheduler data, but they now live in one space library.
+                  </Text>
                 </View>
 
                 <View style={styles.card}>
@@ -2828,11 +2860,36 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Family apps on this Box</Text>
+                    <Text style={styles.cardTitle}>Inspiration Square</Text>
                     <Text style={styles.cardCopy}>
-                      Install a family app once on this Box, then enable it in the spaces where it belongs.
+                      Install a family app once on this Box, then enable it in the spaces where it belongs. This is where Box learns new family-friendly behaviors.
                     </Text>
                     {familyAppsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                    {activeSpace && recommendedFamilyApps.length > 0 ? (
+                      <>
+                        <Text style={styles.selectionLabel}>Recommended for {activeSpace.name}</Text>
+                        {recommendedFamilyApps.map((app) => (
+                          <View key={`recommended-${app.slug}`} style={styles.deviceRowCard}>
+                            <View style={styles.deviceRowHeadline}>
+                              <Text style={styles.networkName}>{app.title}</Text>
+                              <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
+                            </View>
+                            <Text style={styles.cardCopy}>
+                              Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                            </Text>
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.primaryButtonSmall}
+                                onPress={() => void installSelectedFamilyApp(app.slug)}
+                                disabled={settingsBusy}
+                              >
+                                <Text style={styles.primaryButtonText}>Install for this Box</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
                     {installedFamilyApps.length > 0 ? (
                       <>
                         <Text style={styles.selectionLabel}>Installed on this Box</Text>
@@ -2850,9 +2907,7 @@ function App() {
                       </>
                     ) : null}
                     <Text style={styles.selectionLabel}>Available for this Box</Text>
-                    {familyAppsCatalog
-                      .filter((app) => !installedFamilyApps.some((installed) => installed.slug === app.slug))
-                      .map((app) => (
+                    {availableFamilyApps.map((app) => (
                         <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{app.title}</Text>
@@ -4174,6 +4229,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: '#5a6b62',
+  },
+  libraryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  librarySectionCard: {
+    width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: '#edf5ef',
+    borderWidth: 1,
+    borderColor: '#d7e2db',
+    gap: 8,
+  },
+  librarySectionTitle: {
+    color: '#17352a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  librarySectionCopy: {
+    color: '#5a6b62',
+    fontSize: 13,
+    lineHeight: 19,
   },
   input: {
     borderRadius: 16,

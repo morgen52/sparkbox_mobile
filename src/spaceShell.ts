@@ -39,11 +39,11 @@ export function mapSpaceKindToLegacyScope(kind: SpaceKind): {
 export type ChatSendPhase = 'idle' | 'sending' | 'streaming';
 
 export function describeSpaceKind(kind: SpaceKind): string {
-  return kind === 'private' ? 'Private Box space' : 'Shared Sparkbox space';
+  return kind === 'private' ? 'Private Box space' : 'Family space';
 }
 
 export function describeChatAccess(scope: ChatSessionScope): string {
-  return scope === 'private' ? 'Private space' : 'Shared space';
+  return scope === 'private' ? 'Private space' : 'Family space';
 }
 
 export function describeSpaceTemplate(template: SpaceTemplate | string): string {

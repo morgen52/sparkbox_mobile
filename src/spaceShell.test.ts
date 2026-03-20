@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeChatAccess,
   describeChatSendPhase,
   describeSpaceKind,
   formatSpaceTemplateList,
@@ -43,7 +44,12 @@ describe('resolveActiveSpaceId', () => {
 describe('space identity helpers', () => {
   it('describes private and shared spaces with explicit labels', () => {
     expect(describeSpaceKind('private')).toBe('Private Box space');
-    expect(describeSpaceKind('shared')).toBe('Shared Sparkbox space');
+    expect(describeSpaceKind('shared')).toBe('Family space');
+  });
+
+  it('describes family chat access using space language', () => {
+    expect(describeChatAccess('family')).toBe('Family space');
+    expect(describeChatAccess('private')).toBe('Private space');
   });
 
   it('formats space templates into friendly labels', () => {
