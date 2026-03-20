@@ -1020,10 +1020,15 @@ export async function getHouseholdFiles(
   token: string,
   space: HouseholdFileSpace,
   path: string,
+  options: { spaceId?: string | null } = {},
 ): Promise<HouseholdFileListing> {
   const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   const response = await cloudJson<{
     space: HouseholdFileSpace;
+    space_id?: string | null;
     path: string;
     root: string;
     parent?: string | null;
@@ -1042,8 +1047,12 @@ export async function createHouseholdDirectory(
   token: string,
   space: HouseholdFileSpace,
   path: string,
+  options: { spaceId?: string | null } = {},
 ): Promise<{ ok: boolean; path: string }> {
   const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   return cloudJson<{ ok: boolean; path: string }>(`/api/files/mkdir?${params.toString()}`, {
     method: 'POST',
     token,
@@ -1055,8 +1064,12 @@ export async function renameHouseholdPath(
   space: HouseholdFileSpace,
   src: string,
   dst: string,
+  options: { spaceId?: string | null } = {},
 ): Promise<{ ok: boolean }> {
   const params = new URLSearchParams({ space, src, dst });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   return cloudJson<{ ok: boolean }>(`/api/files/rename?${params.toString()}`, {
     method: 'POST',
     token,
@@ -1067,8 +1080,12 @@ export async function deleteHouseholdPath(
   token: string,
   space: HouseholdFileSpace,
   path: string,
+  options: { spaceId?: string | null } = {},
 ): Promise<{ ok: boolean }> {
   const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   return cloudJson<{ ok: boolean }>(`/api/files?${params.toString()}`, {
     method: 'DELETE',
     token,
@@ -1080,6 +1097,7 @@ export async function uploadHouseholdFiles(
   space: HouseholdFileSpace,
   path: string,
   files: HouseholdUploadInput[],
+  options: { spaceId?: string | null } = {},
 ): Promise<{ ok: boolean; saved: Array<{ name: string; size: number }> }> {
   const formData = new FormData();
   for (const file of files) {
@@ -1091,6 +1109,9 @@ export async function uploadHouseholdFiles(
     formData.append('files', blob, file.name);
   }
   const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   const response = await fetch(`${CLOUD_API_BASE}/api/files/upload?${params.toString()}`, {
     method: 'POST',
     headers: {
@@ -1117,8 +1138,12 @@ export async function uploadHouseholdFiles(
 export function buildHouseholdFileDownloadUrl(
   space: HouseholdFileSpace,
   path: string,
+  options: { spaceId?: string | null } = {},
 ): string {
   const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
   return `${CLOUD_API_BASE}/api/files/download?${params.toString()}`;
 }
 

@@ -607,7 +607,8 @@ function App() {
     !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
-  const activeFileSpacePrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
+  const activeFileSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
+  const activeFileLegacyPrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
   const activeTaskSpaceId =
     activeSpace?.kind === 'shared' && activeSpace.template !== 'household' ? activeSpace.id : '';
   const libraryOverviewSections = [
@@ -693,15 +694,15 @@ function App() {
   }
 
   function toDeviceFilePath(displayPath: string): string {
-    return buildSpaceScopedFilePath(activeFileSpacePrefix, displayPath);
+    return buildSpaceScopedFilePath('', displayPath);
   }
 
   function fromDeviceFilePath(devicePath: string | null | undefined): string {
-    return stripSpaceScopedFilePath(activeFileSpacePrefix, devicePath);
+    return stripSpaceScopedFilePath(activeFileLegacyPrefix, devicePath);
   }
 
   function mapListingToActiveSpace(listing: HouseholdFileListing): HouseholdFileListing {
-    if (!activeFileSpacePrefix) {
+    if (!activeFileLegacyPrefix) {
       return listing;
     }
     return {
@@ -1236,7 +1237,7 @@ function App() {
       return;
     }
     void refreshFiles();
-  }, [session?.token, shellSurface, shellTab, fileSpace, activeFileSpacePrefix]);
+  }, [session?.token, shellSurface, shellTab, fileSpace, activeFileSpaceId, activeFileLegacyPrefix]);
 
   useEffect(() => {
     if (!canManage || homeDevices.length === 0) {
@@ -2342,6 +2343,7 @@ function App() {
         session.token,
         fileSpace,
         toDeviceFilePath(nextPath ?? currentFilePath),
+        { spaceId: activeFileSpaceId || undefined },
       );
       setFileListing(mapListingToActiveSpace(listing));
     } catch (error) {
@@ -2373,13 +2375,17 @@ function App() {
     try {
       if (fileEditorMode === 'mkdir') {
         const nextPath = currentFilePath ? `${currentFilePath}/${trimmed}` : trimmed;
-        await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(nextPath));
+        await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(nextPath), {
+          spaceId: activeFileSpaceId || undefined,
+        });
         setFilesNotice(`Created ${trimmed}.`);
       } else if (fileTargetEntry) {
         const src = fileTargetEntry.path;
         const parent = src.includes('/') ? src.slice(0, src.lastIndexOf('/')) : '';
         const dst = parent ? `${parent}/${trimmed}` : trimmed;
-        await renameHouseholdPath(session.token, fileSpace, toDeviceFilePath(src), toDeviceFilePath(dst));
+        await renameHouseholdPath(session.token, fileSpace, toDeviceFilePath(src), toDeviceFilePath(dst), {
+          spaceId: activeFileSpaceId || undefined,
+        });
         setFilesNotice(`Renamed to ${trimmed}.`);
       }
       setFileEditorOpen(false);
@@ -2398,7 +2404,9 @@ function App() {
     setFilesBusy(true);
     setFilesError('');
     try {
-      await deleteHouseholdPath(session.token, fileSpace, toDeviceFilePath(entry.path));
+      await deleteHouseholdPath(session.token, fileSpace, toDeviceFilePath(entry.path), {
+        spaceId: activeFileSpaceId || undefined,
+      });
       setFilesNotice(`Removed ${entry.name}.`);
       await refreshFiles();
     } catch (error) {
@@ -2434,7 +2442,13 @@ function App() {
           };
         }),
       );
-      const response = await uploadHouseholdFiles(session.token, fileSpace, toDeviceFilePath(currentFilePath), uploads);
+      const response = await uploadHouseholdFiles(
+        session.token,
+        fileSpace,
+        toDeviceFilePath(currentFilePath),
+        uploads,
+        { spaceId: activeFileSpaceId || undefined },
+      );
       setFilesNotice(`Uploaded ${response.saved.map((item) => item.name).join(', ')}.`);
       await refreshFiles();
     } catch (error) {
@@ -2456,7 +2470,9 @@ function App() {
         throw new Error('No writable file cache is available on this phone.');
       }
       const result = await FileSystem.downloadAsync(
-        buildHouseholdFileDownloadUrl(fileSpace, toDeviceFilePath(entry.path)),
+        buildHouseholdFileDownloadUrl(fileSpace, toDeviceFilePath(entry.path), {
+          spaceId: activeFileSpaceId || undefined,
+        }),
         `${destinationRoot}${entry.name}`,
         {
           headers: {

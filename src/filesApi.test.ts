@@ -85,4 +85,51 @@ describe('household files API', () => {
       expect.objectContaining({ method: 'DELETE' }),
     );
   });
+
+  it('threads shared space ids through file routes when present', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ space: 'family', space_id: 'space-parents', path: '', entries: [] }),
+    } as Response);
+
+    global.fetch = fetchMock;
+
+    await getHouseholdFiles('token-1', 'family', '', { spaceId: 'space-parents' });
+    await createHouseholdDirectory('token-1', 'family', 'photos', { spaceId: 'space-parents' });
+    await renameHouseholdPath('token-1', 'family', 'photos', 'albums', { spaceId: 'space-parents' });
+    await deleteHouseholdPath('token-1', 'family', 'albums', { spaceId: 'space-parents' });
+    await uploadHouseholdFiles(
+      'token-1',
+      'family',
+      '',
+      [{ name: 'brief.txt', mimeType: 'text/plain', data: new Uint8Array([1, 2, 3]) }],
+      { spaceId: 'space-parents' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://morgen52.site/familyserver/api/files?space=family&path=&space_id=space-parents',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://morgen52.site/familyserver/api/files/mkdir?space=family&path=photos&space_id=space-parents',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://morgen52.site/familyserver/api/files/rename?space=family&src=photos&dst=albums&space_id=space-parents',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'https://morgen52.site/familyserver/api/files?space=family&path=albums&space_id=space-parents',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'https://morgen52.site/familyserver/api/files/upload?space=family&path=&space_id=space-parents',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
 });
