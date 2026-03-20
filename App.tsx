@@ -66,6 +66,7 @@ import {
   getHouseholdTasks,
   installFamilyApp,
   onboardDeviceProvider,
+  openSpaceSideChannel,
   renameHouseholdPath,
   resetDeviceToSetupMode,
   type HouseholdTaskScope,
@@ -1518,6 +1519,36 @@ function App() {
     }
   }
 
+  async function openCurrentSpaceSideChannel(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatBusy(true);
+    setChatError('');
+    try {
+      const sideChannel = await openSpaceSideChannel(session.token, activeSpaceId);
+      if (!sideChannel.sessionId) {
+        throw new Error('Sparkbox has not prepared a private side channel for this space yet.');
+      }
+      setActiveSpaceDetail((current) =>
+        current
+          ? {
+              ...current,
+              privateSideChannel: sideChannel,
+            }
+          : current,
+      );
+      setChatScope('private');
+      setActiveChatSessionId(sideChannel.sessionId);
+      const sessions = await getHouseholdChatSessions(session.token, 'private');
+      setChatSessions(sessions);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Could not open the private side channel.');
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   function openChatSessionEditor(sessionItem?: HouseholdChatSessionSummary): void {
     if (sessionItem) {
       setEditingChatSession(sessionItem);
@@ -2361,6 +2392,27 @@ function App() {
                   ) : (
                     <Text style={styles.cardCopy}>No topics yet.</Text>
                   )}
+                  {activeSpaceDetail?.privateSideChannel?.available ? (
+                    <View style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{activeSpaceDetail.privateSideChannel.label}</Text>
+                        <Text style={styles.tagMuted}>private</Text>
+                      </View>
+                      <Text style={styles.cardCopy}>
+                        Ask Sparkbox privately about this shared space before you bring anything back into the group.
+                      </Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={styles.primaryButtonSmall}
+                          onPress={() => {
+                            void openCurrentSpaceSideChannel();
+                          }}
+                        >
+                          <Text style={styles.primaryButtonText}>Open private side chat</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                   {activeSpaceDetail?.enabledFamilyApps.length ? (
                     <>
                       <Text style={styles.selectionLabel}>Enabled in this space</Text>

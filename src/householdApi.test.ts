@@ -25,6 +25,7 @@ import {
   getHouseholdSummary,
   installFamilyApp,
   onboardDeviceProvider,
+  openSpaceSideChannel,
   removeHouseholdMember,
   resetDeviceToSetupMode,
   revokeHouseholdInvitation,
@@ -118,6 +119,11 @@ describe('space and family app API', () => {
             { id: 'thread-1', title: '近况与问候', position: 0 },
           ],
           enabled_family_apps: [],
+          private_side_channel: {
+            available: true,
+            label: '先私下问问 Sparkbox',
+            session_id: null,
+          },
         }),
       } as Response)
       .mockResolvedValueOnce({
@@ -133,6 +139,14 @@ describe('space and family app API', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ ok: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          available: true,
+          label: '先私下问问 Sparkbox',
+          session_id: 'chat-side-1',
+        }),
       } as Response);
 
     global.fetch = fetchMock;
@@ -148,13 +162,24 @@ describe('space and family app API', () => {
       cadence: 'weekly',
       entryCard: true,
     });
+    const sideChannel = await openSpaceSideChannel('token-1', 'space-parents');
 
     expect(spaces).toHaveLength(1);
     expect(spaces[0]?.kind).toBe('private');
     expect(created.members).toHaveLength(2);
     expect(created.threads[0]?.title).toBe('近况与问候');
+    expect(created.privateSideChannel).toEqual({
+      available: true,
+      label: '先私下问问 Sparkbox',
+      sessionId: null,
+    });
     expect(installed.slug).toBe('weekend-plans');
     expect(enabled).toEqual({ ok: true });
+    expect(sideChannel).toEqual({
+      available: true,
+      label: '先私下问问 Sparkbox',
+      sessionId: 'chat-side-1',
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'https://morgen52.site/familyserver/api/spaces',
@@ -186,6 +211,13 @@ describe('space and family app API', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ cadence: 'weekly', entry_card: true }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/side-channel',
+      expect.objectContaining({
+        method: 'POST',
       }),
     );
   });

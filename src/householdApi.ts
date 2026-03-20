@@ -69,10 +69,17 @@ export type EnabledFamilyApp = {
   config: Record<string, unknown>;
 };
 
+export type HouseholdSpaceSideChannel = {
+  available: boolean;
+  label: string;
+  sessionId?: string | null;
+};
+
 export type HouseholdSpaceDetail = HouseholdSpaceSummary & {
   members: HouseholdSpaceMember[];
   threads: HouseholdSpaceThread[];
   enabledFamilyApps: EnabledFamilyApp[];
+  privateSideChannel?: HouseholdSpaceSideChannel | null;
 };
 
 export type HouseholdSpaceCreateInput = {
@@ -404,6 +411,20 @@ export async function getHouseholdSpaceDetail(
     token,
   });
   return normalizeSpaceDetail(response);
+}
+
+export async function openSpaceSideChannel(
+  token: string,
+  spaceId: string,
+): Promise<HouseholdSpaceSideChannel> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/side-channel`,
+    {
+      method: 'POST',
+      token,
+    },
+  );
+  return normalizeSpaceSideChannel(response);
 }
 
 export async function installFamilyApp(
@@ -1340,6 +1361,10 @@ function normalizeSpaceDetail(space: Record<string, unknown>): HouseholdSpaceDet
               : {},
         }))
       : [],
+    privateSideChannel:
+      space.private_side_channel && typeof space.private_side_channel === 'object'
+        ? normalizeSpaceSideChannel(space.private_side_channel as Record<string, unknown>)
+        : null,
   };
 }
 
@@ -1352,6 +1377,14 @@ function normalizeFamilyAppInstallation(app: Record<string, unknown>): FamilyApp
     spaceTemplates: Array.isArray(app.space_templates)
       ? app.space_templates.map((item) => String(item))
       : [],
+  };
+}
+
+function normalizeSpaceSideChannel(sideChannel: Record<string, unknown>): HouseholdSpaceSideChannel {
+  return {
+    available: sideChannel.available !== false,
+    label: String(sideChannel.label ?? '先私下问问 Sparkbox'),
+    sessionId: typeof sideChannel.session_id === 'string' ? sideChannel.session_id : null,
   };
 }
 
