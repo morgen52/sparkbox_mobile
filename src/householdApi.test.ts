@@ -26,6 +26,7 @@ import {
   installFamilyApp,
   onboardDeviceProvider,
   openSpaceSideChannel,
+  openSpaceThreadSession,
   removeHouseholdMember,
   resetDeviceToSetupMode,
   revokeHouseholdInvitation,
@@ -117,7 +118,7 @@ describe('space and family app API', () => {
             { id: 'user-2', display_name: 'Dad', role: 'member' },
           ],
           threads: [
-            { id: 'thread-1', title: '近况与问候', position: 0 },
+            { id: 'thread-1', title: '近况与问候', position: 0, chat_session_id: 'chat-thread-1' },
           ],
           enabled_family_apps: [],
           private_side_channel: {
@@ -156,6 +157,20 @@ describe('space and family app API', () => {
           label: '先私下问问 Sparkbox',
           session_id: 'chat-side-1',
         }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'chat-thread-1',
+          name: '我和爸妈 + Sparkbox · 近况与问候',
+          scope: 'family',
+          owner_user_id: 'user-1',
+          system_prompt: '',
+          temperature: 0.7,
+          max_tokens: 2048,
+          created_at: '2026-03-20T10:03:00Z',
+          updated_at: '2026-03-20T10:03:00Z',
+        }),
       } as Response);
 
     global.fetch = fetchMock;
@@ -176,6 +191,7 @@ describe('space and family app API', () => {
       content: '请 Sparkbox 帮我转述：今晚 8 点开个短会。',
     });
     const sideChannel = await openSpaceSideChannel('token-1', 'space-parents');
+    const openedThread = await openSpaceThreadSession('token-1', 'space-parents', 'thread-1');
 
     expect(spaces).toHaveLength(1);
     expect(spaces[0]?.kind).toBe('private');
@@ -198,6 +214,7 @@ describe('space and family app API', () => {
       label: '先私下问问 Sparkbox',
       sessionId: 'chat-side-1',
     });
+    expect(openedThread.id).toBe('chat-thread-1');
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'https://morgen52.site/familyserver/api/spaces',
@@ -245,6 +262,13 @@ describe('space and family app API', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       'https://morgen52.site/familyserver/api/spaces/space-parents/side-channel',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/threads/thread-1/open',
       expect.objectContaining({
         method: 'POST',
       }),
@@ -330,7 +354,7 @@ describe('space and family app API', () => {
         updated_at: '2026-03-20T10:02:00Z',
         members: [{ id: 'user-1', display_name: 'Morgan', role: 'owner' }],
         threads: [
-          { id: 'thread-1', title: '近况与问候', position: 0 },
+          { id: 'thread-1', title: '近况与问候', position: 0, chat_session_id: 'chat-thread-1' },
           { id: 'thread-2', title: '健康与提醒', position: 1 },
         ],
         enabled_family_apps: [
@@ -342,6 +366,7 @@ describe('space and family app API', () => {
     const detail = await getHouseholdSpaceDetail('token-1', 'space-parents');
 
     expect(detail.threads.map((thread) => thread.title)).toEqual(['近况与问候', '健康与提醒']);
+    expect(detail.threads[0]?.chatSessionId).toBe('chat-thread-1');
     expect(detail.enabledFamilyApps[0]?.slug).toBe('weekend-plans');
     expect(global.fetch).toHaveBeenCalledWith(
       'https://morgen52.site/familyserver/api/spaces/space-parents',

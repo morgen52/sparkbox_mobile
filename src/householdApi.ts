@@ -60,6 +60,7 @@ export type HouseholdSpaceThread = {
   id: string;
   title: string;
   position: number;
+  chatSessionId?: string | null;
 };
 
 export type EnabledFamilyApp = {
@@ -441,6 +442,21 @@ export async function openSpaceSideChannel(
     },
   );
   return normalizeSpaceSideChannel(response);
+}
+
+export async function openSpaceThreadSession(
+  token: string,
+  spaceId: string,
+  threadId: string,
+): Promise<HouseholdChatSessionSummary> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/threads/${encodeURIComponent(threadId)}/open`,
+    {
+      method: 'POST',
+      token,
+    },
+  );
+  return normalizeChatSessionSummary(response);
 }
 
 export async function relayHouseholdSpaceMessage(
@@ -1379,6 +1395,10 @@ function normalizeSpaceDetail(space: Record<string, unknown>): HouseholdSpaceDet
           position: typeof (thread as Record<string, unknown>).position === 'number'
             ? Number((thread as Record<string, unknown>).position)
             : 0,
+          chatSessionId:
+            typeof (thread as Record<string, unknown>).chat_session_id === 'string'
+              ? String((thread as Record<string, unknown>).chat_session_id)
+              : null,
         }))
       : [],
     enabledFamilyApps: Array.isArray(space.enabled_family_apps)

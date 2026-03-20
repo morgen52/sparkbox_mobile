@@ -67,6 +67,7 @@ import {
   installFamilyApp,
   onboardDeviceProvider,
   openSpaceSideChannel,
+  openSpaceThreadSession,
   relayHouseholdSpaceMessage,
   renameHouseholdPath,
   resetDeviceToSetupMode,
@@ -1650,6 +1651,31 @@ function App() {
     }
   }
 
+  async function openSpaceThread(threadId: string): Promise<void> {
+    if (!session?.token || !activeSpaceId || !activeSpaceDetail) {
+      return;
+    }
+    setChatBusy(true);
+    setChatError('');
+    try {
+      const opened = await openSpaceThreadSession(session.token, activeSpaceId, threadId);
+      setChatScope(opened.scope);
+      setActiveChatSessionId(opened.id);
+      const [sessions, detail, refreshedSpace] = await Promise.all([
+        getHouseholdChatSessions(session.token, opened.scope),
+        getHouseholdChatSession(session.token, opened.id),
+        getHouseholdSpaceDetail(session.token, activeSpaceId),
+      ]);
+      setChatSessions(sessions);
+      setActiveChatSession(detail);
+      setActiveSpaceDetail(refreshedSpace);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Could not open this topic yet.');
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   function openChatSessionEditor(sessionItem?: HouseholdChatSessionSummary): void {
     if (sessionItem) {
       setEditingChatSession(sessionItem);
@@ -2484,12 +2510,23 @@ function App() {
                   {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
                   {activeSpaceDetail?.threads.length ? (
                     activeSpaceDetail.threads.map((thread) => (
-                      <View key={thread.id} style={styles.deviceRowCard}>
+                      <Pressable
+                        key={thread.id}
+                        style={styles.deviceRowCard}
+                        onPress={() => void openSpaceThread(thread.id)}
+                      >
                         <View style={styles.deviceRowHeadline}>
                           <Text style={styles.networkName}>{thread.title}</Text>
-                          <Text style={styles.tagMuted}>topic</Text>
+                          <Text style={styles.tagMuted}>
+                            {thread.chatSessionId && thread.chatSessionId === activeChatSessionId ? 'open' : 'topic'}
+                          </Text>
                         </View>
-                      </View>
+                        <Text style={styles.cardCopy}>
+                          {thread.chatSessionId
+                            ? 'Tap to continue this topic.'
+                            : 'Tap to start this topic with Sparkbox.'}
+                        </Text>
+                      </Pressable>
                     ))
                   ) : (
                     <Text style={styles.cardCopy}>No topics yet.</Text>
