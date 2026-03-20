@@ -29,6 +29,7 @@ import {
   resetDeviceToSetupMode,
   revokeHouseholdInvitation,
   sendHouseholdChatSessionMessage,
+  streamHouseholdChatSessionMessage,
   startDeviceReprovision,
   sendHouseholdChat,
   updateHouseholdChatSession,
@@ -37,9 +38,11 @@ import {
 } from './householdApi';
 
 const originalFetch = global.fetch;
+const originalXmlHttpRequest = global.XMLHttpRequest;
 
 afterEach(() => {
   global.fetch = originalFetch;
+  global.XMLHttpRequest = originalXmlHttpRequest;
   vi.restoreAllMocks();
 });
 
@@ -549,6 +552,57 @@ describe('scoped chat session API', () => {
         body: JSON.stringify({ content: 'hello again' }),
       }),
     );
+  });
+
+  it('streams pending, token, and done events through XMLHttpRequest', async () => {
+    class FakeXmlHttpRequest {
+      static sentBodies: string[] = [];
+      readyState = 0;
+      status = 200;
+      responseText = '';
+      onprogress: (() => void) | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      headers: Record<string, string> = {};
+
+      open(_method: string, _url: string) {
+        this.readyState = 1;
+      }
+
+      setRequestHeader(name: string, value: string) {
+        this.headers[name] = value;
+      }
+
+      send(body?: Document | XMLHttpRequestBodyInit | null) {
+        FakeXmlHttpRequest.sentBodies.push(String(body ?? ''));
+        this.responseText += 'event: pending\ndata: {"type":"pending","device_id":"sbx-1","message":"Preparing"}\n\n';
+        this.onprogress?.();
+        this.responseText += 'event: token\ndata: {"type":"token","content":"Hello "}\n\n';
+        this.onprogress?.();
+        this.responseText += 'event: token\ndata: {"type":"token","content":"family"}\n\n';
+        this.onprogress?.();
+        this.responseText += 'event: done\ndata: {"type":"done","device_id":"sbx-1","message":"Hello family"}\n\n';
+        this.onload?.();
+      }
+    }
+
+    global.XMLHttpRequest = FakeXmlHttpRequest as unknown as typeof XMLHttpRequest;
+
+    const events: string[] = [];
+    const response = await streamHouseholdChatSessionMessage('token-1', 'chat-2', 'hello again', {
+      onPending: (event) => events.push(`pending:${event.message}`),
+      onToken: (event) => events.push(`token:${event.content}`),
+      onDone: (event) => events.push(`done:${event.message}`),
+    });
+
+    expect(response).toEqual({ deviceId: 'sbx-1', message: 'Hello family' });
+    expect(events).toEqual([
+      'pending:Preparing',
+      'token:Hello ',
+      'token:family',
+      'done:Hello family',
+    ]);
+    expect(FakeXmlHttpRequest.sentBodies).toEqual([JSON.stringify({ content: 'hello again' })]);
   });
 });
 

@@ -155,6 +155,30 @@ export type HouseholdChatResponse = {
   message: string;
 };
 
+export type HouseholdChatStreamPendingEvent = {
+  type: 'pending';
+  deviceId: string;
+  message: string;
+};
+
+export type HouseholdChatStreamTokenEvent = {
+  type: 'token';
+  content: string;
+};
+
+export type HouseholdChatStreamDoneEvent = {
+  type: 'done';
+  deviceId: string;
+  message: string;
+  error?: string | null;
+};
+
+export type HouseholdChatSessionStreamHandlers = {
+  onPending?: (event: HouseholdChatStreamPendingEvent) => void;
+  onToken?: (event: HouseholdChatStreamTokenEvent) => void;
+  onDone?: (event: HouseholdChatStreamDoneEvent) => void;
+};
+
 export type HouseholdTaskScope = 'family' | 'private';
 
 export type HouseholdTaskSummary = {
@@ -546,6 +570,100 @@ export async function sendHouseholdChatSessionMessage(
     deviceId: response.device_id,
     message: response.message,
   };
+}
+
+export async function streamHouseholdChatSessionMessage(
+  token: string,
+  sessionId: string,
+  content: string,
+  handlers: HouseholdChatSessionStreamHandlers = {},
+): Promise<HouseholdChatResponse> {
+  const XhrCtor = getXmlHttpRequestConstructor();
+  if (!XhrCtor) {
+    throw new Error('Streaming chat is unavailable on this device.');
+  }
+
+  return new Promise<HouseholdChatResponse>((resolve, reject) => {
+    const xhr = new XhrCtor();
+    let processedLength = 0;
+    let buffer = '';
+    let doneEvent: HouseholdChatStreamDoneEvent | null = null;
+    let settled = false;
+
+    const settleReject = (message: string) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error(message));
+    };
+
+    const settleResolve = (response: HouseholdChatResponse) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(response);
+    };
+
+    const flushEvents = (force: boolean) => {
+      const nextChunk = xhr.responseText.slice(processedLength);
+      if (!nextChunk && !force) {
+        return;
+      }
+      processedLength = xhr.responseText.length;
+      buffer += nextChunk;
+      const parsed = extractSseEvents(buffer, force);
+      buffer = parsed.rest;
+      for (const event of parsed.events) {
+        if (event.type === 'pending') {
+          handlers.onPending?.(event);
+          continue;
+        }
+        if (event.type === 'token') {
+          handlers.onToken?.(event);
+          continue;
+        }
+        doneEvent = event;
+        handlers.onDone?.(event);
+      }
+    };
+
+    xhr.open('POST', `${CLOUD_API_BASE}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`);
+    xhr.setRequestHeader('Accept', 'text/event-stream');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onprogress = () => {
+      flushEvents(false);
+    };
+
+    xhr.onload = () => {
+      flushEvents(true);
+      if (xhr.status >= 400) {
+        settleReject(parseStreamingError(xhr.status, xhr.responseText));
+        return;
+      }
+      if (!doneEvent) {
+        settleReject('Streaming chat ended before Sparkbox finished replying.');
+        return;
+      }
+      if (doneEvent.error) {
+        settleReject(doneEvent.error);
+        return;
+      }
+      settleResolve({
+        deviceId: doneEvent.deviceId,
+        message: doneEvent.message,
+      });
+    };
+
+    xhr.onerror = () => {
+      settleReject('Chat is unavailable right now.');
+    };
+
+    xhr.send(JSON.stringify({ content }));
+  });
 }
 
 export async function clearHouseholdChat(token: string): Promise<{ ok: boolean }> {
@@ -1040,6 +1158,96 @@ async function cloudJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+function getXmlHttpRequestConstructor(): typeof XMLHttpRequest | null {
+  return typeof XMLHttpRequest === 'function' ? XMLHttpRequest : null;
+}
+
+function parseStreamingError(status: number, responseText: string): string {
+  if (responseText.trim()) {
+    try {
+      const payload = JSON.parse(responseText) as { detail?: string };
+      if (typeof payload.detail === 'string' && payload.detail.trim()) {
+        return payload.detail.trim();
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return `Request failed: ${status}`;
+}
+
+function extractSseEvents(
+  rawBuffer: string,
+  force: boolean,
+): {
+  events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent>;
+  rest: string;
+} {
+  const normalized = rawBuffer.replace(/\r\n/g, '\n');
+  const segments = normalized.split('\n\n');
+  const rest = force ? '' : segments.pop() ?? '';
+  const events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent> = [];
+
+  for (const segment of segments) {
+    const parsed = parseSseSegment(segment);
+    if (parsed) {
+      events.push(parsed);
+    }
+  }
+
+  return { events, rest };
+}
+
+function parseSseSegment(
+  segment: string,
+): HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent | null {
+  if (!segment.trim()) {
+    return null;
+  }
+  let eventName = 'message';
+  const dataLines: string[] = [];
+  for (const rawLine of segment.split('\n')) {
+    const line = rawLine.trimEnd();
+    if (!line) {
+      continue;
+    }
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim();
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+  if (dataLines.length === 0) {
+    return null;
+  }
+  const payload = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
+  const type = typeof payload.type === 'string' ? payload.type : eventName;
+  if (type === 'pending') {
+    return {
+      type: 'pending',
+      deviceId: String(payload.device_id ?? ''),
+      message: String(payload.message ?? ''),
+    };
+  }
+  if (type === 'token') {
+    return {
+      type: 'token',
+      content: String(payload.content ?? ''),
+    };
+  }
+  if (type === 'done') {
+    return {
+      type: 'done',
+      deviceId: String(payload.device_id ?? ''),
+      message: String(payload.message ?? ''),
+      error: typeof payload.error === 'string' ? payload.error : null,
+    };
+  }
+  return null;
 }
 
 function normalizeTask(task: Record<string, unknown>): HouseholdTaskSummary {

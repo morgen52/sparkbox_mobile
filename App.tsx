@@ -68,7 +68,6 @@ import {
   onboardDeviceProvider,
   renameHouseholdPath,
   resetDeviceToSetupMode,
-  sendHouseholdChatSessionMessage,
   type HouseholdTaskScope,
   type HouseholdTaskSummary,
   type HouseholdTaskRunSummary,
@@ -78,6 +77,7 @@ import {
   type ChatSessionScope,
   type HouseholdChatSessionDetail,
   type HouseholdChatSessionSummary,
+  streamHouseholdChatSessionMessage,
   triggerHouseholdTask,
   updateDeviceProviderConfig,
   updateHouseholdChatSession,
@@ -180,6 +180,12 @@ type HouseholdDevice = {
 type ChatTimelineMessage = HouseholdChatSessionMessage & {
   pending?: boolean;
 };
+
+const CHAT_PENDING_NOTES = [
+  'Sparkbox 正在认真准备，不会丢下这条消息。',
+  '正在结合这个空间的上下文慢慢想一想。',
+  '第一次回复可能会慢一点，但它还在继续生成。',
+];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -358,6 +364,7 @@ function App() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatSendPhase, setChatSendPhase] = useState<ChatSendPhase>('idle');
   const [chatPendingMessage, setChatPendingMessage] = useState<ChatTimelineMessage | null>(null);
+  const [, setChatPendingNoteIndex] = useState(0);
   const [chatError, setChatError] = useState('');
   const [chatDraft, setChatDraft] = useState('');
   const [chatSessionEditorOpen, setChatSessionEditorOpen] = useState(false);
@@ -847,7 +854,29 @@ function App() {
   useEffect(() => {
     setChatPendingMessage(null);
     setChatSendPhase('idle');
+    setChatPendingNoteIndex(0);
   }, [activeChatSessionId]);
+
+  useEffect(() => {
+    if (chatSendPhase !== 'sending' || !chatPendingMessage?.pending) {
+      return;
+    }
+    const interval = setInterval(() => {
+      setChatPendingNoteIndex((current) => {
+        const next = (current + 1) % CHAT_PENDING_NOTES.length;
+        setChatPendingMessage((existing) =>
+          existing?.pending
+            ? {
+                ...existing,
+                content: CHAT_PENDING_NOTES[next],
+              }
+            : existing,
+        );
+        return next;
+      });
+    }, 2400);
+    return () => clearInterval(interval);
+  }, [chatPendingMessage?.pending, chatSendPhase]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
@@ -1560,28 +1589,46 @@ function App() {
     setChatDraft('');
     setChatBusy(true);
     setChatError('');
+    setChatPendingNoteIndex(0);
     setChatSendPhase('sending');
     setChatPendingMessage({
       role: 'assistant',
-      content: describeChatSendPhase('sending'),
+      content: CHAT_PENDING_NOTES[0],
       senderDisplayName: null,
       pending: true,
     });
-    const previousSession = activeChatSession;
-    if (previousSession) {
+    if (activeChatSession) {
       setActiveChatSession({
-        ...previousSession,
-        messages: [...previousSession.messages, { role: 'user', content, senderDisplayName: session.user.display_name }],
+        ...activeChatSession,
+        messages: [...activeChatSession.messages, { role: 'user', content, senderDisplayName: session.user.display_name }],
       });
     }
     try {
-      const response = await sendHouseholdChatSessionMessage(session.token, activeChatSessionId, content);
-      setChatSendPhase('streaming');
-      setChatPendingMessage({
-        role: 'assistant',
-        content: response.message || describeChatSendPhase('streaming'),
-        senderDisplayName: null,
-        pending: true,
+      let streamedMessage = '';
+      const response = await streamHouseholdChatSessionMessage(session.token, activeChatSessionId, content, {
+        onPending: (event) => {
+          setChatSendPhase('sending');
+          if (event.message?.trim()) {
+            setChatPendingMessage((current) =>
+              current?.pending
+                ? {
+                    ...current,
+                    content: current.content || event.message,
+                  }
+                : current,
+            );
+          }
+        },
+        onToken: (event) => {
+          streamedMessage += event.content;
+          setChatSendPhase('streaming');
+          setChatPendingMessage({
+            role: 'assistant',
+            content: streamedMessage,
+            senderDisplayName: null,
+            pending: true,
+          });
+        },
       });
       const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
       setActiveChatSession(detail);
@@ -1604,11 +1651,11 @@ function App() {
       }
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
-      setActiveChatSession(previousSession);
       setChatError(error instanceof Error ? error.message : 'Chat is unavailable right now.');
     } finally {
       setChatPendingMessage(null);
       setChatSendPhase('idle');
+      setChatPendingNoteIndex(0);
       setChatBusy(false);
     }
   }
