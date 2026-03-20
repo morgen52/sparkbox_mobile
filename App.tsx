@@ -67,6 +67,7 @@ import {
   installFamilyApp,
   onboardDeviceProvider,
   openSpaceSideChannel,
+  relayHouseholdSpaceMessage,
   renameHouseholdPath,
   resetDeviceToSetupMode,
   type HouseholdTaskScope,
@@ -112,8 +113,10 @@ import {
   describeSpaceKind,
   describeSpaceTemplate,
   formatSpaceTemplateList,
+  getRelayTargets,
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
+  resolveRelayTargetUserId,
   type ChatSendPhase,
 } from './src/spaceShell';
 import {
@@ -398,6 +401,12 @@ function App() {
   const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [taskHistoryTask, setTaskHistoryTask] = useState<HouseholdTaskSummary | null>(null);
   const [taskHistoryRuns, setTaskHistoryRuns] = useState<HouseholdTaskRunSummary[]>([]);
+  const [relayComposerOpen, setRelayComposerOpen] = useState(false);
+  const [relayTargetUserId, setRelayTargetUserId] = useState('');
+  const [relayMessage, setRelayMessage] = useState('');
+  const [relayBusy, setRelayBusy] = useState(false);
+  const [relayError, setRelayError] = useState('');
+  const [relayNotice, setRelayNotice] = useState('');
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [diagnosticsDeviceId, setDiagnosticsDeviceId] = useState('');
@@ -563,6 +572,7 @@ function App() {
   const canManage = canManageHousehold(session?.user.role ?? '');
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
+  const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
   const currentFilePath = fileListing?.path ?? '';
   const canCreateTasks = canManage || taskScope === 'private';
   const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
@@ -809,6 +819,21 @@ function App() {
       cancelled = true;
     };
   }, [session?.token, activeSpaceId]);
+
+  useEffect(() => {
+    setRelayTargetUserId((current) => resolveRelayTargetUserId(relayTargets, current));
+    if (!relayTargets.some((member) => member.id === relayTargetUserId)) {
+      setRelayError('');
+    }
+  }, [relayTargetUserId, relayTargets]);
+
+  useEffect(() => {
+    setRelayComposerOpen(false);
+    setRelayTargetUserId('');
+    setRelayMessage('');
+    setRelayError('');
+    setRelayNotice('');
+  }, [activeSpaceId]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token) {
@@ -1221,6 +1246,12 @@ function App() {
     setTaskHistoryOpen(false);
     setTaskHistoryTask(null);
     setTaskHistoryRuns([]);
+    setRelayComposerOpen(false);
+    setRelayTargetUserId('');
+    setRelayMessage('');
+    setRelayBusy(false);
+    setRelayError('');
+    setRelayNotice('');
     setFileListing(null);
     setFilesBusy(false);
     setFilesError('');
@@ -1574,6 +1605,48 @@ function App() {
       setChatError(error instanceof Error ? error.message : 'Could not open the private side channel.');
     } finally {
       setChatBusy(false);
+    }
+  }
+
+  function openRelayComposer(): void {
+    if (!activeSpace || activeSpace.kind !== 'shared' || relayTargets.length === 0) {
+      return;
+    }
+    setRelayTargetUserId((current) => resolveRelayTargetUserId(relayTargets, current));
+    setRelayError('');
+    setRelayNotice('');
+    setRelayComposerOpen(true);
+  }
+
+  async function submitRelayMessage(): Promise<void> {
+    if (!session?.token || !activeSpaceId || !activeSpaceDetail || activeSpaceDetail.kind !== 'shared') {
+      return;
+    }
+    const target = relayTargets.find((member) => member.id === relayTargetUserId) ?? relayTargets[0];
+    const content = relayMessage.trim();
+    if (!target) {
+      setRelayError('Choose a member in this shared space first.');
+      return;
+    }
+    if (!content) {
+      setRelayError('Write the note Sparkbox should pass along.');
+      return;
+    }
+    setRelayBusy(true);
+    setRelayError('');
+    try {
+      await relayHouseholdSpaceMessage(session.token, activeSpaceId, {
+        targetUserId: target.id,
+        content,
+      });
+      setRelayNotice(`Sparkbox passed it to ${target.displayName}.`);
+      setRelayComposerOpen(false);
+      setRelayMessage('');
+      setRelayTargetUserId(resolveRelayTargetUserId(relayTargets, target.id));
+    } catch (error) {
+      setRelayError(error instanceof Error ? error.message : 'Could not relay this note.');
+    } finally {
+      setRelayBusy(false);
     }
   }
 
@@ -2408,6 +2481,7 @@ function App() {
                       ? `${activeSpaceDetail.name} is organized around topics, not one endless chat.`
                       : 'Pick a space to see its default topics.'}
                   </Text>
+                  {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
                   {activeSpaceDetail?.threads.length ? (
                     activeSpaceDetail.threads.map((thread) => (
                       <View key={thread.id} style={styles.deviceRowCard}>
@@ -2420,6 +2494,25 @@ function App() {
                   ) : (
                     <Text style={styles.cardCopy}>No topics yet.</Text>
                   )}
+                  {activeSpaceDetail?.kind === 'shared' ? (
+                    <>
+                      <Text style={styles.cardCopy}>
+                        Pick one other member and ask Sparkbox to relay a note privately.
+                      </Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={[
+                            styles.primaryButtonSmall,
+                            relayTargets.length === 0 ? styles.networkRowDisabled : null,
+                          ]}
+                          onPress={openRelayComposer}
+                          disabled={relayTargets.length === 0}
+                        >
+                          <Text style={styles.primaryButtonText}>请 Sparkbox 帮我转述</Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : null}
                   {activeSpaceDetail?.privateSideChannel?.available ? (
                     <View style={styles.deviceRowCard}>
                       <View style={styles.deviceRowHeadline}>
@@ -2874,9 +2967,13 @@ function App() {
                               <Text style={styles.networkName}>{app.title}</Text>
                               <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
                             </View>
+                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                             <Text style={styles.cardCopy}>
                               Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                             </Text>
+                            {app.capabilities.length > 0 ? (
+                              <Text style={styles.cardCopy}>Capabilities: {app.capabilities.join(' · ')}</Text>
+                            ) : null}
                             <View style={styles.inlineActions}>
                               <Pressable
                                 style={styles.primaryButtonSmall}
@@ -2899,8 +2996,14 @@ function App() {
                               <Text style={styles.networkName}>{app.title}</Text>
                               <Text style={styles.statusTagOnline}>installed</Text>
                             </View>
+                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                             <Text style={styles.cardCopy}>
                               Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                            </Text>
+                            <Text style={styles.cardCopy}>
+                              {app.supportsProactiveMessages ? 'Proactive' : 'On demand only'}
+                              {app.supportsPrivateRelay ? ' · Private relay' : ''}
+                              {app.requiresOwnerConfirmation ? ' · Owner confirmation' : ''}
                             </Text>
                           </View>
                         ))}
@@ -2908,14 +3011,18 @@ function App() {
                     ) : null}
                     <Text style={styles.selectionLabel}>Available for this Box</Text>
                     {availableFamilyApps.map((app) => (
-                        <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
+                      <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{app.title}</Text>
                             <Text style={styles.tagMuted}>{app.riskLevel}</Text>
                           </View>
+                          {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                           <Text style={styles.cardCopy}>
                             Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                           </Text>
+                          {app.capabilities.length > 0 ? (
+                            <Text style={styles.cardCopy}>Capabilities: {app.capabilities.join(' · ')}</Text>
+                          ) : null}
                           <View style={styles.inlineActions}>
                             <Pressable
                               style={styles.primaryButtonSmall}
@@ -3469,6 +3576,69 @@ function App() {
                 <View style={styles.inlineActions}>
                   <Pressable style={styles.secondaryButtonSmall} onPress={() => setTaskHistoryOpen(false)}>
                     <Text style={styles.secondaryButtonText}>Close</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            animationType="slide"
+            presentationStyle="overFullScreen"
+            transparent
+            visible={relayComposerOpen}
+            onRequestClose={() => setRelayComposerOpen(false)}
+          >
+            <View style={styles.networkSheetBackdrop}>
+              <View style={styles.networkSheetCard}>
+                <Text style={styles.selectionLabel}>Relay message</Text>
+                <Text style={styles.selectionTitle}>请 Sparkbox 帮我转述</Text>
+                <Text style={styles.selectionCopy}>
+                  Choose one other member in this shared space, then write the note Sparkbox should pass along privately.
+                </Text>
+                <Text style={styles.selectionLabel}>Send to</Text>
+                <View style={styles.scopeRow}>
+                  {relayTargets.map((member) => {
+                    const active = relayTargetUserId === member.id;
+                    return (
+                      <Pressable
+                        key={member.id}
+                        style={[styles.scopePill, active ? styles.scopePillActive : null]}
+                        onPress={() => setRelayTargetUserId(member.id)}
+                      >
+                        <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
+                          {member.displayName}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  autoCapitalize="sentences"
+                  autoCorrect={false}
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Write the message Sparkbox should relay"
+                  placeholderTextColor="#7e8a83"
+                  style={[styles.input, styles.textArea]}
+                  value={relayMessage}
+                  onChangeText={setRelayMessage}
+                />
+                {relayError ? <Text style={styles.errorText}>{relayError}</Text> : null}
+                <View style={styles.inlineActions}>
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => setRelayComposerOpen(false)}
+                    disabled={relayBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.primaryButtonSmall, relayTargets.length === 0 ? styles.networkRowDisabled : null]}
+                    onPress={() => void submitRelayMessage()}
+                    disabled={relayBusy || relayTargets.length === 0}
+                  >
+                    {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Relay</Text>}
                   </Pressable>
                 </View>
               </View>

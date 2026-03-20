@@ -29,6 +29,7 @@ import {
   removeHouseholdMember,
   resetDeviceToSetupMode,
   revokeHouseholdInvitation,
+  relayHouseholdSpaceMessage,
   sendHouseholdChatSessionMessage,
   streamHouseholdChatSessionMessage,
   startDeviceReprovision,
@@ -143,6 +144,14 @@ describe('space and family app API', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          ok: true,
+          target_user_id: 'user-2',
+          chat_session_id: 'chat-side-2',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
           available: true,
           label: '先私下问问 Sparkbox',
           session_id: 'chat-side-1',
@@ -162,6 +171,10 @@ describe('space and family app API', () => {
       cadence: 'weekly',
       entryCard: true,
     });
+    const relay = await relayHouseholdSpaceMessage('token-1', 'space-parents', {
+      targetUserId: 'user-2',
+      content: '请 Sparkbox 帮我转述：今晚 8 点开个短会。',
+    });
     const sideChannel = await openSpaceSideChannel('token-1', 'space-parents');
 
     expect(spaces).toHaveLength(1);
@@ -175,6 +188,11 @@ describe('space and family app API', () => {
     });
     expect(installed.slug).toBe('weekend-plans');
     expect(enabled).toEqual({ ok: true });
+    expect(relay).toEqual({
+      ok: true,
+      targetUserId: 'user-2',
+      chatSessionId: 'chat-side-2',
+    });
     expect(sideChannel).toEqual({
       available: true,
       label: '先私下问问 Sparkbox',
@@ -215,6 +233,17 @@ describe('space and family app API', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/relay',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          target_user_id: 'user-2',
+          content: '请 Sparkbox 帮我转述：今晚 8 点开个短会。',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
       'https://morgen52.site/familyserver/api/spaces/space-parents/side-channel',
       expect.objectContaining({
         method: 'POST',
@@ -233,8 +262,13 @@ describe('space and family app API', () => {
               slug: 'weekend-plans',
               title: '周末安排',
               installed: false,
+              description: '在周末前帮一个空间收口安排',
               risk_level: 'normal',
               space_templates: ['partner', 'parents'],
+              capabilities: ['create_tasks', 'send_proactive_messages'],
+              supports_proactive_messages: true,
+              supports_private_relay: false,
+              requires_owner_confirmation: false,
             },
           ],
         }),
@@ -247,8 +281,13 @@ describe('space and family app API', () => {
               slug: 'family-diary',
               title: '家庭小日记',
               installed: true,
+              description: '每天一句、每周一页',
               risk_level: 'normal',
               space_templates: ['partner', 'child'],
+              capabilities: ['suggest_memories', 'generate_summaries'],
+              supports_proactive_messages: true,
+              supports_private_relay: false,
+              requires_owner_confirmation: false,
             },
           ],
         }),
@@ -260,7 +299,12 @@ describe('space and family app API', () => {
     const installed = await getInstalledFamilyApps('token-1');
 
     expect(catalog[0]?.installed).toBe(false);
+    expect(catalog[0]?.description).toContain('周末');
+    expect(catalog[0]?.capabilities).toContain('create_tasks');
+    expect(catalog[0]?.supportsProactiveMessages).toBe(true);
     expect(installed[0]?.installed).toBe(true);
+    expect(installed[0]?.description).toContain('每天一句');
+    expect(installed[0]?.requiresOwnerConfirmation).toBe(false);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'https://morgen52.site/familyserver/api/family-apps/catalog',

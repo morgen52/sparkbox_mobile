@@ -5,8 +5,10 @@ import {
   describeChatSendPhase,
   describeSpaceKind,
   formatSpaceTemplateList,
+  getRelayTargets,
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
+  resolveRelayTargetUserId,
 } from './spaceShell';
 
 
@@ -82,5 +84,36 @@ describe('mapSpaceKindToLegacyScope', () => {
       fileSpace: 'family',
       taskScope: 'family',
     });
+  });
+});
+
+describe('relay target helpers', () => {
+  const detail = {
+    id: 'space-shared',
+    name: '我和爸妈 + Sparkbox',
+    kind: 'shared' as const,
+    template: 'parents' as const,
+    memberCount: 3,
+    threadCount: 4,
+    updatedAt: '2026-03-20T10:01:00Z',
+    members: [
+      { id: 'user-1', displayName: 'Morgan', role: 'owner' as const },
+      { id: 'user-2', displayName: 'Dad', role: 'member' as const },
+      { id: 'user-3', displayName: 'Mom', role: 'member' as const },
+    ],
+    threads: [],
+    enabledFamilyApps: [],
+    privateSideChannel: null,
+  };
+
+  it('filters the active user out of relay targets', () => {
+    expect(getRelayTargets(detail, 'user-1').map((member) => member.id)).toEqual(['user-2', 'user-3']);
+  });
+
+  it('falls back to the first available relay target', () => {
+    const targets = getRelayTargets(detail, 'user-1');
+    expect(resolveRelayTargetUserId(targets, '')).toBe('user-2');
+    expect(resolveRelayTargetUserId(targets, 'missing')).toBe('user-2');
+    expect(resolveRelayTargetUserId(targets, 'user-3')).toBe('user-3');
   });
 });

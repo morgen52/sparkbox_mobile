@@ -1,6 +1,8 @@
 import type {
   ChatSessionScope,
   HouseholdFileSpace,
+  HouseholdSpaceDetail,
+  HouseholdSpaceMember,
   HouseholdSpaceSummary,
   HouseholdTaskScope,
   SpaceKind,
@@ -81,4 +83,24 @@ export function describeChatSendPhase(phase: ChatSendPhase): string {
     default:
       return '';
   }
+}
+
+export function getRelayTargets(
+  spaceDetail: HouseholdSpaceDetail | null,
+  currentUserId: string | undefined,
+): HouseholdSpaceMember[] {
+  if (!spaceDetail) {
+    return [];
+  }
+  return spaceDetail.members.filter((member) => member.id !== currentUserId);
+}
+
+export function resolveRelayTargetUserId(
+  relayTargets: HouseholdSpaceMember[],
+  currentRelayTargetUserId: string,
+): string {
+  if (currentRelayTargetUserId && relayTargets.some((member) => member.id === currentRelayTargetUserId)) {
+    return currentRelayTargetUserId;
+  }
+  return relayTargets[0]?.id ?? '';
 }

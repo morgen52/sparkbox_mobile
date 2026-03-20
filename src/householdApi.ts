@@ -75,6 +75,17 @@ export type HouseholdSpaceSideChannel = {
   sessionId?: string | null;
 };
 
+export type HouseholdSpaceRelayInput = {
+  targetUserId: string;
+  content: string;
+};
+
+export type HouseholdSpaceRelayResponse = {
+  ok: boolean;
+  targetUserId: string;
+  chatSessionId: string;
+};
+
 export type HouseholdSpaceDetail = HouseholdSpaceSummary & {
   members: HouseholdSpaceMember[];
   threads: HouseholdSpaceThread[];
@@ -92,8 +103,13 @@ export type FamilyAppInstallation = {
   slug: string;
   title: string;
   installed: boolean;
+  description: string;
   riskLevel: string;
   spaceTemplates: string[];
+  capabilities: string[];
+  supportsProactiveMessages: boolean;
+  supportsPrivateRelay: boolean;
+  requiresOwnerConfirmation: boolean;
 };
 
 export type SpaceFamilyAppEnableInput = {
@@ -425,6 +441,22 @@ export async function openSpaceSideChannel(
     },
   );
   return normalizeSpaceSideChannel(response);
+}
+
+export async function relayHouseholdSpaceMessage(
+  token: string,
+  spaceId: string,
+  input: HouseholdSpaceRelayInput,
+): Promise<HouseholdSpaceRelayResponse> {
+  const response = await cloudJson<Record<string, unknown>>(`/api/spaces/${encodeURIComponent(spaceId)}/relay`, {
+    method: 'POST',
+    token,
+    body: {
+      target_user_id: input.targetUserId,
+      content: input.content,
+    },
+  });
+  return normalizeSpaceRelayResponse(response);
 }
 
 export async function installFamilyApp(
@@ -1373,10 +1405,15 @@ function normalizeFamilyAppInstallation(app: Record<string, unknown>): FamilyApp
     slug: String(app.slug ?? ''),
     title: String(app.title ?? ''),
     installed: app.installed !== false,
+    description: String(app.description ?? ''),
     riskLevel: String(app.risk_level ?? 'normal'),
     spaceTemplates: Array.isArray(app.space_templates)
       ? app.space_templates.map((item) => String(item))
       : [],
+    capabilities: Array.isArray(app.capabilities) ? app.capabilities.map((item) => String(item)) : [],
+    supportsProactiveMessages: app.supports_proactive_messages === true,
+    supportsPrivateRelay: app.supports_private_relay === true,
+    requiresOwnerConfirmation: app.requires_owner_confirmation === true,
   };
 }
 
@@ -1385,6 +1422,14 @@ function normalizeSpaceSideChannel(sideChannel: Record<string, unknown>): Househ
     available: sideChannel.available !== false,
     label: String(sideChannel.label ?? '先私下问问 Sparkbox'),
     sessionId: typeof sideChannel.session_id === 'string' ? sideChannel.session_id : null,
+  };
+}
+
+function normalizeSpaceRelayResponse(response: Record<string, unknown>): HouseholdSpaceRelayResponse {
+  return {
+    ok: response.ok !== false,
+    targetUserId: String(response.target_user_id ?? ''),
+    chatSessionId: String(response.chat_session_id ?? ''),
   };
 }
 
