@@ -293,6 +293,10 @@ describe('space and family app API', () => {
               title: '周末安排',
               installed: false,
               description: '在周末前帮一个空间收口安排',
+              entry_title: '一起把周末安排清楚',
+              entry_copy: '让 Sparkbox 帮这个空间把周末计划、采购和出行收口。',
+              starter_prompts: ['结合这个空间最近的安排，帮我整理一个周末计划。'],
+              thread_hints: ['周末安排'],
               risk_level: 'normal',
               space_templates: ['partner', 'parents'],
               capabilities: ['create_tasks', 'send_proactive_messages'],
@@ -312,6 +316,10 @@ describe('space and family app API', () => {
               title: '家庭小日记',
               installed: true,
               description: '每天一句、每周一页',
+              entry_title: '给这个空间写一句今天',
+              entry_copy: '让 Sparkbox 帮这个空间把今天的一句话留下来。',
+              starter_prompts: ['帮我用一句话记下今天这个空间最值得留下的事。'],
+              thread_hints: ['今天和这周'],
               risk_level: 'normal',
               space_templates: ['partner', 'child'],
               capabilities: ['suggest_memories', 'generate_summaries'],
@@ -330,10 +338,14 @@ describe('space and family app API', () => {
 
     expect(catalog[0]?.installed).toBe(false);
     expect(catalog[0]?.description).toContain('周末');
+    expect(catalog[0]?.entryTitle).toContain('周末');
+    expect(catalog[0]?.starterPrompts[0]).toContain('周末');
+    expect(catalog[0]?.threadHints).toContain('周末安排');
     expect(catalog[0]?.capabilities).toContain('create_tasks');
     expect(catalog[0]?.supportsProactiveMessages).toBe(true);
     expect(installed[0]?.installed).toBe(true);
     expect(installed[0]?.description).toContain('每天一句');
+    expect(installed[0]?.entryCopy).toContain('一句话');
     expect(installed[0]?.requiresOwnerConfirmation).toBe(false);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,

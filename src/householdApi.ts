@@ -127,6 +127,10 @@ export type FamilyAppInstallation = {
   title: string;
   installed: boolean;
   description: string;
+  entryTitle?: string | null;
+  entryCopy?: string | null;
+  starterPrompts: string[];
+  threadHints: string[];
   riskLevel: string;
   spaceTemplates: string[];
   capabilities: string[];
@@ -1606,6 +1610,10 @@ function normalizeFamilyAppInstallation(app: Record<string, unknown>): FamilyApp
     title: String(app.title ?? ''),
     installed: app.installed !== false,
     description: String(app.description ?? ''),
+    entryTitle: typeof app.entry_title === 'string' ? app.entry_title : null,
+    entryCopy: typeof app.entry_copy === 'string' ? app.entry_copy : null,
+    starterPrompts: Array.isArray(app.starter_prompts) ? app.starter_prompts.map((item) => String(item)) : [],
+    threadHints: Array.isArray(app.thread_hints) ? app.thread_hints.map((item) => String(item)) : [],
     riskLevel: String(app.risk_level ?? 'normal'),
     spaceTemplates: Array.isArray(app.space_templates)
       ? app.space_templates.map((item) => String(item))

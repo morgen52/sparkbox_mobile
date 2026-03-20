@@ -52,6 +52,7 @@ import {
   deleteSpaceSummary,
   deleteHouseholdPath,
   deleteHouseholdTask,
+  enableSpaceFamilyApp,
   getDeviceConfigStatus,
   getDeviceDiagnostics,
   getDeviceInferenceDetail,
@@ -595,6 +596,7 @@ function App() {
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
   const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
   const currentFilePath = fileListing?.path ?? '';
+  const photoEntries = (fileListing?.entries ?? []).filter((entry) => !entry.isDir && /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(entry.name));
   const canCreateTasks = canManage || taskScope === 'private';
   const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
   const activeChatTimelineMessages: ChatTimelineMessage[] = chatPendingMessage
@@ -633,6 +635,18 @@ function App() {
   const availableFamilyApps = familyAppsCatalog.filter(
     (app) => !installedFamilyApps.some((installed) => installed.slug === app.slug),
   );
+  const installedFamilyAppsBySlug = new Map(installedFamilyApps.map((app) => [app.slug, app] as const));
+  const enabledFamilyAppCards = activeSpaceDetail?.enabledFamilyApps.map((enabled) => ({
+    ...enabled,
+    meta: installedFamilyAppsBySlug.get(enabled.slug) ?? familyAppsCatalog.find((item) => item.slug === enabled.slug) ?? null,
+  })) ?? [];
+  const installedFamilyAppsAvailableForActiveSpace = activeSpace
+    ? installedFamilyApps.filter(
+        (app) =>
+          app.spaceTemplates.includes(activeSpace.template) &&
+          !activeSpaceDetail?.enabledFamilyApps.some((enabled) => enabled.slug === app.slug),
+      )
+    : [];
   const recommendedFamilyApps = activeSpace
     ? availableFamilyApps.filter((app) => app.spaceTemplates.includes(activeSpace.template))
     : [];
@@ -797,6 +811,13 @@ function App() {
     }
   }
 
+  function confirmRemoveMemory(memory: SpaceMemory): void {
+    Alert.alert('Delete this memory?', 'Sparkbox will stop using it as current memory for this space.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void removeMemory(memory) },
+    ]);
+  }
+
   async function captureActiveSpaceSummary(): Promise<void> {
     if (!session?.token || !activeSpaceId || !activeChatSessionId || !activeChatSession) {
       setLibraryError('Pick an active topic chat before capturing a summary.');
@@ -833,17 +854,6 @@ function App() {
     } finally {
       setLibraryBusy(false);
     }
-  }
-
-  function confirmRemoveMemory(memory: SpaceMemory): void {
-    Alert.alert(
-      'Delete this memory?',
-      `${memory.title} will stop shaping Sparkbox responses in this space.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => void removeMemory(memory) },
-      ],
-    );
   }
 
   function confirmRemoveSummary(summary: SpaceSummary): void {
@@ -1379,6 +1389,59 @@ function App() {
       setSettingsError(error instanceof Error ? error.message : 'Could not install this family app.');
     } finally {
       setSettingsBusy(false);
+    }
+  }
+
+  async function enableInstalledFamilyAppForActiveSpace(slug: string): Promise<void> {
+    if (!session?.token || !canManage || !activeSpaceId || !activeSpace) {
+      return;
+    }
+    setSettingsBusy(true);
+    setSettingsError('');
+    try {
+      await enableSpaceFamilyApp(session.token, activeSpaceId, slug, {
+        cadence: 'gentle',
+        entryCard: true,
+      });
+      const detail = await getHouseholdSpaceDetail(session.token, activeSpaceId);
+      setActiveSpaceDetail(detail);
+      const app = installedFamilyApps.find((item) => item.slug === slug);
+      setSettingsNotice(`${app?.title || slug} is now enabled in ${activeSpace.name}.`);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Could not enable this family app in the active space.');
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function openFamilyAppStarter(slug: string, prompt: string): Promise<void> {
+    if (!session?.token || !activeSpaceId || !activeSpaceDetail) {
+      return;
+    }
+    setShellTab('chats');
+    setChatError('');
+    try {
+      const appMeta =
+        installedFamilyAppsBySlug.get(slug) ?? familyAppsCatalog.find((item) => item.slug === slug) ?? null;
+      if (appMeta?.supportsPrivateRelay && activeSpaceDetail.kind === 'shared' && activeSpaceDetail.privateSideChannel?.available) {
+        const sideChannel = await openSpaceSideChannel(session.token, activeSpaceId);
+        if (sideChannel.sessionId) {
+          setActiveChatSessionId(sideChannel.sessionId);
+          setChatDraft(prompt);
+          return;
+        }
+      }
+      const hintedThread = appMeta?.threadHints
+        ?.map((hint) => activeSpaceDetail.threads.find((thread) => thread.title === hint))
+        .find(Boolean);
+      const threadToOpen = hintedThread ?? activeSpaceDetail.threads[0];
+      if (threadToOpen) {
+        const opened = await openSpaceThreadSession(session.token, activeSpaceId, threadToOpen.id);
+        setActiveChatSessionId(opened.id);
+      }
+      setChatDraft(prompt);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Could not open this family app right now.');
     }
   }
 
@@ -2839,17 +2902,59 @@ function App() {
                       </View>
                     </View>
                   ) : null}
-                  {activeSpaceDetail?.enabledFamilyApps.length ? (
+                  {enabledFamilyAppCards.length ? (
                     <>
                       <Text style={styles.selectionLabel}>Enabled in this space</Text>
-                      {activeSpaceDetail.enabledFamilyApps.map((app) => (
+                      {enabledFamilyAppCards.map((app) => (
                         <View key={app.slug} style={styles.deviceRowCard}>
-                          <Text style={styles.networkName}>{app.title}</Text>
+                          <View style={styles.deviceRowHeadline}>
+                            <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
+                            <Text style={styles.statusTagOnline}>enabled</Text>
+                          </View>
+                          <Text style={styles.cardCopy}>
+                            {app.meta?.entryCopy || app.meta?.description || 'This family app is enabled in the active space.'}
+                          </Text>
+                          {app.meta?.starterPrompts?.length ? (
+                            <View style={styles.scopeRow}>
+                              {app.meta.starterPrompts.map((prompt) => (
+                                <Pressable
+                                  key={`${app.slug}-${prompt}`}
+                                  style={styles.scopePill}
+                                  onPress={() => void openFamilyAppStarter(app.slug, prompt)}
+                                >
+                                  <Text style={styles.scopePillLabel}>{prompt}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          ) : null}
                           <Text style={styles.cardCopy}>
                             {Object.entries(app.config)
                               .map(([key, value]) => `${key}: ${String(value)}`)
-                              .join(' · ') || 'Enabled'}
+                              .join(' · ') || 'Enabled for this space'}
                           </Text>
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
+                  {canManage && installedFamilyAppsAvailableForActiveSpace.length ? (
+                    <>
+                      <Text style={styles.selectionLabel}>Ready to enable here</Text>
+                      {installedFamilyAppsAvailableForActiveSpace.map((app) => (
+                        <View key={`ready-${app.slug}`} style={styles.deviceRowCard}>
+                          <View style={styles.deviceRowHeadline}>
+                            <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
+                            <Text style={styles.tagMuted}>{app.riskLevel}</Text>
+                          </View>
+                          <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
+                          <View style={styles.inlineActions}>
+                            <Pressable
+                              style={styles.primaryButtonSmall}
+                              onPress={() => void enableInstalledFamilyAppForActiveSpace(app.slug)}
+                              disabled={settingsBusy}
+                            >
+                              <Text style={styles.primaryButtonText}>Enable in this space</Text>
+                            </Pressable>
+                          </View>
                         </View>
                       ))}
                     </>
@@ -3088,6 +3193,62 @@ function App() {
                         >
                           <Text style={styles.secondaryButtonText}>Delete</Text>
                         </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Photos in this space</Text>
+                  <Text style={styles.cardCopy}>
+                    Photos still use Jetson's compatibility file layer, but this space now treats them as shared moments instead of generic files.
+                  </Text>
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                      onPress={() => void refreshFiles()}
+                      disabled={!onlineDeviceAvailable || filesBusy}
+                    >
+                      <Text style={styles.secondaryButtonText}>Refresh photos</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                      onPress={() => void pickAndUploadFiles()}
+                      disabled={!onlineDeviceAvailable || filesBusy}
+                    >
+                      <Text style={styles.primaryButtonText}>Upload photos</Text>
+                    </Pressable>
+                  </View>
+                  {photoEntries.length === 0 && !filesBusy ? (
+                    <Text style={styles.cardCopy}>No shared photos detected in the current folder yet.</Text>
+                  ) : null}
+                  {photoEntries.map((entry) => (
+                    <View key={`photo-${entry.path}`} style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{entry.name}</Text>
+                        <Text style={styles.statusTagOnline}>photo</Text>
+                      </View>
+                      <Text style={styles.cardCopy}>
+                        {entry.modified ? `Updated ${entry.modified}` : 'Stored on Sparkbox'}
+                        {typeof entry.size === 'number' ? ` · ${entry.size} bytes` : ''}
+                      </Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => void downloadFileEntry(entry)}
+                          disabled={filesBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Download</Text>
+                        </Pressable>
+                        {canManageFileEntry(entry) ? (
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => void deleteFileEntry(entry)}
+                            disabled={filesBusy}
+                          >
+                            <Text style={styles.secondaryButtonText}>Delete</Text>
+                          </Pressable>
+                        ) : null}
                       </View>
                     </View>
                   ))}
