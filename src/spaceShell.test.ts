@@ -65,8 +65,10 @@ describe('space identity helpers', () => {
 
 describe('chat send state helpers', () => {
   it('describes pending chat send phases for the UI', () => {
-    expect(describeChatSendPhase('sending')).toBe('Sending topic message...');
-    expect(describeChatSendPhase('streaming')).toBe('Streaming reply...');
+    expect(describeChatSendPhase('sending')).toBe('Sparkbox 正在准备第一段回复');
+    expect(describeChatSendPhase('streaming')).toBe('Sparkbox 正在继续回答');
+    expect(describeChatSendPhase('timed_out')).toBe('Sparkbox 这次准备得太久了');
+    expect(describeChatSendPhase('failed')).toBe('Sparkbox 这次没有顺利回完');
   });
 });
 

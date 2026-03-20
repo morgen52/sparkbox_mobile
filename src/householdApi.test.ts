@@ -12,6 +12,7 @@ import {
   deleteSpaceMemory,
   deleteSpaceSummary,
   deleteHouseholdChatSession,
+  disableSpaceFamilyApp,
   enableSpaceFamilyApp,
   getFamilyAppCatalog,
   getInstalledFamilyApps,
@@ -40,6 +41,7 @@ import {
   streamHouseholdChatSessionMessage,
   startDeviceReprovision,
   sendHouseholdChat,
+  uninstallFamilyApp,
   updateSpaceMemory,
   updateHouseholdChatSession,
   updateDeviceProviderConfig,
@@ -150,6 +152,14 @@ describe('space and family app API', () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
         json: async () => ({
           ok: true,
           target_user_id: 'user-2',
@@ -192,6 +202,8 @@ describe('space and family app API', () => {
       cadence: 'weekly',
       entryCard: true,
     });
+    const disabled = await disableSpaceFamilyApp('token-1', 'space-parents', 'weekend-plans');
+    const removed = await uninstallFamilyApp('token-1', 'weekend-plans');
     const relay = await relayHouseholdSpaceMessage('token-1', 'space-parents', {
       targetUserId: 'user-2',
       content: '请 Sparkbox 帮我转述：今晚 8 点开个短会。',
@@ -210,6 +222,8 @@ describe('space and family app API', () => {
     });
     expect(installed.slug).toBe('weekend-plans');
     expect(enabled).toEqual({ ok: true });
+    expect(disabled).toEqual({ ok: true });
+    expect(removed).toEqual({ ok: true });
     expect(relay).toEqual({
       ok: true,
       targetUserId: 'user-2',
@@ -243,7 +257,7 @@ describe('space and family app API', () => {
       'https://morgen52.site/familyserver/api/family-apps/install',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ slug: 'weekend-plans' }),
+        body: JSON.stringify({ slug: 'weekend-plans', confirmed: false }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -251,11 +265,25 @@ describe('space and family app API', () => {
       'https://morgen52.site/familyserver/api/spaces/space-parents/family-apps/weekend-plans/enable',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ cadence: 'weekly', entry_card: true }),
+        body: JSON.stringify({ cadence: 'weekly', entry_card: true, confirmed: false }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/family-apps/weekend-plans',
+      expect.objectContaining({
+        method: 'DELETE',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      'https://morgen52.site/familyserver/api/family-apps/weekend-plans',
+      expect.objectContaining({
+        method: 'DELETE',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
       'https://morgen52.site/familyserver/api/spaces/space-parents/relay',
       expect.objectContaining({
         method: 'POST',
@@ -266,14 +294,14 @@ describe('space and family app API', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      8,
       'https://morgen52.site/familyserver/api/spaces/space-parents/side-channel',
       expect.objectContaining({
         method: 'POST',
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+      9,
       'https://morgen52.site/familyserver/api/spaces/space-parents/threads/thread-1/open',
       expect.objectContaining({
         method: 'POST',
@@ -839,13 +867,13 @@ describe('scoped chat session API', () => {
 
       send(body?: Document | XMLHttpRequestBodyInit | null) {
         FakeXmlHttpRequest.sentBodies.push(String(body ?? ''));
-        this.responseText += 'event: pending\ndata: {"type":"pending","device_id":"sbx-1","message":"Preparing"}\n\n';
+        this.responseText += 'event: pending\ndata: {"type":"pending","device_id":"sbx-1","message":"Preparing","stage":"preparing"}\n\n';
         this.onprogress?.();
         this.responseText += 'event: token\ndata: {"type":"token","content":"Hello "}\n\n';
         this.onprogress?.();
         this.responseText += 'event: token\ndata: {"type":"token","content":"family"}\n\n';
         this.onprogress?.();
-        this.responseText += 'event: done\ndata: {"type":"done","device_id":"sbx-1","message":"Hello family"}\n\n';
+        this.responseText += 'event: done\ndata: {"type":"done","device_id":"sbx-1","message":"Hello family","retryable":false}\n\n';
         this.onload?.();
       }
     }
@@ -859,7 +887,14 @@ describe('scoped chat session API', () => {
       onDone: (event) => events.push(`done:${event.message}`),
     });
 
-    expect(response).toEqual({ deviceId: 'sbx-1', message: 'Hello family' });
+    expect(response).toEqual({
+      type: 'done',
+      deviceId: 'sbx-1',
+      message: 'Hello family',
+      error: null,
+      reason: null,
+      retryable: false,
+    });
     expect(events).toEqual([
       'pending:Preparing',
       'token:Hello ',
@@ -867,6 +902,36 @@ describe('scoped chat session API', () => {
       'done:Hello family',
     ]);
     expect(FakeXmlHttpRequest.sentBodies).toEqual([JSON.stringify({ content: 'hello again' })]);
+  });
+
+  it('returns structured timeout info when the stream finishes with a retryable timeout', async () => {
+    class FakeXmlHttpRequest {
+      status = 200;
+      responseText = '';
+      onprogress: (() => void) | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      open() {}
+      setRequestHeader() {}
+      send() {
+        this.responseText +=
+          'event: done\ndata: {"type":"done","device_id":"sbx-1","message":"","error":"Sparkbox 这次准备第一段回复太久了。","reason":"ttft_timeout","retryable":true}\n\n';
+        this.onload?.();
+      }
+    }
+
+    global.XMLHttpRequest = FakeXmlHttpRequest as unknown as typeof XMLHttpRequest;
+
+    const response = await streamHouseholdChatSessionMessage('token-1', 'chat-2', 'hello again');
+
+    expect(response).toEqual({
+      type: 'done',
+      deviceId: 'sbx-1',
+      message: '',
+      error: 'Sparkbox 这次准备第一段回复太久了。',
+      reason: 'ttft_timeout',
+      retryable: true,
+    });
   });
 });
 

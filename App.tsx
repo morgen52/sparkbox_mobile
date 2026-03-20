@@ -52,6 +52,7 @@ import {
   deleteSpaceSummary,
   deleteHouseholdPath,
   deleteHouseholdTask,
+  disableSpaceFamilyApp,
   enableSpaceFamilyApp,
   getDeviceConfigStatus,
   getDeviceDiagnostics,
@@ -91,6 +92,7 @@ import {
   type HouseholdChatSessionSummary,
   streamHouseholdChatSessionMessage,
   triggerHouseholdTask,
+  uninstallFamilyApp,
   updateSpaceMemory,
   updateDeviceProviderConfig,
   updateHouseholdChatSession,
@@ -196,13 +198,13 @@ type HouseholdDevice = {
 
 type ChatTimelineMessage = HouseholdChatSessionMessage & {
   pending?: boolean;
+  failed?: boolean;
+  retryable?: boolean;
+  retryContent?: string | null;
+  errorMessage?: string | null;
 };
 
-const CHAT_PENDING_NOTES = [
-  'Sparkbox 正在认真准备，不会丢下这条消息。',
-  '正在结合这个空间的上下文慢慢想一想。',
-  '第一次回复可能会慢一点，但它还在继续生成。',
-];
+const CHAT_PENDING_FALLBACK = 'Sparkbox 正在认真准备，不会丢下这条消息。';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1151,18 +1153,7 @@ function App() {
       return;
     }
     const interval = setInterval(() => {
-      setChatPendingNoteIndex((current) => {
-        const next = (current + 1) % CHAT_PENDING_NOTES.length;
-        setChatPendingMessage((existing) =>
-          existing?.pending
-            ? {
-                ...existing,
-                content: CHAT_PENDING_NOTES[next],
-              }
-            : existing,
-        );
-        return next;
-      });
+      setChatPendingNoteIndex((current) => (current + 1) % 3);
     }, 2400);
     return () => clearInterval(interval);
   }, [chatPendingMessage?.pending, chatSendPhase]);
@@ -1382,14 +1373,29 @@ function App() {
     }
   }
 
-  async function installSelectedFamilyApp(slug: string): Promise<void> {
+  async function installSelectedFamilyApp(slug: string, confirmed = false): Promise<void> {
     if (!session?.token || !canManage) {
+      return;
+    }
+    const app =
+      familyAppsCatalog.find((item) => item.slug === slug) ??
+      installedFamilyApps.find((item) => item.slug === slug) ??
+      null;
+    if (app?.requiresOwnerConfirmation && !confirmed) {
+      Alert.alert(
+        `Install ${app.title}?`,
+        'This family app touches sensitive family interactions. Install it only if you want Sparkbox to expose that behavior on this Box.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Install', onPress: () => void installSelectedFamilyApp(slug, true) },
+        ],
+      );
       return;
     }
     setSettingsBusy(true);
     setSettingsError('');
     try {
-      const installed = await installFamilyApp(session.token, slug);
+      const installed = await installFamilyApp(session.token, slug, { confirmed });
       setInstalledFamilyApps((current) => {
         if (current.some((item) => item.slug === installed.slug)) {
           return current;
@@ -1404,8 +1410,20 @@ function App() {
     }
   }
 
-  async function enableInstalledFamilyAppForActiveSpace(slug: string): Promise<void> {
+  async function enableInstalledFamilyAppForActiveSpace(slug: string, confirmed = false): Promise<void> {
     if (!session?.token || !canManage || !activeSpaceId || !activeSpace) {
+      return;
+    }
+    const app = installedFamilyApps.find((item) => item.slug === slug) ?? null;
+    if (app?.requiresOwnerConfirmation && !confirmed) {
+      Alert.alert(
+        `Enable ${app.title} in ${activeSpace.name}?`,
+        'This family app can shape sensitive family interactions in this space. Sparkbox will only enable it here after you confirm.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Enable', onPress: () => void enableInstalledFamilyAppForActiveSpace(slug, true) },
+        ],
+      );
       return;
     }
     setSettingsBusy(true);
@@ -1414,16 +1432,87 @@ function App() {
       await enableSpaceFamilyApp(session.token, activeSpaceId, slug, {
         cadence: 'gentle',
         entryCard: true,
+        confirmed,
       });
       const detail = await getHouseholdSpaceDetail(session.token, activeSpaceId);
       setActiveSpaceDetail(detail);
-      const app = installedFamilyApps.find((item) => item.slug === slug);
       setSettingsNotice(`${app?.title || slug} is now enabled in ${activeSpace.name}.`);
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : 'Could not enable this family app in the active space.');
     } finally {
       setSettingsBusy(false);
     }
+  }
+
+  async function disableFamilyAppForActiveSpace(slug: string): Promise<void> {
+    if (!session?.token || !canManage || !activeSpaceId || !activeSpace) {
+      return;
+    }
+    const app = installedFamilyAppsBySlug.get(slug) ?? familyAppsCatalog.find((item) => item.slug === slug) ?? null;
+    Alert.alert(
+      `Disable ${app?.title || slug}?`,
+      `Sparkbox will stop using this family app in ${activeSpace.name}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disable',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSettingsBusy(true);
+              setSettingsError('');
+              try {
+                await disableSpaceFamilyApp(session.token!, activeSpaceId, slug);
+                const detail = await getHouseholdSpaceDetail(session.token!, activeSpaceId);
+                setActiveSpaceDetail(detail);
+                setSettingsNotice(`${app?.title || slug} is no longer active in ${activeSpace.name}.`);
+              } catch (error) {
+                setSettingsError(error instanceof Error ? error.message : 'Could not disable this family app in the active space.');
+              } finally {
+                setSettingsBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }
+
+  async function uninstallInstalledFamilyApp(slug: string): Promise<void> {
+    if (!session?.token || !canManage) {
+      return;
+    }
+    const app = installedFamilyApps.find((item) => item.slug === slug) ?? familyAppsCatalog.find((item) => item.slug === slug) ?? null;
+    Alert.alert(
+      `Remove ${app?.title || slug}?`,
+      'This removes the family app from this Box and turns it off in every space.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSettingsBusy(true);
+              setSettingsError('');
+              try {
+                await uninstallFamilyApp(session.token!, slug);
+                setInstalledFamilyApps((current) => current.filter((item) => item.slug !== slug));
+                if (activeSpaceId) {
+                  const detail = await getHouseholdSpaceDetail(session.token!, activeSpaceId);
+                  setActiveSpaceDetail(detail);
+                }
+                setSettingsNotice(`${app?.title || slug} was removed from this Box.`);
+              } catch (error) {
+                setSettingsError(error instanceof Error ? error.message : 'Could not remove this family app.');
+              } finally {
+                setSettingsBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   }
 
   async function openFamilyAppStarter(slug: string, prompt: string): Promise<void> {
@@ -2066,24 +2155,27 @@ function App() {
     }
   }
 
-  async function submitChatMessage(): Promise<void> {
+  async function submitChatMessage(overrideContent?: string): Promise<void> {
     if (!session?.token || !activeChatSessionId) {
       return;
     }
-    const content = chatDraft.trim();
+    const content = (overrideContent ?? chatDraft).trim();
     if (!content) {
       return;
     }
-    setChatDraft('');
+    if (!overrideContent) {
+      setChatDraft('');
+    }
     setChatBusy(true);
     setChatError('');
     setChatPendingNoteIndex(0);
     setChatSendPhase('sending');
     setChatPendingMessage({
       role: 'assistant',
-      content: CHAT_PENDING_NOTES[0],
+      content: CHAT_PENDING_FALLBACK,
       senderDisplayName: null,
       pending: true,
+      retryContent: content,
     });
     if (activeChatSession) {
       setActiveChatSession({
@@ -2091,6 +2183,7 @@ function App() {
         messages: [...activeChatSession.messages, { role: 'user', content, senderDisplayName: session.user.display_name }],
       });
     }
+    let keepPendingBubble = false;
     try {
       let streamedMessage = '';
       const response = await streamHouseholdChatSessionMessage(session.token, activeChatSessionId, content, {
@@ -2102,6 +2195,7 @@ function App() {
                 ? {
                     ...current,
                     content: event.message,
+                    retryContent: content,
                   }
                 : current,
             );
@@ -2115,35 +2209,85 @@ function App() {
             content: streamedMessage,
             senderDisplayName: null,
             pending: true,
+            retryContent: content,
           });
         },
       });
-      const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
-      setActiveChatSession(detail);
-      setChatSessions((current) =>
-        current.map((item) =>
-          item.id === detail.id
-            ? { ...item, name: detail.name, updatedAt: detail.updatedAt, systemPrompt: detail.systemPrompt, temperature: detail.temperature, maxTokens: detail.maxTokens }
-            : item,
-        ),
+      if (response.error) {
+        keepPendingBubble = true;
+        const timedOut = response.reason === 'ttft_timeout';
+        setChatSendPhase(timedOut ? 'timed_out' : 'failed');
+        setChatError(response.error);
+        setChatPendingMessage({
+          role: 'assistant',
+          content: streamedMessage || (timedOut ? 'Sparkbox 这次准备第一段回复太久了。' : 'Sparkbox 这次没有顺利把回复发出来。'),
+          senderDisplayName: null,
+          pending: false,
+          failed: true,
+          retryable: response.retryable === true,
+          retryContent: content,
+          errorMessage: response.error,
+        });
+        return;
+      }
+      setActiveChatSession((current) =>
+        current
+          ? {
+              ...current,
+              messages: [...current.messages, { role: 'assistant', content: response.message, senderDisplayName: null }],
+            }
+          : current,
       );
-      if (response.message && !detail.messages.some((message) => message.role === 'assistant' && message.content === response.message)) {
-        setActiveChatSession((current) =>
-          current
-            ? {
-                ...current,
-                messages: [...current.messages, { role: 'assistant', content: response.message, senderDisplayName: null }],
-              }
-            : current,
+      try {
+        const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
+        setActiveChatSession(detail);
+        setChatSessions((current) =>
+          current.map((item) =>
+            item.id === detail.id
+              ? {
+                  ...item,
+                  name: detail.name,
+                  updatedAt: detail.updatedAt,
+                  systemPrompt: detail.systemPrompt,
+                  temperature: detail.temperature,
+                  maxTokens: detail.maxTokens,
+                }
+              : item,
+          ),
+        );
+      } catch {
+        setChatSessions((current) =>
+          current.map((item) =>
+            item.id === activeChatSessionId
+              ? {
+                  ...item,
+                  updatedAt: new Date().toISOString(),
+                }
+              : item,
+          ),
         );
       }
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
+      keepPendingBubble = true;
+      setChatSendPhase('failed');
       setChatError(error instanceof Error ? error.message : 'Chat is unavailable right now.');
+      setChatPendingMessage({
+        role: 'assistant',
+        content: 'Sparkbox 这次没有顺利回上来。',
+        senderDisplayName: null,
+        pending: false,
+        failed: true,
+        retryable: true,
+        retryContent: content,
+        errorMessage: error instanceof Error ? error.message : 'Chat is unavailable right now.',
+      });
     } finally {
-      setChatPendingMessage(null);
-      setChatSendPhase('idle');
-      setChatPendingNoteIndex(0);
+      if (!keepPendingBubble) {
+        setChatPendingMessage(null);
+        setChatSendPhase('idle');
+        setChatPendingNoteIndex(0);
+      }
       setChatBusy(false);
     }
   }
@@ -2959,6 +3103,15 @@ function App() {
                               .map(([key, value]) => `${key}: ${String(value)}`)
                               .join(' · ') || 'Enabled for this space'}
                           </Text>
+                          <View style={styles.inlineActions}>
+                            <Pressable
+                              style={styles.secondaryButtonSmall}
+                              onPress={() => void disableFamilyAppForActiveSpace(app.slug)}
+                              disabled={settingsBusy}
+                            >
+                              <Text style={styles.secondaryButtonText}>Disable here</Text>
+                            </Pressable>
+                          </View>
                         </View>
                       ))}
                     </>
@@ -3052,9 +3205,25 @@ function App() {
                         {message.pending ? (
                           <Text style={styles.cardCopy}>
                             {chatSendPhase === 'streaming'
-                              ? `Sparkbox is replying${chatPendingIndicator}`
-                              : `Sparkbox is preparing${chatPendingIndicator}`}
+                              ? `Sparkbox 正在继续回答${chatPendingIndicator}`
+                              : `首次响应可能需要 1–5 分钟${chatPendingIndicator}`}
                           </Text>
+                        ) : null}
+                        {message.failed ? (
+                          <>
+                            {message.errorMessage ? <Text style={styles.errorText}>{message.errorMessage}</Text> : null}
+                            {message.retryable && message.retryContent ? (
+                              <View style={styles.inlineActions}>
+                                <Pressable
+                                  style={styles.secondaryButtonSmall}
+                                  onPress={() => void submitChatMessage(message.retryContent ?? undefined)}
+                                  disabled={chatBusy}
+                                >
+                                  <Text style={styles.secondaryButtonText}>Retry</Text>
+                                </Pressable>
+                              </View>
+                            ) : null}
+                          </>
                         ) : null}
                       </View>
                     ))
@@ -3587,6 +3756,15 @@ function App() {
                               {app.supportsPrivateRelay ? ' · Private relay' : ''}
                               {app.requiresOwnerConfirmation ? ' · Owner confirmation' : ''}
                             </Text>
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.secondaryButtonSmall}
+                                onPress={() => void uninstallInstalledFamilyApp(app.slug)}
+                                disabled={settingsBusy}
+                              >
+                                <Text style={styles.secondaryButtonText}>Remove from Box</Text>
+                              </Pressable>
+                            </View>
                           </View>
                         ))}
                       </>

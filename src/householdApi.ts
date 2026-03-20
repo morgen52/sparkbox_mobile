@@ -142,6 +142,7 @@ export type FamilyAppInstallation = {
 export type SpaceFamilyAppEnableInput = {
   cadence?: string;
   entryCard?: boolean;
+  confirmed?: boolean;
 };
 
 export type SpaceMemoryCreateInput = {
@@ -226,6 +227,7 @@ export type HouseholdChatStreamPendingEvent = {
   type: 'pending';
   deviceId: string;
   message: string;
+  stage: 'preparing' | 'streaming';
 };
 
 export type HouseholdChatStreamTokenEvent = {
@@ -238,6 +240,8 @@ export type HouseholdChatStreamDoneEvent = {
   deviceId: string;
   message: string;
   error?: string | null;
+  reason?: string | null;
+  retryable?: boolean;
 };
 
 export type HouseholdChatSessionStreamHandlers = {
@@ -632,11 +636,12 @@ export async function relayHouseholdSpaceMessage(
 export async function installFamilyApp(
   token: string,
   slug: string,
+  options: { confirmed?: boolean } = {},
 ): Promise<FamilyAppInstallation> {
   const response = await cloudJson<Record<string, unknown>>('/api/family-apps/install', {
     method: 'POST',
     token,
-    body: { slug },
+    body: { slug, confirmed: options.confirmed === true },
   });
   return normalizeFamilyAppInstallation(response);
 }
@@ -673,9 +678,34 @@ export async function enableSpaceFamilyApp(
       body: {
         cadence: input.cadence,
         entry_card: input.entryCard,
+        confirmed: input.confirmed === true,
       },
     },
   );
+}
+
+export async function disableSpaceFamilyApp(
+  token: string,
+  spaceId: string,
+  slug: string,
+): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/family-apps/${encodeURIComponent(slug)}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
+}
+
+export async function uninstallFamilyApp(
+  token: string,
+  slug: string,
+): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>(`/api/family-apps/${encodeURIComponent(slug)}`, {
+    method: 'DELETE',
+    token,
+  });
 }
 
 export async function getHouseholdSummary(token: string): Promise<HouseholdSummary> {
@@ -800,13 +830,13 @@ export async function streamHouseholdChatSessionMessage(
   sessionId: string,
   content: string,
   handlers: HouseholdChatSessionStreamHandlers = {},
-): Promise<HouseholdChatResponse> {
+): Promise<HouseholdChatStreamDoneEvent> {
   const XhrCtor = getXmlHttpRequestConstructor();
   if (!XhrCtor) {
     throw new Error('Streaming chat is unavailable on this device.');
   }
 
-  return new Promise<HouseholdChatResponse>((resolve, reject) => {
+  return new Promise<HouseholdChatStreamDoneEvent>((resolve, reject) => {
     const xhr = new XhrCtor();
     let processedLength = 0;
     let buffer = '';
@@ -821,7 +851,7 @@ export async function streamHouseholdChatSessionMessage(
       reject(new Error(message));
     };
 
-    const settleResolve = (response: HouseholdChatResponse) => {
+    const settleResolve = (response: HouseholdChatStreamDoneEvent) => {
       if (settled) {
         return;
       }
@@ -871,14 +901,7 @@ export async function streamHouseholdChatSessionMessage(
         settleReject('Streaming chat ended before Sparkbox finished replying.');
         return;
       }
-      if (doneEvent.error) {
-        settleReject(doneEvent.error);
-        return;
-      }
-      settleResolve({
-        deviceId: doneEvent.deviceId,
-        message: doneEvent.message,
-      });
+      settleResolve(doneEvent);
     };
 
     xhr.onerror = () => {
@@ -1482,13 +1505,14 @@ function parseSseSegment(
   }
   const payload = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
   const type = typeof payload.type === 'string' ? payload.type : eventName;
-  if (type === 'pending') {
-    return {
-      type: 'pending',
-      deviceId: String(payload.device_id ?? ''),
-      message: String(payload.message ?? ''),
-    };
-  }
+      if (type === 'pending') {
+        return {
+          type: 'pending',
+          deviceId: String(payload.device_id ?? ''),
+          message: String(payload.message ?? ''),
+          stage: payload.stage === 'streaming' ? 'streaming' : 'preparing',
+        };
+      }
   if (type === 'token') {
     return {
       type: 'token',
@@ -1496,12 +1520,14 @@ function parseSseSegment(
     };
   }
   if (type === 'done') {
-    return {
-      type: 'done',
-      deviceId: String(payload.device_id ?? ''),
-      message: String(payload.message ?? ''),
-      error: typeof payload.error === 'string' ? payload.error : null,
-    };
+      return {
+        type: 'done',
+        deviceId: String(payload.device_id ?? ''),
+        message: String(payload.message ?? ''),
+        error: typeof payload.error === 'string' ? payload.error : null,
+        reason: typeof payload.reason === 'string' ? payload.reason : null,
+        retryable: payload.retryable === true,
+      };
   }
   return null;
 }

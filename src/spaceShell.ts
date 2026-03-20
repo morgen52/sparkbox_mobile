@@ -38,7 +38,7 @@ export function mapSpaceKindToLegacyScope(kind: SpaceKind): {
   };
 }
 
-export type ChatSendPhase = 'idle' | 'sending' | 'streaming';
+export type ChatSendPhase = 'idle' | 'sending' | 'streaming' | 'timed_out' | 'failed';
 
 export function describeSpaceKind(kind: SpaceKind): string {
   return kind === 'private' ? 'Private Box space' : 'Family space';
@@ -77,9 +77,13 @@ export function formatSpaceTemplateList(spaceTemplates: string[]): string {
 export function describeChatSendPhase(phase: ChatSendPhase): string {
   switch (phase) {
     case 'sending':
-      return 'Sending topic message...';
+      return 'Sparkbox 正在准备第一段回复';
     case 'streaming':
-      return 'Streaming reply...';
+      return 'Sparkbox 正在继续回答';
+    case 'timed_out':
+      return 'Sparkbox 这次准备得太久了';
+    case 'failed':
+      return 'Sparkbox 这次没有顺利回完';
     default:
       return '';
   }
