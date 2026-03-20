@@ -686,6 +686,7 @@ function App() {
   const authSubmitLabel =
     authMode === 'login' ? 'Sign in' : authMode === 'register' ? 'Create account' : 'Join household';
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
+  const canReturnToShell = Boolean(session) && homeLoaded && homeDevices.length > 0;
 
   function canEditTask(task: HouseholdTaskSummary): boolean {
     if (canManage) {
@@ -735,6 +736,12 @@ function App() {
         path: fromDeviceFilePath(entry.path),
       })),
     };
+  }
+
+  function returnToShell(): void {
+    resetFlow();
+    setShellTab('chats');
+    setShellSurface('shell');
   }
 
   function openMemoryEditor(memory?: SpaceMemory): void {
@@ -4725,6 +4732,14 @@ function App() {
           </Text>
         </View>
 
+        {canReturnToShell ? (
+          <View style={styles.inlineActions}>
+            <Pressable style={styles.secondaryButtonSmall} onPress={returnToShell}>
+              <Text style={styles.secondaryButtonText}>Back to household</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.stepRail}>
           {[1, 2, 3, 4].map((step) => {
             const done = step < activeStep;
@@ -4835,9 +4850,15 @@ function App() {
               <Pressable style={styles.primaryButtonSmall} onPress={() => void logout()}>
                 <Text style={styles.primaryButtonText}>Log out</Text>
               </Pressable>
-              <Pressable style={styles.secondaryButtonSmall} onPress={resetFlow}>
-                <Text style={styles.secondaryButtonText}>Start over</Text>
-              </Pressable>
+              {canReturnToShell ? (
+                <Pressable style={styles.secondaryButtonSmall} onPress={returnToShell}>
+                  <Text style={styles.secondaryButtonText}>Back to household</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.secondaryButtonSmall} onPress={resetFlow}>
+                  <Text style={styles.secondaryButtonText}>Start over</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         )}
