@@ -105,7 +105,16 @@ import {
   hasOnlineDevice,
   type ShellTab,
 } from './src/householdState';
-import { mapSpaceKindToLegacyScope, resolveActiveSpaceId } from './src/spaceShell';
+import {
+  describeChatAccess,
+  describeChatSendPhase,
+  describeSpaceKind,
+  describeSpaceTemplate,
+  formatSpaceTemplateList,
+  mapSpaceKindToLegacyScope,
+  resolveActiveSpaceId,
+  type ChatSendPhase,
+} from './src/spaceShell';
 import {
   isLikelyLocalSetupHandoffError,
   listLocalSetupNetworks,
@@ -166,6 +175,10 @@ type HouseholdDevice = {
   status: string;
   online: boolean;
   claimed: boolean;
+};
+
+type ChatTimelineMessage = HouseholdChatSessionMessage & {
+  pending?: boolean;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -343,6 +356,8 @@ function App() {
   const [activeChatSessionId, setActiveChatSessionId] = useState('');
   const [activeChatSession, setActiveChatSession] = useState<HouseholdChatSessionDetail | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatSendPhase, setChatSendPhase] = useState<ChatSendPhase>('idle');
+  const [chatPendingMessage, setChatPendingMessage] = useState<ChatTimelineMessage | null>(null);
   const [chatError, setChatError] = useState('');
   const [chatDraft, setChatDraft] = useState('');
   const [chatSessionEditorOpen, setChatSessionEditorOpen] = useState(false);
@@ -543,8 +558,13 @@ function App() {
   const currentFilePath = fileListing?.path ?? '';
   const canCreateTasks = canManage || taskScope === 'private';
   const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
+  const activeChatTimelineMessages: ChatTimelineMessage[] = chatPendingMessage
+    ? [...activeChatMessages, chatPendingMessage]
+    : activeChatMessages;
   const canManageActiveChat =
     !!activeChatSession && (canManage || activeChatSession.ownerUserId === session?.user.id);
+  const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
+  const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
   const authCardTitle =
     authMode === 'login'
       ? 'Sign in'
@@ -823,6 +843,11 @@ function App() {
       cancelled = true;
     };
   }, [activeChatSessionId, session?.token, shellSurface, shellTab]);
+
+  useEffect(() => {
+    setChatPendingMessage(null);
+    setChatSendPhase('idle');
+  }, [activeChatSessionId]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
@@ -1535,6 +1560,13 @@ function App() {
     setChatDraft('');
     setChatBusy(true);
     setChatError('');
+    setChatSendPhase('sending');
+    setChatPendingMessage({
+      role: 'assistant',
+      content: describeChatSendPhase('sending'),
+      senderDisplayName: null,
+      pending: true,
+    });
     const previousSession = activeChatSession;
     if (previousSession) {
       setActiveChatSession({
@@ -1544,6 +1576,13 @@ function App() {
     }
     try {
       const response = await sendHouseholdChatSessionMessage(session.token, activeChatSessionId, content);
+      setChatSendPhase('streaming');
+      setChatPendingMessage({
+        role: 'assistant',
+        content: response.message || describeChatSendPhase('streaming'),
+        senderDisplayName: null,
+        pending: true,
+      });
       const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
       setActiveChatSession(detail);
       setChatSessions((current) =>
@@ -1568,6 +1607,8 @@ function App() {
       setActiveChatSession(previousSession);
       setChatError(error instanceof Error ? error.message : 'Chat is unavailable right now.');
     } finally {
+      setChatPendingMessage(null);
+      setChatSendPhase('idle');
       setChatBusy(false);
     }
   }
@@ -2039,10 +2080,10 @@ function App() {
             <Text style={styles.title}>{householdName}</Text>
             <Text style={styles.subtitle}>
               {shellTab === 'chats'
-                ? 'Open your private Box chat and each shared Sparkbox space from one place.'
+                ? "Choose a space first, then move into that space's topics and chats."
                 : shellTab === 'library'
-                  ? 'See what each space has accumulated, then manage files, photos, and routines.'
-                  : 'Manage members, devices, family apps, and your signed-in Sparkbox session.'}
+                  ? "See each space's context, then manage files and routines inside it."
+                  : 'Manage the Box, the active space, family apps, and your signed-in Sparkbox session.'}
             </Text>
           </View>
 
@@ -2067,7 +2108,7 @@ function App() {
             {shellTab === 'settings' ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Household Home</Text>
+                  <Text style={styles.cardTitle}>Household overview</Text>
                   <Text style={styles.cardCopy}>
                     {homeBusy
                       ? 'Refreshing your household status...'
@@ -2087,6 +2128,29 @@ function App() {
                       </Pressable>
                     ) : null}
                   </View>
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Active space identity</Text>
+                  <Text style={styles.cardCopy}>
+                    {activeSpace
+                      ? `${activeSpace.name} is the current ${activeSpaceKindLabel.toLowerCase()} and it already has ${activeSpace.threadCount} topics.`
+                      : 'Pick a space in Chats so Library and Settings can follow that space identity.'}
+                  </Text>
+                  {activeSpace ? (
+                    <View style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{activeSpace.name}</Text>
+                        <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
+                      </View>
+                      <Text style={styles.cardCopy}>
+                        Template: {activeSpaceTemplateLabel || 'Household space'}
+                      </Text>
+                      <Text style={styles.cardCopy}>
+                        {activeSpace.threadCount} topics · {activeSpace.memberCount} members
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.card}>
@@ -2132,7 +2196,7 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Spaces</Text>
                   <Text style={styles.cardCopy}>
-                    Pick a private Box chat or a shared Sparkbox space before opening a thread.
+                    Pick a space first. Each space keeps its own topics and chat history.
                   </Text>
                   {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
                   {spacesBusy && spaces.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
@@ -2146,7 +2210,7 @@ function App() {
                       >
                         <View style={styles.deviceRowHeadline}>
                           <Text style={styles.networkName}>{space.name}</Text>
-                          <Text style={active ? styles.statusTagOnline : styles.tagMuted}>{space.kind}</Text>
+                          <Text style={active ? styles.statusTagOnline : styles.tagMuted}>{describeSpaceKind(space.kind)}</Text>
                         </View>
                         <Text style={styles.cardCopy}>
                           {space.threadCount} topics · {space.memberCount} members
@@ -2157,12 +2221,17 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Chat</Text>
+                  <Text style={styles.cardTitle}>Topic chat</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Current space: ${activeSpace?.name ?? 'Select a space'}`
+                      ? activeSpace
+                        ? `Current space: ${activeSpace.name} (${activeSpaceKindLabel})`
+                        : 'Select a space to open its topics.'
                       : 'Sparkbox is offline right now. You can still browse chat history and settings.'}
                   </Text>
+                  {chatSendPhase !== 'idle' ? (
+                    <Text style={styles.selectionLabel}>{describeChatSendPhase(chatSendPhase)}</Text>
+                  ) : null}
                   {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
                   <View style={styles.scopeRow}>
                     {(['family', 'private'] as ChatSessionScope[]).map((scope) => {
@@ -2174,7 +2243,7 @@ function App() {
                           onPress={() => setChatScope(scope)}
                         >
                           <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {scope === 'family' ? 'Family chats' : 'Private chats'}
+                            {describeChatAccess(scope)}
                           </Text>
                         </Pressable>
                       );
@@ -2195,7 +2264,7 @@ function App() {
                   {chatBusy && chatSessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {chatSessions.length === 0 ? (
                     <Text style={styles.cardCopy}>
-                      {chatScope === 'family' ? 'No family chats yet.' : 'No private chats yet.'}
+                      No chats in this space yet.
                     </Text>
                   ) : (
                     chatSessions.map((sessionItem) => {
@@ -2209,7 +2278,7 @@ function App() {
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{sessionItem.name}</Text>
                             <Text style={active ? styles.statusTagOnline : styles.tagMuted}>
-                              {sessionItem.scope}
+                              {describeChatAccess(sessionItem.scope)}
                             </Text>
                           </View>
                           <Text style={styles.cardCopy}>
@@ -2230,7 +2299,7 @@ function App() {
                   <Text style={styles.cardTitle}>Topics</Text>
                   <Text style={styles.cardCopy}>
                     {activeSpaceDetail
-                      ? `Enter ${activeSpaceDetail.name} through clear topics instead of one endless chat.`
+                      ? `${activeSpaceDetail.name} is organized around topics, not one endless chat.`
                       : 'Pick a space to see its default topics.'}
                   </Text>
                   {activeSpaceDetail?.threads.length ? (
@@ -2263,11 +2332,11 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{activeChatSession?.name || 'Active chat'}</Text>
+                  <Text style={styles.cardTitle}>{activeChatSession?.name || 'Active topic chat'}</Text>
                   <Text style={styles.cardCopy}>
                     {activeChatSession
-                      ? `Scope: ${activeChatSession.scope}. Temperature ${activeChatSession.temperature}, max ${activeChatSession.maxTokens} tokens.`
-                      : 'Pick or create a chat to continue.'}
+                      ? `Scope: ${describeChatAccess(activeChatSession.scope)}. Temperature ${activeChatSession.temperature}, max ${activeChatSession.maxTokens} tokens.`
+                      : 'Pick or create a topic chat to continue.'}
                   </Text>
                   {activeChatSession ? (
                     <View style={styles.inlineActions}>
@@ -2295,19 +2364,22 @@ function App() {
                       </Pressable>
                     </View>
                   ) : null}
-                  {activeChatMessages.length === 0 ? (
+                  {activeChatTimelineMessages.length === 0 ? (
                     <Text style={styles.cardCopy}>No messages yet in this chat.</Text>
                   ) : (
-                    activeChatMessages.map((message, index) => (
+                    activeChatTimelineMessages.map((message, index) => (
                       <View
                         key={`${message.role}-${index}-${message.content}`}
                         style={[
                           styles.chatBubble,
                           message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                          message.pending ? styles.chatBubblePending : null,
                         ]}
                       >
                         <Text style={styles.selectionLabel}>
-                          {message.role === 'user'
+                          {message.pending
+                            ? describeChatSendPhase(chatSendPhase) || 'Sparkbox'
+                            : message.role === 'user'
                             ? message.senderDisplayName || 'You'
                             : 'Sparkbox'}
                         </Text>
@@ -2315,6 +2387,7 @@ function App() {
                           style={[
                             styles.chatBubbleCopy,
                             message.role === 'user' ? styles.chatBubbleCopyUser : null,
+                            message.pending ? styles.chatBubbleCopyPending : null,
                           ]}
                         >
                           {message.content}
@@ -2327,7 +2400,7 @@ function App() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Send a message</Text>
                   <TextInput
-                    placeholder={activeChatSession ? 'Ask Sparkbox what this chat needs next' : 'Pick a chat first'}
+                    placeholder={activeChatSession ? 'Ask this topic what happens next' : 'Pick a topic chat first'}
                     placeholderTextColor="#7e8a83"
                     style={[styles.input, styles.textArea]}
                     value={chatDraft}
@@ -2358,7 +2431,7 @@ function App() {
                   <Text style={styles.cardTitle}>Library</Text>
                   <Text style={styles.cardCopy}>
                     {activeSpace
-                      ? `${activeSpace.name} will accumulate Memories, Summaries, Photos, Files, and Tasks here.`
+                      ? `${activeSpace.name} (${activeSpaceKindLabel}) will accumulate Memories, Summaries, Photos, Files, and Tasks here.`
                       : 'Pick a space to browse its accumulated Sparkbox context.'}
                   </Text>
                   <View style={styles.scopeRow}>
@@ -2371,10 +2444,10 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Files</Text>
+                  <Text style={styles.cardTitle}>Files in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Files are currently mapped from ${activeSpace?.kind === 'private' ? 'your private Box space' : 'the shared space'} while the Jetson storage layer migrates.`
+                      ? `Files are currently mapped from ${activeSpace ? activeSpaceKindLabel : 'the active space'} while the Jetson storage layer migrates.`
                       : 'Sparkbox needs to be online before files can be browsed or changed.'}
                   </Text>
                   {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
@@ -2389,7 +2462,7 @@ function App() {
                           onPress={() => setFileSpace(space)}
                         >
                           <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {space === 'family' ? 'Family space' : 'Private space'}
+                            {describeChatAccess(space)}
                           </Text>
                         </Pressable>
                       );
@@ -2429,7 +2502,7 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{fileSpace === 'family' ? 'Shared files' : 'Your files'}</Text>
+                  <Text style={styles.cardTitle}>{fileSpace === 'family' ? 'Shared space files' : 'Private space files'}</Text>
                   {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {!filesBusy && (fileListing?.entries.length ?? 0) === 0 ? (
                     <Text style={styles.cardCopy}>Nothing is stored here yet.</Text>
@@ -2499,7 +2572,7 @@ function App() {
                   <Text style={styles.cardTitle}>Household Tasks</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Tasks are currently mapped from ${activeSpace?.kind === 'private' ? 'your private Box space' : 'the shared space'} while the Jetson scheduler stays on the legacy scope model.`
+                      ? `Tasks are currently mapped from ${activeSpace ? activeSpaceKindLabel : 'the active space'} while the Jetson scheduler stays on the legacy scope model.`
                       : 'Sparkbox needs to be online before tasks can be loaded or changed.'}
                   </Text>
                   {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
@@ -2530,7 +2603,7 @@ function App() {
                           onPress={() => setTaskScope(scope)}
                         >
                           <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {scope === 'family' ? 'Family space' : 'Private space'}
+                            {describeChatAccess(scope)}
                           </Text>
                         </Pressable>
                       );
@@ -2544,7 +2617,7 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{taskScope === 'family' ? 'Shared routines' : 'Your private routines'}</Text>
+                  <Text style={styles.cardTitle}>{taskScope === 'family' ? 'Shared space routines' : 'Private space routines'}</Text>
                   {tasksBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {!tasksBusy && tasks.length === 0 ? (
                     <Text style={styles.cardCopy}>
@@ -2656,7 +2729,7 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Family Apps</Text>
+                    <Text style={styles.cardTitle}>Family apps on this Box</Text>
                     <Text style={styles.cardCopy}>
                       Install a family app once on this Box, then enable it in the spaces where it belongs.
                     </Text>
@@ -2670,12 +2743,14 @@ function App() {
                               <Text style={styles.networkName}>{app.title}</Text>
                               <Text style={styles.statusTagOnline}>installed</Text>
                             </View>
-                            <Text style={styles.cardCopy}>{app.spaceTemplates.join(' · ')}</Text>
+                            <Text style={styles.cardCopy}>
+                              Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                            </Text>
                           </View>
                         ))}
                       </>
                     ) : null}
-                    <Text style={styles.selectionLabel}>Inspiration Square</Text>
+                    <Text style={styles.selectionLabel}>Available for this Box</Text>
                     {familyAppsCatalog
                       .filter((app) => !installedFamilyApps.some((installed) => installed.slug === app.slug))
                       .map((app) => (
@@ -2684,7 +2759,9 @@ function App() {
                             <Text style={styles.networkName}>{app.title}</Text>
                             <Text style={styles.tagMuted}>{app.riskLevel}</Text>
                           </View>
-                          <Text style={styles.cardCopy}>{app.spaceTemplates.join(' · ')}</Text>
+                          <Text style={styles.cardCopy}>
+                            Works in: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                          </Text>
                           <View style={styles.inlineActions}>
                             <Pressable
                               style={styles.primaryButtonSmall}
@@ -4169,6 +4246,12 @@ const styles = StyleSheet.create({
   chatBubbleAssistant: {
     backgroundColor: '#eef5ef',
   },
+  chatBubblePending: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#b9c8c0',
+    opacity: 0.92,
+  },
   chatBubbleCopy: {
     color: '#17352a',
     fontSize: 15,
@@ -4176,6 +4259,9 @@ const styles = StyleSheet.create({
   },
   chatBubbleCopyUser: {
     color: '#ffffff',
+  },
+  chatBubbleCopyPending: {
+    color: '#4f6b5e',
   },
   networkRow: {
     borderRadius: 18,

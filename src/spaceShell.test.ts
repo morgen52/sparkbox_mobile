@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeChatSendPhase,
+  describeSpaceKind,
+  formatSpaceTemplateList,
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
 } from './spaceShell';
@@ -32,8 +35,28 @@ describe('resolveActiveSpaceId', () => {
     expect(resolveActiveSpaceId(spaces, 'space-shared')).toBe('space-shared');
   });
 
-  it('falls back to the private space first for a new shell session', () => {
-    expect(resolveActiveSpaceId(spaces, '')).toBe('space-private');
+  it('falls back to the first listed space for a new shell session', () => {
+    expect(resolveActiveSpaceId([spaces[1], spaces[0]], '')).toBe('space-shared');
+  });
+});
+
+describe('space identity helpers', () => {
+  it('describes private and shared spaces with explicit labels', () => {
+    expect(describeSpaceKind('private')).toBe('Private Box space');
+    expect(describeSpaceKind('shared')).toBe('Shared Sparkbox space');
+  });
+
+  it('formats space templates into friendly labels', () => {
+    expect(formatSpaceTemplateList(['partner', 'parents', 'household_ops'])).toBe(
+      'Partner · Parents · Household ops',
+    );
+  });
+});
+
+describe('chat send state helpers', () => {
+  it('describes pending chat send phases for the UI', () => {
+    expect(describeChatSendPhase('sending')).toBe('Sending topic message...');
+    expect(describeChatSendPhase('streaming')).toBe('Streaming reply...');
   });
 });
 
