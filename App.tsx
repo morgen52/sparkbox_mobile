@@ -724,15 +724,6 @@ function App() {
     setMemoryEditorOpen(true);
   }
 
-  function saveSummaryAsMemory(summary: SpaceSummary): void {
-    setEditingMemory(null);
-    setMemoryTitle(summary.title);
-    setMemoryContent(summary.content);
-    setMemoryPinned(false);
-    setLibraryError('');
-    setMemoryEditorOpen(true);
-  }
-
   function closeMemoryEditor(): void {
     setMemoryEditorOpen(false);
     setEditingMemory(null);
@@ -834,6 +825,26 @@ function App() {
       await refreshLibrary();
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : 'Could not capture a summary right now.');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function saveSummaryAsMemory(summary: SpaceSummary): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      await createSpaceMemory(session.token, activeSpaceId, {
+        title: summary.title,
+        content: summary.content,
+      });
+      setLibraryNotice(`Saved ${summary.title} to Memories.`);
+      await refreshLibrary();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Could not save this summary as a memory.');
     } finally {
       setLibraryBusy(false);
     }
