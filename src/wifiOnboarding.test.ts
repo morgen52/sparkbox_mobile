@@ -15,7 +15,7 @@ describe('wifiOnboarding bridge', () => {
     const { connectToSetupHotspot } = await import('./wifiOnboarding');
 
     await expect(connectToSetupHotspot('Sparkbox-Setup')).rejects.toThrow(
-      'Sparkbox Wi-Fi onboarding is not available on this build.',
+      'This phone cannot switch Wi-Fi automatically right now. Open Wi-Fi settings and join Sparkbox-Setup manually.',
     );
   });
 

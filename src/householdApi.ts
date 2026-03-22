@@ -139,6 +139,86 @@ export type FamilyAppInstallation = {
   requiresOwnerConfirmation: boolean;
 };
 
+const FAMILY_APP_COPY_OVERRIDES: Record<
+  string,
+  {
+    title: string;
+    description: string;
+    entryTitle?: string;
+    entryCopy?: string;
+    starterPrompts?: string[];
+    threadHints?: string[];
+  }
+> = {
+  'good-night-close': {
+    title: 'Nightly wrap-up',
+    description: 'Gently close out the day and keep one small moment worth remembering.',
+    entryTitle: 'What should this space hold onto tonight?',
+    entryCopy: 'Let Sparkbox gently close out the day and keep one moment worth remembering.',
+    starterPrompts: ['Help this space end the day with one moment worth keeping.'],
+    threadHints: ['Nightly wrap-up'],
+  },
+  'weekend-plans': {
+    title: 'Weekend plans',
+    description: 'Help this space line up plans, shopping, and travel before the weekend starts.',
+    entryTitle: 'Plan the weekend together',
+    entryCopy: 'Let Sparkbox help this space line up weekend plans, shopping, and travel.',
+    starterPrompts: ['Use this space’s recent plans to help me put together the weekend.'],
+    threadHints: ['Weekend plans'],
+  },
+  'remember-this-moment': {
+    title: 'Remember this moment',
+    description: 'Suggest a shared memory from chats, photos, and the small things happening around this space.',
+    entryTitle: 'Save this moment',
+    entryCopy: 'Pick one recent moment from chats or photos that this space should remember.',
+    starterPrompts: ['Help me save one recent moment this space should remember.'],
+    threadHints: ['Shared memories'],
+  },
+  'talk-to-parents': {
+    title: 'Talk to parents',
+    description: 'Privately help shape the wording first, then relay it clearly after you confirm.',
+    entryTitle: 'Think it through privately first',
+    entryCopy: 'Let Sparkbox help with the wording here first, then decide whether to relay it to your parents.',
+    starterPrompts: ['Help me work out how to say this before we relay it to my parents.'],
+    threadHints: ['Talk to parents'],
+  },
+  'bedtime-time': {
+    title: 'Bedtime moments',
+    description: 'Bring a bedtime story, a gentle question, or a soft end-of-day check-in to this space.',
+    entryTitle: 'Share a bedtime moment',
+    entryCopy: 'Use a story, a small question, or a gentle wrap-up to end the day together.',
+    starterPrompts: ['Help this space wind down with a short bedtime moment.'],
+    threadHints: ['Bedtime moments'],
+  },
+  'family-diary': {
+    title: 'Family diary',
+    description: 'Keep one sentence a day and one page a week so this space slowly builds its own record.',
+    entryTitle: 'Write one line for today',
+    entryCopy: 'Let Sparkbox keep one line from today so it can slowly grow into a family diary.',
+    starterPrompts: ['Help me keep one line from today that this space should remember.'],
+    threadHints: ['Today and this week'],
+  },
+  'household-scheduler': {
+    title: 'Home routines',
+    description: 'Let Sparkbox keep the recurring tasks, reminders, and coordination this space needs on track.',
+    entryTitle: 'Keep routines on track',
+    entryCopy: 'Use this space to keep recurring plans, reminders, and coordination on track.',
+    starterPrompts: ['Help me set up the recurring tasks this space needs.'],
+    threadHints: ['Home routines'],
+  },
+};
+
+const SEEDED_UI_COPY_REPLACEMENTS: Array<[string, string]> = [
+  ['你和 Sparkbox', 'You + Sparkbox'],
+  ['我和爸妈 + Sparkbox', 'Parents + Sparkbox'],
+  ['先私下问问 Sparkbox', 'Talk privately with Sparkbox'],
+  ['一起聊聊', 'Group chat'],
+  ['想和对方说的话', 'What I want to tell my partner'],
+  ['近况与问候', 'Check-ins'],
+  ['健康与提醒', 'Health and reminders'],
+  ['想和爸妈说的话', 'Talk to parents'],
+];
+
 export type SpaceFamilyAppEnableInput = {
   cadence?: string;
   entryCard?: boolean;
@@ -188,10 +268,15 @@ export type HouseholdChatSessionSummary = {
   maxTokens: number;
   createdAt: string;
   updatedAt: string;
+  lastMessagePreview?: string | null;
+  lastMessageRole?: 'user' | 'assistant' | null;
+  lastMessageSenderDisplayName?: string | null;
+  lastMessageCreatedAt?: string | null;
 };
 
 export type HouseholdChatSessionMessage = HouseholdChatMessage & {
   senderDisplayName?: string | null;
+  createdAt?: string | null;
 };
 
 export type HouseholdChatSessionDetail = HouseholdChatSessionSummary & {
@@ -420,6 +505,14 @@ export type DeviceResetResponse = {
   ok: boolean;
   deviceId: string;
   status: string;
+};
+
+export type DeviceReconnectResponse = {
+  ok: boolean;
+  deviceId: string;
+  online: boolean;
+  status: string;
+  detail: string;
 };
 
 export type DeviceReprovisionResponse = {
@@ -1310,6 +1403,30 @@ export async function resetDeviceToSetupMode(
   };
 }
 
+export async function reconnectDevice(
+  token: string,
+  deviceId: string,
+): Promise<DeviceReconnectResponse> {
+  const response = await cloudJson<{
+    ok: boolean;
+    device_id: string;
+    online: boolean;
+    status: string;
+    detail: string;
+  }>(`/api/devices/${encodeURIComponent(deviceId)}/reconnect`, {
+    method: 'POST',
+    token,
+  });
+
+  return {
+    ok: response.ok,
+    deviceId: response.device_id,
+    online: response.online,
+    status: response.status,
+    detail: response.detail,
+  };
+}
+
 export async function createHouseholdInvitation(
   token: string,
   role: 'owner' | 'member',
@@ -1572,7 +1689,10 @@ function normalizeSpaceLibrarySummary(summary: Record<string, unknown>): SpaceSu
     id: String(summary.id ?? ''),
     title: String(summary.title ?? ''),
     content: String(summary.content ?? ''),
-    sourceLabel: typeof summary.source_label === 'string' ? summary.source_label : null,
+    sourceLabel:
+      typeof summary.source_label === 'string'
+        ? normalizeSeededUiCopy(summary.source_label)
+        : null,
     createdAt: String(summary.created_at ?? ''),
   };
 }
@@ -1580,27 +1700,48 @@ function normalizeSpaceLibrarySummary(summary: Record<string, unknown>): SpaceSu
 function normalizeChatSessionSummary(session: Record<string, unknown>): HouseholdChatSessionSummary {
   return {
     id: String(session.id ?? ''),
-    name: String(session.name ?? 'New Chat'),
+    name: normalizeSeededUiCopy(String(session.name ?? 'New Chat')),
     scope: session.scope === 'private' ? 'private' : 'family',
     ownerUserId: String(session.owner_user_id ?? ''),
-    systemPrompt: typeof session.system_prompt === 'string' ? session.system_prompt : '',
+    systemPrompt:
+      typeof session.system_prompt === 'string' ? normalizeSeededUiCopy(session.system_prompt) : '',
     temperature: typeof session.temperature === 'number' ? session.temperature : 0.7,
     maxTokens: typeof session.max_tokens === 'number' ? session.max_tokens : 2048,
     createdAt: String(session.created_at ?? ''),
     updatedAt: String(session.updated_at ?? ''),
+    lastMessagePreview:
+      typeof session.last_message_preview === 'string'
+        ? normalizeSeededUiCopy(session.last_message_preview)
+        : null,
+    lastMessageRole:
+      session.last_message_role === 'assistant'
+        ? 'assistant'
+        : session.last_message_role === 'user'
+        ? 'user'
+        : null,
+    lastMessageSenderDisplayName:
+      typeof session.last_message_sender_display_name === 'string'
+        ? String(session.last_message_sender_display_name)
+        : null,
+    lastMessageCreatedAt:
+      typeof session.last_message_created_at === 'string' ? String(session.last_message_created_at) : null,
   };
 }
 
 function normalizeChatSessionDetail(session: Record<string, unknown>): HouseholdChatSessionDetail {
   return {
     ...normalizeChatSessionSummary(session),
-    messages: Array.isArray(session.messages)
+        messages: Array.isArray(session.messages)
       ? session.messages.map((message) => ({
           role: message && (message as Record<string, unknown>).role === 'assistant' ? 'assistant' : 'user',
           content: String((message as Record<string, unknown>).content ?? ''),
           senderDisplayName:
             typeof (message as Record<string, unknown>).sender_display_name === 'string'
               ? String((message as Record<string, unknown>).sender_display_name)
+              : null,
+          createdAt:
+            typeof (message as Record<string, unknown>).created_at === 'string'
+              ? String((message as Record<string, unknown>).created_at)
               : null,
         }))
       : [],
@@ -1610,7 +1751,7 @@ function normalizeChatSessionDetail(session: Record<string, unknown>): Household
 function normalizeSpaceSummary(space: Record<string, unknown>): HouseholdSpaceSummary {
   return {
     id: String(space.id ?? ''),
-    name: String(space.name ?? ''),
+    name: normalizeSeededUiCopy(String(space.name ?? '')),
     kind: space.kind === 'private' ? 'private' : 'shared',
     template: normalizeSpaceTemplate(space.template),
     memberCount: typeof space.member_count === 'number' ? space.member_count : 0,
@@ -1632,7 +1773,7 @@ function normalizeSpaceDetail(space: Record<string, unknown>): HouseholdSpaceDet
     threads: Array.isArray(space.threads)
       ? space.threads.map((thread) => ({
           id: String((thread as Record<string, unknown>).id ?? ''),
-          title: String((thread as Record<string, unknown>).title ?? ''),
+          title: normalizeSeededUiCopy(String((thread as Record<string, unknown>).title ?? '')),
           position: typeof (thread as Record<string, unknown>).position === 'number'
             ? Number((thread as Record<string, unknown>).position)
             : 0,
@@ -1643,16 +1784,20 @@ function normalizeSpaceDetail(space: Record<string, unknown>): HouseholdSpaceDet
         }))
       : [],
     enabledFamilyApps: Array.isArray(space.enabled_family_apps)
-      ? space.enabled_family_apps.map((item) => ({
-          slug: String((item as Record<string, unknown>).slug ?? ''),
-          title: String((item as Record<string, unknown>).title ?? ''),
-          enabled: (item as Record<string, unknown>).enabled !== false,
-          config:
-            typeof (item as Record<string, unknown>).config === 'object' &&
-            (item as Record<string, unknown>).config !== null
-              ? ((item as Record<string, unknown>).config as Record<string, unknown>)
-              : {},
-        }))
+      ? space.enabled_family_apps.map((item) => {
+          const slug = String((item as Record<string, unknown>).slug ?? '');
+          const override = FAMILY_APP_COPY_OVERRIDES[slug];
+          return {
+            slug,
+            title: override?.title ?? normalizeSeededUiCopy(String((item as Record<string, unknown>).title ?? '')),
+            enabled: (item as Record<string, unknown>).enabled !== false,
+            config:
+              typeof (item as Record<string, unknown>).config === 'object' &&
+              (item as Record<string, unknown>).config !== null
+                ? ((item as Record<string, unknown>).config as Record<string, unknown>)
+                : {},
+          };
+        })
       : [],
     privateSideChannel:
       space.private_side_channel && typeof space.private_side_channel === 'object'
@@ -1662,15 +1807,17 @@ function normalizeSpaceDetail(space: Record<string, unknown>): HouseholdSpaceDet
 }
 
 function normalizeFamilyAppInstallation(app: Record<string, unknown>): FamilyAppInstallation {
+  const slug = String(app.slug ?? '');
+  const override = FAMILY_APP_COPY_OVERRIDES[slug];
   return {
-    slug: String(app.slug ?? ''),
-    title: String(app.title ?? ''),
+    slug,
+    title: override?.title ?? String(app.title ?? ''),
     installed: app.installed !== false,
-    description: String(app.description ?? ''),
-    entryTitle: typeof app.entry_title === 'string' ? app.entry_title : null,
-    entryCopy: typeof app.entry_copy === 'string' ? app.entry_copy : null,
-    starterPrompts: Array.isArray(app.starter_prompts) ? app.starter_prompts.map((item) => String(item)) : [],
-    threadHints: Array.isArray(app.thread_hints) ? app.thread_hints.map((item) => String(item)) : [],
+    description: override?.description ?? String(app.description ?? ''),
+    entryTitle: override?.entryTitle ?? (typeof app.entry_title === 'string' ? app.entry_title : null),
+    entryCopy: override?.entryCopy ?? (typeof app.entry_copy === 'string' ? app.entry_copy : null),
+    starterPrompts: override?.starterPrompts ?? (Array.isArray(app.starter_prompts) ? app.starter_prompts.map((item) => String(item)) : []),
+    threadHints: override?.threadHints ?? (Array.isArray(app.thread_hints) ? app.thread_hints.map((item) => String(item)) : []),
     riskLevel: String(app.risk_level ?? 'normal'),
     spaceTemplates: Array.isArray(app.space_templates)
       ? app.space_templates.map((item) => String(item))
@@ -1685,7 +1832,7 @@ function normalizeFamilyAppInstallation(app: Record<string, unknown>): FamilyApp
 function normalizeSpaceSideChannel(sideChannel: Record<string, unknown>): HouseholdSpaceSideChannel {
   return {
     available: sideChannel.available !== false,
-    label: String(sideChannel.label ?? '先私下问问 Sparkbox'),
+    label: normalizeSeededUiCopy(String(sideChannel.label ?? 'Talk privately with Sparkbox')),
     sessionId: typeof sideChannel.session_id === 'string' ? sideChannel.session_id : null,
   };
 }
@@ -1710,6 +1857,13 @@ function normalizeSpaceTemplate(value: unknown): SpaceTemplate {
     default:
       return 'household';
   }
+}
+
+function normalizeSeededUiCopy(value: string): string {
+  return SEEDED_UI_COPY_REPLACEMENTS.reduce(
+    (result, [source, replacement]) => result.split(source).join(replacement),
+    String(value ?? ''),
+  );
 }
 
 function normalizeFileEntry(entry: Record<string, unknown>): HouseholdFileEntry {

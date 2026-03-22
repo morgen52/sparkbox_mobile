@@ -37,6 +37,7 @@ import {
   resetDeviceToSetupMode,
   revokeHouseholdInvitation,
   relayHouseholdSpaceMessage,
+  reconnectDevice,
   sendHouseholdChatSessionMessage,
   streamHouseholdChatSessionMessage,
   startDeviceReprovision,
@@ -213,11 +214,13 @@ describe('space and family app API', () => {
 
     expect(spaces).toHaveLength(1);
     expect(spaces[0]?.kind).toBe('private');
+    expect(spaces[0]?.name).toBe('You + Sparkbox');
+    expect(created.name).toBe('Parents + Sparkbox');
     expect(created.members).toHaveLength(2);
-    expect(created.threads[0]?.title).toBe('近况与问候');
+    expect(created.threads[0]?.title).toBe('Check-ins');
     expect(created.privateSideChannel).toEqual({
       available: true,
-      label: '先私下问问 Sparkbox',
+      label: 'Talk privately with Sparkbox',
       sessionId: null,
     });
     expect(installed.slug).toBe('weekend-plans');
@@ -231,10 +234,11 @@ describe('space and family app API', () => {
     });
     expect(sideChannel).toEqual({
       available: true,
-      label: '先私下问问 Sparkbox',
+      label: 'Talk privately with Sparkbox',
       sessionId: 'chat-side-1',
     });
     expect(openedThread.id).toBe('chat-thread-1');
+    expect(openedThread.name).toBe('Parents + Sparkbox · Check-ins');
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'https://morgen52.site/familyserver/api/spaces',
@@ -365,15 +369,17 @@ describe('space and family app API', () => {
     const installed = await getInstalledFamilyApps('token-1');
 
     expect(catalog[0]?.installed).toBe(false);
-    expect(catalog[0]?.description).toContain('周末');
-    expect(catalog[0]?.entryTitle).toContain('周末');
-    expect(catalog[0]?.starterPrompts[0]).toContain('周末');
-    expect(catalog[0]?.threadHints).toContain('周末安排');
+    expect(catalog[0]?.title).toBe('Weekend plans');
+    expect(catalog[0]?.description).toContain('weekend');
+    expect(catalog[0]?.entryTitle).toContain('weekend');
+    expect(catalog[0]?.starterPrompts[0]).toContain('weekend');
+    expect(catalog[0]?.threadHints).toContain('Weekend plans');
     expect(catalog[0]?.capabilities).toContain('create_tasks');
     expect(catalog[0]?.supportsProactiveMessages).toBe(true);
     expect(installed[0]?.installed).toBe(true);
-    expect(installed[0]?.description).toContain('每天一句');
-    expect(installed[0]?.entryCopy).toContain('一句话');
+    expect(installed[0]?.title).toBe('Family diary');
+    expect(installed[0]?.description).toContain('one sentence a day');
+    expect(installed[0]?.entryCopy).toContain('one line from today');
     expect(installed[0]?.requiresOwnerConfirmation).toBe(false);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -384,6 +390,67 @@ describe('space and family app API', () => {
       2,
       'https://morgen52.site/familyserver/api/family-apps/installed',
       expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('normalizes family app titles that still read like backend placeholders', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        apps: [
+          {
+            slug: 'bedtime-time',
+            title: '睡前时光',
+            installed: false,
+            description: '睡前故事和轻声问候',
+            entry_title: '睡前陪伴一下',
+            entry_copy: '让 Sparkbox 帮这个空间安静地收尾。',
+            starter_prompts: ['帮这个空间准备一个简短的睡前时刻。'],
+            thread_hints: ['睡前时光'],
+            risk_level: 'normal',
+            space_templates: ['child'],
+            capabilities: ['send_proactive_messages'],
+            supports_proactive_messages: true,
+            supports_private_relay: false,
+            requires_owner_confirmation: false,
+          },
+          {
+            slug: 'household-scheduler',
+            title: '家庭事务调度',
+            installed: false,
+            description: '日常任务和提醒',
+            entry_title: '安排家务',
+            entry_copy: '让 Sparkbox 帮这个空间盯住重复任务。',
+            starter_prompts: ['帮我设置这个空间的重复任务。'],
+            thread_hints: ['家庭事务'],
+            risk_level: 'normal',
+            space_templates: ['household_ops'],
+            capabilities: ['create_tasks'],
+            supports_proactive_messages: true,
+            supports_private_relay: false,
+            requires_owner_confirmation: false,
+          },
+        ],
+      }),
+    } as Response);
+
+    const catalog = await getFamilyAppCatalog('token-1');
+
+    expect(catalog[0]).toEqual(
+      expect.objectContaining({
+        slug: 'bedtime-time',
+        title: 'Bedtime moments',
+        entryTitle: 'Share a bedtime moment',
+        threadHints: ['Bedtime moments'],
+      }),
+    );
+    expect(catalog[1]).toEqual(
+      expect.objectContaining({
+        slug: 'household-scheduler',
+        title: 'Home routines',
+        entryTitle: 'Keep routines on track',
+        threadHints: ['Home routines'],
+      }),
     );
   });
 
@@ -411,12 +478,46 @@ describe('space and family app API', () => {
 
     const detail = await getHouseholdSpaceDetail('token-1', 'space-parents');
 
-    expect(detail.threads.map((thread) => thread.title)).toEqual(['近况与问候', '健康与提醒']);
+    expect(detail.name).toBe('Parents + Sparkbox');
+    expect(detail.threads.map((thread) => thread.title)).toEqual(['Check-ins', 'Health and reminders']);
     expect(detail.threads[0]?.chatSessionId).toBe('chat-thread-1');
-    expect(detail.enabledFamilyApps[0]?.slug).toBe('weekend-plans');
+    expect(detail.enabledFamilyApps[0]).toEqual(
+      expect.objectContaining({
+        slug: 'weekend-plans',
+        title: 'Weekend plans',
+      }),
+    );
     expect(global.fetch).toHaveBeenCalledWith(
       'https://morgen52.site/familyserver/api/spaces/space-parents',
       expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('normalizes legacy seeded partner thread titles inside chat sessions', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          id: 'chat-partner-1',
+          name: 'webgroup · 想和对方说的话',
+          scope: 'family',
+          owner_user_id: 'user-1',
+          system_prompt: "Keep this thread focused on '想和对方说的话'.",
+          temperature: 0.7,
+          max_tokens: 2048,
+          created_at: '2026-03-20T10:00:00Z',
+          updated_at: '2026-03-20T10:02:00Z',
+        },
+      ]),
+    } as Response);
+
+    const sessions = await getHouseholdChatSessions('token-1', 'family');
+
+    expect(sessions[0]).toEqual(
+      expect.objectContaining({
+        name: 'webgroup · What I want to tell my partner',
+        systemPrompt: "Keep this thread focused on 'What I want to tell my partner'.",
+      }),
     );
   });
 
@@ -507,7 +608,7 @@ describe('space and family app API', () => {
     const removedSummary = await deleteSpaceSummary('token-1', 'space-parents', 'summary-2');
 
     expect(library.memories[0]?.pinned).toBe(true);
-    expect(library.summaries[0]?.sourceLabel).toBe('近况与问候');
+    expect(library.summaries[0]?.sourceLabel).toBe('Check-ins');
     expect(createdMemory.id).toBe('memory-2');
     expect(updatedMemory.pinned).toBe(true);
     expect(removedMemory).toEqual({ ok: true });
@@ -724,6 +825,10 @@ describe('scoped chat session API', () => {
             max_tokens: 2048,
             created_at: '2026-03-20T10:00:00Z',
             updated_at: '2026-03-20T10:00:00Z',
+            last_message_preview: 'Cook noodles and vegetables.',
+            last_message_role: 'assistant',
+            last_message_sender_display_name: null,
+            last_message_created_at: '2026-03-20T10:05:00Z',
           },
         ]),
       } as Response)
@@ -754,8 +859,8 @@ describe('scoped chat session API', () => {
           created_at: '2026-03-20T10:01:00Z',
           updated_at: '2026-03-20T10:01:00Z',
           messages: [
-            { role: 'user', content: 'hello', sender_display_name: 'Owner' },
-            { role: 'assistant', content: 'hi', sender_display_name: null },
+            { role: 'user', content: 'hello', sender_display_name: 'Owner', created_at: '2026-03-20T10:01:10Z' },
+            { role: 'assistant', content: 'hi', sender_display_name: null, created_at: '2026-03-20T10:01:20Z' },
           ],
         }),
       } as Response)
@@ -812,8 +917,17 @@ describe('scoped chat session API', () => {
     const removed = await deleteHouseholdChatSession('token-1', 'chat-2');
 
     expect(listed).toHaveLength(1);
+    expect(listed[0]?.name).toBe('Family planning');
+    expect(listed[0]?.lastMessagePreview).toBe('Cook noodles and vegetables.');
+    expect(listed[0]?.lastMessageRole).toBe('assistant');
+    expect(listed[0]?.lastMessageCreatedAt).toBe('2026-03-20T10:05:00Z');
     expect(created.scope).toBe('private');
-    expect(detail.messages[0]).toEqual({ role: 'user', content: 'hello', senderDisplayName: 'Owner' });
+    expect(detail.messages[0]).toEqual({
+      role: 'user',
+      content: 'hello',
+      senderDisplayName: 'Owner',
+      createdAt: '2026-03-20T10:01:10Z',
+    });
     expect(updated.name).toBe('Private notes renamed');
     expect(sent).toEqual({ deviceId: 'sbx-1', message: 'reply' });
     expect(cleared).toEqual({ ok: true });
@@ -963,6 +1077,40 @@ describe('device reprovision API', () => {
       ok: true,
       deviceId: 'sbx-1',
       status: 'setup_ap_active',
+    });
+  });
+});
+
+describe('device reconnect API', () => {
+  it('reconnects a stale offline device through the cloud route', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        device_id: 'sbx-1',
+        online: true,
+        status: 'bound_online',
+        detail: 'Sparkbox replied and is back online now.',
+      }),
+    } as Response);
+
+    const response = await reconnectDevice('token-1', 'sbx-1');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://morgen52.site/familyserver/api/devices/sbx-1/reconnect',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token-1',
+        }),
+      }),
+    );
+    expect(response).toEqual({
+      ok: true,
+      deviceId: 'sbx-1',
+      online: true,
+      status: 'bound_online',
+      detail: 'Sparkbox replied and is back online now.',
     });
   });
 });

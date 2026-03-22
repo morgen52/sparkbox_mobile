@@ -20,6 +20,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
@@ -3282,6 +3283,7 @@ function App() {
   }
 
   const canSubmitWifi = Boolean(selectedSsid.trim()) && !provisionBusy;
+  const libraryTabActive = shellTab === 'library';
 
   if (booting) {
     return (
@@ -3343,7 +3345,38 @@ function App() {
             })}
           </View>
 
-          <ScrollView contentContainerStyle={styles.content}>
+          {libraryTabActive ? (
+            <View style={styles.card}>
+              <Text style={styles.selectionLabel}>Quick actions</Text>
+              <Text style={styles.cardCopy}>
+                The creation shortcuts live here so they are always easy to reach.
+              </Text>
+              <View style={styles.inlineActions}>
+                {canMutateActiveSpaceFiles ? (
+                  <Pressable
+                    android_ripple={{ color: 'rgba(23,53,42,0.14)' }}
+                    accessibilityRole="button"
+                    style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                    onPress={() => openFileEditor('mkdir')}
+                    disabled={!onlineDeviceAvailable || filesBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>New folder</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  android_ripple={{ color: 'rgba(255,255,255,0.18)' }}
+                  accessibilityRole="button"
+                  style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !canCreateTasks) ? styles.networkRowDisabled : null]}
+                  onPress={() => openTaskEditor()}
+                  disabled={!onlineDeviceAvailable || !canCreateTasks}
+                >
+                  <Text style={styles.primaryButtonText}>New task</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>
             {shellTab === 'chats' ? (
               <>
                 {!activeChatSessionId ? (
@@ -4005,7 +4038,7 @@ function App() {
               </>
             ) : null}
 
-            {shellTab === 'library' ? (
+            {libraryTabActive ? (
               <>
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Library overview</Text>
@@ -4041,21 +4074,21 @@ function App() {
                     </Text>
                   ) : null}
                   <View style={styles.inlineActions}>
-                    <Pressable
+                    <TouchableOpacity
                       style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
                       onPress={() => void refreshLibrary()}
                       disabled={!activeSpace || libraryBusy}
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                     {canMutateActiveSpaceLibrary ? (
-                      <Pressable
+                      <TouchableOpacity
                         style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
                         onPress={() => openMemoryEditor()}
                         disabled={!activeSpace || libraryBusy}
                       >
                         <Text style={styles.primaryButtonText}>New memory</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ) : null}
                   </View>
                   {spaceLibrary.memories.length === 0 && !libraryBusy ? (
@@ -4075,20 +4108,20 @@ function App() {
                       </Text>
                       {canMutateActiveSpaceLibrary ? (
                         <View style={styles.inlineActions}>
-                          <Pressable
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => openMemoryEditor(memory)}
                             disabled={libraryBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Edit</Text>
-                          </Pressable>
-                          <Pressable
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => confirmRemoveMemory(memory)}
                             disabled={libraryBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         </View>
                       ) : null}
                     </View>
@@ -4099,21 +4132,21 @@ function App() {
                   <Text style={styles.cardTitle}>Summaries in this space</Text>
                   <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
                   <View style={styles.inlineActions}>
-                    <Pressable
+                    <TouchableOpacity
                       style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
                       onPress={() => void refreshLibrary()}
                       disabled={!activeSpace || libraryBusy}
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                     {canMutateActiveSpaceLibrary ? (
-                      <Pressable
+                      <TouchableOpacity
                         style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
                         onPress={() => void captureActiveSpaceSummary()}
                         disabled={!activeChatSessionId || libraryBusy}
                       >
                         <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ) : null}
                   </View>
                   <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
@@ -4132,20 +4165,20 @@ function App() {
                       </Text>
                       {canMutateActiveSpaceLibrary ? (
                         <View style={styles.inlineActions}>
-                          <Pressable
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => saveSummaryAsMemory(summary)}
                             disabled={libraryBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Save as memory</Text>
-                          </Pressable>
-                          <Pressable
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => confirmRemoveSummary(summary)}
                             disabled={libraryBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         </View>
                       ) : null}
                     </View>
@@ -4163,21 +4196,21 @@ function App() {
                     </Text>
                   ) : null}
                   <View style={styles.inlineActions}>
-                    <Pressable
+                    <TouchableOpacity
                       style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
                       onPress={() => void refreshFiles()}
                       disabled={!onlineDeviceAvailable || filesBusy}
                     >
                       <Text style={styles.secondaryButtonText}>Refresh photos</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                     {canMutateActiveSpaceFiles ? (
-                      <Pressable
+                      <TouchableOpacity
                         style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
                         onPress={() => void pickAndUploadFiles()}
                         disabled={!onlineDeviceAvailable || filesBusy}
                       >
                         <Text style={styles.primaryButtonText}>Upload photos</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ) : null}
                   </View>
                   {photoEntries.length === 0 && !filesBusy ? (
@@ -4194,21 +4227,21 @@ function App() {
                         {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
                       </Text>
                       <View style={styles.inlineActions}>
-                        <Pressable
+                        <TouchableOpacity
                           style={styles.secondaryButtonSmall}
                           onPress={() => void downloadFileEntry(entry)}
                           disabled={filesBusy}
                         >
                           <Text style={styles.secondaryButtonText}>Download</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                         {canManageFileEntry(entry) ? (
-                          <Pressable
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => void deleteFileEntry(entry)}
                             disabled={filesBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         ) : null}
                       </View>
                     </View>
@@ -4234,36 +4267,27 @@ function App() {
                     {(currentFilePath || activeSpace?.name || (fileSpace === 'family' ? 'Shared space' : 'Private space')).replace(/^\/+/, '')}
                   </Text>
                   <View style={styles.inlineActions}>
-                    <Pressable
+                    <TouchableOpacity
                       style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
                       onPress={() => void refreshFiles()}
                       disabled={!onlineDeviceAvailable || filesBusy}
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                     {canMutateActiveSpaceFiles ? (
-                      <Pressable
-                        style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                        onPress={() => openFileEditor('mkdir')}
-                        disabled={!onlineDeviceAvailable || filesBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>New folder</Text>
-                      </Pressable>
-                    ) : null}
-                    {canMutateActiveSpaceFiles ? (
-                      <Pressable
+                      <TouchableOpacity
                         style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
                         onPress={() => void pickAndUploadFiles()}
                         disabled={!onlineDeviceAvailable || filesBusy}
                       >
                         <Text style={styles.primaryButtonText}>Upload</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ) : null}
                   </View>
                   {fileListing?.parent ? (
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshFiles(fileListing.parent || '')}>
+                    <TouchableOpacity style={styles.secondaryButtonSmall} onPress={() => void refreshFiles(fileListing.parent || '')}>
                       <Text style={styles.secondaryButtonText}>Go up</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   ) : null}
                 </View>
 
@@ -4292,37 +4316,37 @@ function App() {
                       ) : null}
                       <View style={styles.inlineActions}>
                         {entry.isDir ? (
-                          <Pressable
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => void refreshFiles(entry.path)}
                           >
                             <Text style={styles.secondaryButtonText}>Open</Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         ) : (
-                          <Pressable
+                          <TouchableOpacity
                             style={styles.secondaryButtonSmall}
                             onPress={() => void downloadFileEntry(entry)}
                             disabled={filesBusy}
                           >
                             <Text style={styles.secondaryButtonText}>Download</Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         )}
                         {canManageFileEntry(entry) ? (
                           <>
-                            <Pressable
+                            <TouchableOpacity
                               style={styles.secondaryButtonSmall}
                               onPress={() => openFileEditor('rename', entry)}
                               disabled={filesBusy}
                             >
                               <Text style={styles.secondaryButtonText}>Rename</Text>
-                            </Pressable>
-                            <Pressable
+                            </TouchableOpacity>
+                            <TouchableOpacity
                               style={styles.secondaryButtonSmall}
                               onPress={() => void deleteFileEntry(entry)}
                               disabled={filesBusy}
                             >
                               <Text style={styles.secondaryButtonText}>Delete</Text>
-                            </Pressable>
+                            </TouchableOpacity>
                           </>
                         ) : null}
                       </View>
@@ -4340,21 +4364,15 @@ function App() {
                   {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
                   {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
                   <View style={styles.inlineActions}>
-                    <Pressable
+                    <TouchableOpacity
                       style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
                       onPress={() => void refreshTasks()}
                       disabled={!onlineDeviceAvailable || tasksBusy}
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !canCreateTasks) ? styles.networkRowDisabled : null]}
-                      onPress={() => openTaskEditor()}
-                      disabled={!onlineDeviceAvailable || !canCreateTasks}
-                    >
-                      <Text style={styles.primaryButtonText}>New task</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
+                  <Text style={styles.cardCopy}>Use Quick actions above when you want to add a new routine.</Text>
                   {!canManage && taskScope === 'family' ? (
                     <Text style={styles.cardCopy}>
                       Members can run shared routines here, but only owners can create or edit them.
@@ -4392,36 +4410,36 @@ function App() {
                         </Text>
                       ) : null}
                       <View style={styles.inlineActions}>
-                        <Pressable
+                        <TouchableOpacity
                           style={[styles.secondaryButtonSmall, !canTriggerTask(task) ? styles.networkRowDisabled : null]}
                           onPress={() => void runTaskNow(task)}
                           disabled={!canTriggerTask(task) || tasksBusy}
                         >
                           <Text style={styles.secondaryButtonText}>Run now</Text>
-                        </Pressable>
-                        <Pressable
+                        </TouchableOpacity>
+                        <TouchableOpacity
                           style={styles.secondaryButtonSmall}
                           onPress={() => void openTaskHistory(task)}
                           disabled={tasksBusy}
                         >
                           <Text style={styles.secondaryButtonText}>History</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                         {canEditTask(task) ? (
                           <>
-                            <Pressable
+                            <TouchableOpacity
                               style={styles.secondaryButtonSmall}
                               onPress={() => openTaskEditor(task)}
                               disabled={tasksBusy}
                             >
                               <Text style={styles.secondaryButtonText}>Edit</Text>
-                            </Pressable>
-                            <Pressable
+                            </TouchableOpacity>
+                            <TouchableOpacity
                               style={styles.secondaryButtonSmall}
                               onPress={() => void removeTask(task)}
                               disabled={tasksBusy}
                             >
                               <Text style={styles.secondaryButtonText}>Delete</Text>
-                            </Pressable>
+                            </TouchableOpacity>
                           </>
                         ) : null}
                       </View>

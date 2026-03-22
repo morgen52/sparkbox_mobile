@@ -153,6 +153,15 @@ describe('App structure', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
 
     expect(appSource).toContain('Library overview');
+    expect(appSource).toContain('Quick actions');
+    expect(appSource).toContain('The creation shortcuts live here so they are always easy to reach.');
+    expect(appSource).toContain('New folder');
+    expect(appSource).toContain('New task');
+    expect(appSource).toContain('android_ripple={{ color: \'rgba(23,53,42,0.14)\' }}');
+    expect(appSource).toContain('android_ripple={{ color: \'rgba(255,255,255,0.18)\' }}');
+    expect(appSource).toContain('accessibilityRole="button"');
+    expect(appSource).toContain("onPress={() => openFileEditor('mkdir')}");
+    expect(appSource).toContain('onPress={() => openTaskEditor()}');
     expect(appSource).toContain('Pick a space to browse what Sparkbox has saved there.');
     expect(appSource).toContain('Everything Sparkbox has saved for this space shows up here in one place.');
     expect(appSource).toContain('Viewing folder:');
@@ -401,6 +410,24 @@ describe('App structure', () => {
 
     expect(appSource).toContain('Viewing ${activeSpace.name} (${activeSpaceKindLabel})');
     expect(appSource).not.toContain('Current space: ${activeSpace.name} (${activeSpaceKindLabel})');
+  });
+
+  it('keeps shell scroll content forwarding taps to inline action buttons', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+
+    expect(appSource).toContain('<ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>');
+  });
+
+  it('keeps Android shell scroll content attached for touch targets after scrolling', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+
+    expect(appSource).toContain('<ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>');
+  });
+
+  it('keeps Android release builds on the stable architecture path', () => {
+    const gradleProps = readFileSync(resolve(__dirname, '../android/gradle.properties'), 'utf8');
+
+    expect(gradleProps).toContain('newArchEnabled=false');
   });
 
   it('keeps chat copy away from context-engine jargon', () => {

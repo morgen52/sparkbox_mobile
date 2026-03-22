@@ -11,7 +11,7 @@ type NativeWifiOnboarding = {
 function getNativeBridge(): NativeWifiOnboarding {
   const bridge = (NativeModules as { SparkboxWifiOnboarding?: NativeWifiOnboarding }).SparkboxWifiOnboarding;
   if (!bridge) {
-    throw new Error('Sparkbox Wi-Fi onboarding is not available on this build.');
+    throw new Error('This phone cannot switch Wi-Fi automatically right now. Open Wi-Fi settings and join Sparkbox-Setup manually.');
   }
   return bridge;
 }
