@@ -329,10 +329,11 @@ describe('App structure', () => {
   it('shows join-code previews for household and target shared space', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const invitePreviewSource = readFileSync(resolve(__dirname, './invitePreview.ts'), 'utf8');
+    const accountCardSource = readFileSync(resolve(__dirname, './components/SetupAccountCard.tsx'), 'utf8');
 
     expect(invitePreviewSource).toContain('This code joins');
     expect(invitePreviewSource).toContain('and adds you to');
-    expect(appSource).toContain('Checking this invite code...');
+    expect(accountCardSource).toContain('Checking this invite code...');
   });
 
   it('keeps account copy away from metadata-style role labels', () => {
@@ -366,12 +367,12 @@ describe('App structure', () => {
   });
 
   it('keeps the signed-in onboarding card free of metadata-style account labels', () => {
-    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const accountCardSource = readFileSync(resolve(__dirname, './components/SetupAccountCard.tsx'), 'utf8');
 
-    expect(appSource).toContain("You're signed in");
-    expect(appSource).toContain('{session.user.display_name} · {session.household.name}');
-    expect(appSource).not.toContain('Signed in as {session.user.display_name}');
-    expect(appSource).not.toContain('Household: {session.household.name}');
+    expect(accountCardSource).toContain("You're signed in");
+    expect(accountCardSource).toContain('{displayName} · {householdName}');
+    expect(accountCardSource).not.toContain('Signed in as {displayName}');
+    expect(accountCardSource).not.toContain('Household: {householdName}');
   });
 
   it('keeps the settings subtitle free of session jargon', () => {
@@ -385,10 +386,10 @@ describe('App structure', () => {
 
   it('keeps invite instructions aligned with the join CTA label', () => {
     const spaceMembersSource = readFileSync(resolve(__dirname, './spaceMembers.ts'), 'utf8');
-    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const accountCardSource = readFileSync(resolve(__dirname, './components/SetupAccountCard.tsx'), 'utf8');
 
-    expect(appSource).toContain('Join household');
-    expect(appSource).not.toContain('Join a household');
+    expect(accountCardSource).toContain('Join household');
+    expect(accountCardSource).not.toContain('Join a household');
     expect(spaceMembersSource).toContain('open Sparkbox, choose Join household, and enter this code');
     expect(spaceMembersSource).not.toContain('open Sparkbox, choose Join, and enter this code');
   });

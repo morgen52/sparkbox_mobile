@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
+import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
@@ -5635,107 +5636,43 @@ function App() {
         </View>
 
         {!session ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(1, event)}>
-            <Text style={styles.cardTitle}>{authCardTitle}</Text>
-            <Text style={styles.cardCopy}>{authCardCopy}</Text>
-            <View style={styles.authModeRow}>
-              {([
-                { id: 'login', label: 'Sign in' },
-                { id: 'register', label: 'Create' },
-                { id: 'join', label: 'Join household' },
-              ] as Array<{ id: AuthMode; label: string }>).map((modeOption) => {
-                const active = authMode === modeOption.id;
-                return (
-                  <Pressable
-                    key={modeOption.id}
-                    style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                    onPress={() => {
-                      setAuthMode(modeOption.id);
-                      setAuthError('');
-                    }}
-                  >
-                    <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                      {modeOption.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              placeholder="Email"
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-            />
-            {authMode === 'register' || authMode === 'join' ? (
-              <TextInput
-                placeholder="Display name"
-                placeholderTextColor="#7e8a83"
-                style={styles.input}
-                value={displayName}
-                onChangeText={setDisplayName}
-              />
-            ) : null}
-            {authMode === 'join' ? (
-              <>
-                <TextInput
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  placeholder="Invite code"
-                  placeholderTextColor="#7e8a83"
-                  style={styles.input}
-                  value={inviteCode}
-                  onChangeText={setInviteCode}
-                />
-                {invitePreviewBusy ? (
-                  <Text style={styles.cardCopy}>Checking this invite code...</Text>
-                ) : invitePreview ? (
-                  <Text style={styles.cardCopy}>
-                    {buildInvitePreviewSummary(invitePreview.householdName, invitePreview.spaceName)}
-                  </Text>
-                ) : invitePreviewError ? (
-                  <Text style={styles.errorText}>{invitePreviewError}</Text>
-                ) : null}
-              </>
-            ) : null}
-            <TextInput
-              secureTextEntry
-              placeholder="Password"
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-            />
-            {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
-            <Pressable style={styles.primaryButton} onPress={() => void submitAuth()} disabled={authBusy}>
-              {authBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{authSubmitLabel}</Text>}
-            </Pressable>
-          </View>
+          <AuthSetupCard
+            styles={styles}
+            authCardTitle={authCardTitle}
+            authCardCopy={authCardCopy}
+            authMode={authMode}
+            email={email}
+            displayName={displayName}
+            inviteCode={inviteCode}
+            password={password}
+            invitePreviewBusy={invitePreviewBusy}
+            invitePreviewError={invitePreviewError}
+            invitePreview={invitePreview}
+            authError={authError}
+            authBusy={authBusy}
+            authSubmitLabel={authSubmitLabel}
+            onLayout={(event) => captureStepOffset(1, event)}
+            onChangeAuthMode={(mode) => {
+              setAuthMode(mode);
+              setAuthError('');
+            }}
+            onChangeEmail={setEmail}
+            onChangeDisplayName={setDisplayName}
+            onChangeInviteCode={setInviteCode}
+            onChangePassword={setPassword}
+            onSubmit={() => void submitAuth()}
+            renderInvitePreviewSummary={buildInvitePreviewSummary}
+          />
         ) : (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>You're signed in</Text>
-            <Text style={styles.cardCopy}>
-              {session.user.display_name} · {session.household.name}
-            </Text>
-            <View style={styles.inlineActions}>
-              <Pressable style={styles.primaryButtonSmall} onPress={() => void logout()}>
-                <Text style={styles.primaryButtonText}>Log out</Text>
-              </Pressable>
-              {canReturnToShell ? (
-                <Pressable style={styles.secondaryButtonSmall} onPress={returnToShell}>
-                  <Text style={styles.secondaryButtonText}>Back to household</Text>
-                </Pressable>
-              ) : (
-                <Pressable style={styles.secondaryButtonSmall} onPress={resetFlow}>
-                  <Text style={styles.secondaryButtonText}>Start over</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
+          <SignedInSetupCard
+            styles={styles}
+            displayName={session.user.display_name}
+            householdName={session.household.name}
+            canReturnToShell={canReturnToShell}
+            onLogout={() => void logout()}
+            onReturnToShell={returnToShell}
+            onResetFlow={resetFlow}
+          />
         )}
 
         {session && claimStepVisible ? (
