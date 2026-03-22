@@ -62,8 +62,9 @@ describe('App structure', () => {
 
   it('keeps primary chat entry labels explicit about chats and the shared group thread', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatInboxSource = readFileSync(resolve(__dirname, './components/ChatInboxPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Chats in this space');
+    expect(chatInboxSource).toContain('Chats in this space');
     expect(appSource).toContain('Open group chat');
     expect(appSource).not.toContain('without opening every thread');
     expect(appSource).not.toContain('same thread here');
@@ -73,20 +74,21 @@ describe('App structure', () => {
 
   it('keeps the chats header compact instead of using the old spaces hero card', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatInboxSource = readFileSync(resolve(__dirname, './components/ChatInboxPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('chatInboxHeader');
+    expect(chatInboxSource).toContain('chatInboxHeader');
     expect(appSource).toContain("Viewing ${activeSpace.name} (${activeSpaceKindLabel})");
     expect(appSource).not.toContain('Start with the people first. Every space keeps its own chats, memories, and shared history.');
   });
 
   it('renders chat list rows as inbox entries with avatar, title, preview, and time', () => {
-    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatInboxSource = readFileSync(resolve(__dirname, './components/ChatInboxPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('chatSessionRow');
-    expect(appSource).toContain('chatSessionAvatarRail');
-    expect(appSource).toContain('chatSessionTitle');
-    expect(appSource).toContain('chatSessionPreview');
-    expect(appSource).toContain('chatSessionTimestamp');
+    expect(chatInboxSource).toContain('chatSessionRow');
+    expect(chatInboxSource).toContain('chatSessionAvatarRail');
+    expect(chatInboxSource).toContain('chatSessionTitle');
+    expect(chatInboxSource).toContain('chatSessionPreview');
+    expect(chatInboxSource).toContain('chatSessionTimestamp');
   });
 
   it('renders chat detail with a messenger header and explicit back behavior', () => {

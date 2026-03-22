@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
+import { ChatInboxPane } from './src/components/ChatInboxPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
@@ -3517,204 +3518,103 @@ function App() {
               <>
                 {!activeChatSessionId ? (
                   <>
-                <View style={styles.chatInboxHeader}>
-                  <View style={styles.chatInboxHeaderTopRow}>
-                    <View style={styles.chatInboxHeaderBody}>
-                      <Text style={styles.chatInboxHeaderTitle}>Chats</Text>
-                      <Text style={styles.chatInboxHeaderCopy}>
-                        {describeShellSubtitle({
-                          shellTab: 'chats',
-                          activeSpaceName: activeSpace?.name || '',
-                          activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
-                          spacesReady: !waitingForSpaces,
-                        })}
-                      </Text>
-                    </View>
-                    {canManage ? (
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={openSpaceCreator}
-                        disabled={spacesBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Create shared space</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
-                  {spacesBusy && spaces.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  <View style={styles.chatInboxSpaceRow}>
-                    {spaces.map((space) => {
-                      const active = space.id === activeSpaceId;
-                      return (
-                        <Pressable
-                          key={space.id}
-                          style={[styles.chatInboxSpaceChip, active ? styles.chatInboxSpaceChipActive : null]}
-                          onPress={() => setActiveSpaceId(space.id)}
-                        >
-                          <Text
-                            style={[
-                              styles.chatInboxSpaceChipLabel,
-                              active ? styles.chatInboxSpaceChipLabelActive : null,
-                            ]}
-                          >
-                            {space.name}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.chatInboxSpaceChipMeta,
-                              active ? styles.chatInboxSpaceChipMetaActive : null,
-                            ]}
-                          >
-                            {describeSpaceCounts(space.kind, space.threadCount, space.memberCount)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Chats in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    {waitingForSpaces
+                <ChatInboxPane
+                  styles={styles}
+                  headerCopy={describeShellSubtitle({
+                    shellTab: 'chats',
+                    activeSpaceName: activeSpace?.name || '',
+                    activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+                    spacesReady: !waitingForSpaces,
+                  })}
+                  spacesError={spacesError}
+                  spacesBusy={spacesBusy}
+                  hasSpaces={spaces.length > 0}
+                  canManage={canManage}
+                  waitingForSpaces={waitingForSpaces}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  activeSpaceBodyCopy={
+                    waitingForSpaces
                       ? 'Loading your spaces...'
                       : onlineDeviceAvailable
-                      ? activeSpace
-                        ? `Viewing ${activeSpace.name} (${activeSpaceKindLabel})`
-                        : 'Select a space to open its chats.'
-                      : 'Sparkbox is offline right now. You can still browse chat history and settings.'}
-                  </Text>
-                  {chatSendPhase !== 'idle' ? (
-                    <Text style={styles.selectionLabel}>{describeChatSendPhase(chatSendPhase)}</Text>
-                  ) : null}
-                  {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
-                  {waitingForSpaces ? (
-                    <ActivityIndicator color="#0b6e4f" />
-                  ) : (
-                    <>
-                      <View style={styles.scopeRow}>
-                        {(['family', 'private'] as ChatSessionScope[]).map((scope) => {
-                          const active = chatScope === scope;
-                          return (
-                            <Pressable
-                              key={scope}
-                              style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                              onPress={() => handleChatScopeChange(scope)}
-                            >
-                              <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                                {describeChatAccess(scope)}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                      <View style={styles.inlineActions}>
-                        <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshChatSessions()} disabled={chatBusy}>
-                          <Text style={styles.secondaryButtonText}>Refresh</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[
-                            styles.primaryButtonSmall,
-                            !onlineDeviceAvailable || !canCreateActiveChat ? styles.networkRowDisabled : null,
-                          ]}
-                          onPress={() => openChatSessionEditor()}
-                          disabled={!onlineDeviceAvailable || chatBusy || !canCreateActiveChat}
-                        >
-                          <Text style={styles.primaryButtonText}>
-                            {describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope)}
-                          </Text>
-                        </Pressable>
-                      </View>
-                      {chatBusy && chatSessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
-                      {chatSessions.length === 0 ? (
-                        <Text style={styles.cardCopy}>{describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope)}</Text>
-                      ) : (
-                        chatSessions.map((sessionItem) => {
-                          const active = sessionItem.id === activeChatSessionId;
-                          const sharedGroupSession = looksLikeSharedGroupChatSession(
-                            sessionItem.name,
-                            sessionItem.scope,
-                            activeSpaceCopyContext,
-                          );
-                          const sharedGroupFallback = looksLikeSharedGroupChatSession(
-                            sessionItem.name,
-                            sessionItem.scope,
-                            activeSpaceCopyContext,
-                          );
-                          const previewText = describeChatSessionPreview(
-                            {
-                              lastMessagePreview: decodeChatMessageContent(sessionItem.lastMessagePreview ?? ''),
-                              lastMessageRole: sessionItem.lastMessageRole,
-                              lastMessageSenderDisplayName: sessionItem.lastMessageSenderDisplayName,
-                            },
-                            session?.user.display_name,
-                          );
-                          const previewFallback =
-                            sharedGroupSession && activeSharedChatParticipantSummary
-                              ? activeSharedChatParticipantSummary
-                              : sharedGroupFallback
-                              ? 'Everyone in this space keeps talking together here with Sparkbox helping everyone stay in sync.'
-                              : describeChatSessionPurpose({
-                                  sessionName: sessionItem.name,
-                                  scope: sessionItem.scope,
-                                  spaceDetail: activeSpaceCopyContext,
-                                });
-                          const sessionTimestamp = describeChatListTimestamp(
-                            sessionItem.lastMessageCreatedAt || sessionItem.updatedAt,
-                          );
-                          const sessionBadge = describeChatSessionBadge({
-                            sessionName: sessionItem.name,
-                            scope: sessionItem.scope,
-                            spaceDetail: activeSpaceCopyContext,
-                            active,
-                          });
-                          const avatarLabel = sharedGroupSession ? 'G' : sessionItem.scope === 'private' ? 'S' : '#';
-                          return (
-                            <Pressable
-                              key={sessionItem.id}
-                              style={[styles.chatSessionRow, active ? styles.chatSessionRowActive : null]}
-                              onPress={() => setActiveChatSessionId(sessionItem.id)}
-                            >
-                              <View style={styles.chatSessionAvatarRail}>
-                                <View
-                                  style={[
-                                    styles.chatSessionAvatarBubble,
-                                    sharedGroupSession
-                                      ? styles.chatSessionAvatarBubbleGroup
-                                      : sessionItem.scope === 'private'
-                                      ? styles.chatSessionAvatarBubblePrivate
-                                      : styles.chatSessionAvatarBubbleShared,
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.chatSessionAvatarLabel,
-                                      sharedGroupSession ? styles.chatSessionAvatarLabelOnDark : null,
-                                    ]}
-                                  >
-                                    {avatarLabel}
-                                  </Text>
-                                </View>
-                              </View>
-                              <View style={styles.chatSessionBody}>
-                                <Text numberOfLines={1} style={styles.chatSessionTitle}>
-                                  {sessionItem.name}
-                                </Text>
-                                <Text numberOfLines={2} style={styles.chatSessionPreview}>
-                                  {previewText || previewFallback}
-                                </Text>
-                              </View>
-                              <View style={styles.chatSessionMeta}>
-                                {sessionTimestamp ? <Text style={styles.chatSessionTimestamp}>{sessionTimestamp}</Text> : null}
-                                <Text style={active ? styles.statusTagOnline : styles.tagMuted}>{sessionBadge}</Text>
-                              </View>
-                            </Pressable>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
-                </View>
+                        ? activeSpace
+                          ? `Viewing ${activeSpace.name} (${activeSpaceKindLabel})`
+                          : 'Select a space to open its chats.'
+                        : 'Sparkbox is offline right now. You can still browse chat history and settings.'
+                  }
+                  chatSendPhaseCopy={chatSendPhase !== 'idle' ? describeChatSendPhase(chatSendPhase) : ''}
+                  chatError={chatError}
+                  scopeOptions={
+                    (['family', 'private'] as ChatSessionScope[]).map((scope) => ({
+                      id: scope,
+                      label: describeChatAccess(scope),
+                      active: chatScope === scope,
+                    }))
+                  }
+                  chatBusy={chatBusy}
+                  canCreateChat={canCreateActiveChat}
+                  createChatLabel={describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope)}
+                  sessions={chatSessions.map((sessionItem) => {
+                    const active = sessionItem.id === activeChatSessionId;
+                    const sharedGroupSession = looksLikeSharedGroupChatSession(
+                      sessionItem.name,
+                      sessionItem.scope,
+                      activeSpaceCopyContext,
+                    );
+                    const sharedGroupFallback = looksLikeSharedGroupChatSession(
+                      sessionItem.name,
+                      sessionItem.scope,
+                      activeSpaceCopyContext,
+                    );
+                    const previewText = describeChatSessionPreview(
+                      {
+                        lastMessagePreview: decodeChatMessageContent(sessionItem.lastMessagePreview ?? ''),
+                        lastMessageRole: sessionItem.lastMessageRole,
+                        lastMessageSenderDisplayName: sessionItem.lastMessageSenderDisplayName,
+                      },
+                      session?.user.display_name,
+                    );
+                    const previewFallback =
+                      sharedGroupSession && activeSharedChatParticipantSummary
+                        ? activeSharedChatParticipantSummary
+                        : sharedGroupFallback
+                          ? 'Everyone in this space keeps talking together here with Sparkbox helping everyone stay in sync.'
+                          : describeChatSessionPurpose({
+                              sessionName: sessionItem.name,
+                              scope: sessionItem.scope,
+                              spaceDetail: activeSpaceCopyContext,
+                            });
+                    return {
+                      id: sessionItem.id,
+                      name: sessionItem.name,
+                      preview: previewText || previewFallback,
+                      timestamp: describeChatListTimestamp(
+                        sessionItem.lastMessageCreatedAt || sessionItem.updatedAt,
+                      ),
+                      badge: describeChatSessionBadge({
+                        sessionName: sessionItem.name,
+                        scope: sessionItem.scope,
+                        spaceDetail: activeSpaceCopyContext,
+                        active,
+                      }),
+                      active,
+                      avatarLabel: sharedGroupSession ? 'G' : sessionItem.scope === 'private' ? 'S' : '#',
+                      avatarTone: sharedGroupSession ? 'group' : sessionItem.scope === 'private' ? 'private' : 'shared',
+                    };
+                  })}
+                  emptyStateCopy={describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope)}
+                  spaceChips={spaces.map((space) => ({
+                    id: space.id,
+                    name: space.name,
+                    countsCopy: describeSpaceCounts(space.kind, space.threadCount, space.memberCount),
+                    active: space.id === activeSpaceId,
+                  }))}
+                  onOpenSpaceCreator={openSpaceCreator}
+                  onSelectSpace={setActiveSpaceId}
+                  onSelectScope={(scopeId) => handleChatScopeChange(scopeId as ChatSessionScope)}
+                  onRefresh={() => void refreshChatSessions()}
+                  onCreateChat={() => openChatSessionEditor()}
+                  onOpenSession={setActiveChatSessionId}
+                />
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>
