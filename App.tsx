@@ -27,6 +27,7 @@ import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModa
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatInboxPane } from './src/components/ChatInboxPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
+import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
@@ -4593,120 +4594,20 @@ function App() {
                   </View>
                 ) : null}
 
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Household members</Text>
-                  <Text style={styles.cardCopy}>{householdMembersCopy}</Text>
-                  {homeMembers.map((member) => {
-                    const isSelf = member.id === session.user.id;
-                    const canDemoteOrPromote = canChangeMemberRole(
-                      homeMembers,
-                      member,
-                      member.role === 'owner' ? 'member' : 'owner',
-                    );
-                    const canRemoveMemberEntry = canRemoveHouseholdMember(homeMembers, member);
-                    return (
-                      <View key={member.id} style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>{member.display_name}</Text>
-                        <Text style={styles.cardCopy}>{describeHouseholdRole(member.role)}</Text>
-                        {canManage && !isSelf ? (
-                          <View style={styles.inlineActions}>
-                            <Pressable
-                              style={[
-                                styles.secondaryButtonSmall,
-                                !canDemoteOrPromote ? styles.networkRowDisabled : null,
-                              ]}
-                              onPress={() => void changeMemberRole(member, member.role === 'owner' ? 'member' : 'owner')}
-                              disabled={settingsBusy || !canDemoteOrPromote}
-                            >
-                              <Text style={styles.secondaryButtonText}>
-                                {member.role === 'owner' ? 'Remove owner access' : 'Give owner access'}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              style={[
-                                styles.secondaryButtonSmall,
-                                !canRemoveMemberEntry ? styles.networkRowDisabled : null,
-                              ]}
-                              onPress={() => void removeMember(member)}
-                              disabled={settingsBusy || !canRemoveMemberEntry}
-                            >
-                              <Text style={styles.secondaryButtonText}>Remove</Text>
-                            </Pressable>
-                          </View>
-                        ) : isSelf ? (
-                          <Text style={styles.cardCopy}>This is you.</Text>
-                        ) : null}
-                      </View>
-                    );
-                  })}
-                </View>
-
-                {canManage ? (
-                  <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Invites</Text>
-                    <Text style={styles.cardCopy}>
-                      Create a standard join invite or invite another owner here. Space-specific invites add people to this household and the shared space you picked.
-                    </Text>
-                    <View style={styles.inlineActions}>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => void generateInvite('member')}
-                        disabled={settingsBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Invite someone</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => void generateInvite('owner')}
-                        disabled={settingsBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Invite co-owner</Text>
-                      </Pressable>
-                    </View>
-                    {homePendingInvites.length === 0 ? (
-                      <Text style={styles.cardCopy}>No active invites right now.</Text>
-                    ) : (
-                      homePendingInvites.map((invite) => (
-                        <View key={invite.id} style={styles.deviceRowCard}>
-                          <Text style={styles.networkName}>{describeInviteRole(invite.role)} invite</Text>
-                          <Text style={styles.cardCopy}>Join code: {invite.invite_code || 'Waiting for a fresh code'}</Text>
-                          {invite.space_name ? (
-                            <Text style={styles.cardCopy}>Adds them to {invite.space_name}</Text>
-                          ) : null}
-                          <Text style={styles.cardCopy}>{describeInviteExpiry(invite.expires_at)}</Text>
-                          <View style={styles.inlineActions}>
-                            <Pressable
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => void revokeInvite(invite)}
-                              disabled={settingsBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Revoke</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                ) : null}
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Recent Activity</Text>
-                  {homeRecentActivity.length === 0 ? (
-                    <Text style={styles.cardCopy}>No household activity yet.</Text>
-                  ) : (
-                    homeRecentActivity.slice(0, 5).map((event) => (
-                      <View key={event.id} style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>{event.actor_name}</Text>
-                        <Text style={styles.cardCopy}>
-                          {describeActivityEvent(event.details || '', event.event_type)}
-                        </Text>
-                        {describeUiDateTime(event.created_at) ? (
-                          <Text style={styles.cardCopy}>{describeUiDateTime(event.created_at)}</Text>
-                        ) : null}
-                      </View>
-                    ))
-                  )}
-                </View>
+                <HouseholdPeoplePane
+                  styles={styles}
+                  canManage={canManage}
+                  settingsBusy={settingsBusy}
+                  currentUserId={session.user.id}
+                  householdMembersCopy={householdMembersCopy}
+                  homeMembers={homeMembers}
+                  pendingInvites={homePendingInvites}
+                  recentActivity={homeRecentActivity}
+                  onChangeMemberRole={(member, nextRole) => void changeMemberRole(member, nextRole)}
+                  onRemoveMember={(member) => void removeMember(member)}
+                  onGenerateInvite={(role) => void generateInvite(role)}
+                  onRevokeInvite={(invite) => void revokeInvite(invite)}
+                />
               </>
             ) : null}
           </ScrollView>

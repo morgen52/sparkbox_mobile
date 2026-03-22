@@ -305,6 +305,7 @@ describe('App structure', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const viewedSpaceCardSource = readFileSync(resolve(__dirname, './components/ViewedSpaceCard.tsx'), 'utf8');
     const spaceMembersModalSource = readFileSync(resolve(__dirname, './components/SpaceMembersEditorModal.tsx'), 'utf8');
+    const householdPeopleSource = readFileSync(resolve(__dirname, './components/HouseholdPeoplePane.tsx'), 'utf8');
 
     expect(appSource).toContain('adjust who can manage Sparkbox');
     expect(viewedSpaceCardSource).toContain('Manage members');
@@ -312,14 +313,14 @@ describe('App structure', () => {
     expect(viewedSpaceCardSource).toContain('You stay in this space automatically.');
     expect(spaceMembersModalSource).toContain('Manage members');
     expect(spaceMembersModalSource).toContain('Need someone new first? Create a household invite');
-    expect(appSource).toContain('Give owner access');
-    expect(appSource).toContain('Remove owner access');
-    expect(appSource).toContain('Invite someone');
-    expect(appSource).toContain('Invite co-owner');
+    expect(householdPeopleSource).toContain('Give owner access');
+    expect(householdPeopleSource).toContain('Remove owner access');
+    expect(householdPeopleSource).toContain('Invite someone');
+    expect(householdPeopleSource).toContain('Invite co-owner');
     expect(appSource).toContain('describeInviteRole(role)');
-    expect(appSource).toContain('describeInviteRole(invite.role)} invite');
-    expect(appSource).toContain('Join code:');
-    expect(appSource).toContain('Waiting for a fresh code');
+    expect(householdPeopleSource).toContain('describeInviteRole(invite.role)} invite');
+    expect(householdPeopleSource).toContain('Join code:');
+    expect(householdPeopleSource).toContain('Waiting for a fresh code');
     expect(appSource).not.toContain('promote, demote');
     expect(appSource).not.toContain('Make member');
     expect(appSource).not.toContain('Make owner');
