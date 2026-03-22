@@ -322,9 +322,10 @@ describe('App structure', () => {
 
   it('shows join-code previews for household and target shared space', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const invitePreviewSource = readFileSync(resolve(__dirname, './invitePreview.ts'), 'utf8');
 
-    expect(appSource).toContain('This code joins');
-    expect(appSource).toContain('and adds you to');
+    expect(invitePreviewSource).toContain('This code joins');
+    expect(invitePreviewSource).toContain('and adds you to');
     expect(appSource).toContain('Checking this invite code...');
   });
 
@@ -377,12 +378,13 @@ describe('App structure', () => {
   });
 
   it('keeps invite instructions aligned with the join CTA label', () => {
+    const spaceMembersSource = readFileSync(resolve(__dirname, './spaceMembers.ts'), 'utf8');
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
 
     expect(appSource).toContain('Join household');
     expect(appSource).not.toContain('Join a household');
-    expect(appSource).toContain('open Sparkbox, choose Join household, and enter this code');
-    expect(appSource).not.toContain('open Sparkbox, choose Join, and enter this code');
+    expect(spaceMembersSource).toContain('open Sparkbox, choose Join household, and enter this code');
+    expect(spaceMembersSource).not.toContain('open Sparkbox, choose Join, and enter this code');
   });
 
   it('keeps family-app state copy away from active-space jargon', () => {

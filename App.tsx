@@ -176,6 +176,13 @@ import {
   type ShellTab,
 } from './src/householdState';
 import {
+  buildManagedSpaceMemberIds,
+  buildManagedSpaceSubmitIds,
+  buildSpaceInviteAlertMessage,
+  buildSpaceInviteNotice,
+  toggleManagedSpaceMember,
+} from './src/spaceMembers';
+import {
   buildChatScopeResetState,
   buildSpaceScopedResetState,
   buildSpaceScopedFilePath,
@@ -245,6 +252,7 @@ import {
   getCurrentSsid,
   openInternetPanel,
 } from './src/wifiOnboarding';
+import { buildInvitePreviewSummary, shouldLoadInvitePreview } from './src/invitePreview';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -857,13 +865,7 @@ function App() {
     }
 
     const trimmedCode = inviteCode.trim();
-    if (!trimmedCode) {
-      setInvitePreview(null);
-      setInvitePreviewError('');
-      setInvitePreviewBusy(false);
-      return;
-    }
-    if (trimmedCode.length < 4) {
+    if (!shouldLoadInvitePreview(authMode, trimmedCode)) {
       setInvitePreview(null);
       setInvitePreviewError('');
       setInvitePreviewBusy(false);
@@ -1358,20 +1360,12 @@ function App() {
       return;
     }
     setSpaceMembersEditorError('');
-    setSpaceMembersEditorIds(
-      activeSpaceDetail.members
-        .filter((member) => member.id !== session?.user.id)
-        .map((member) => member.id),
-    );
+    setSpaceMembersEditorIds(buildManagedSpaceMemberIds(activeSpaceDetail.members, session?.user.id));
     setSpaceMembersEditorOpen(true);
   }
 
   function toggleSpaceMembersEditorMember(memberId: string): void {
-    setSpaceMembersEditorIds((current) =>
-      current.includes(memberId)
-        ? current.filter((id) => id !== memberId)
-        : [...current, memberId],
-    );
+    setSpaceMembersEditorIds((current) => toggleManagedSpaceMember(current, memberId));
   }
 
   async function submitSpaceCreator(): Promise<void> {
@@ -1415,10 +1409,11 @@ function App() {
     setSpaceMembersEditorBusy(true);
     setSpaceMembersEditorError('');
     try {
-      const updated = await updateHouseholdSpaceMembers(session.token, activeSpaceDetail.id, [
-        session.user.id,
-        ...spaceMembersEditorIds,
-      ]);
+      const updated = await updateHouseholdSpaceMembers(
+        session.token,
+        activeSpaceDetail.id,
+        buildManagedSpaceSubmitIds(session.user.id, spaceMembersEditorIds),
+      );
       setActiveSpaceDetail(updated);
       setSpaces((current) =>
         current.map((space) =>
@@ -1910,15 +1905,11 @@ function App() {
       });
       const inviteRoleLabel = describeInviteRole(role);
       const inviteTargetName = invite.spaceName || options.targetSpaceName || '';
-      const inviteNotice = inviteTargetName
-        ? `${inviteRoleLabel} invite for ${inviteTargetName}: ${invite.inviteCode}`
-        : `${inviteRoleLabel} invite ready: ${invite.inviteCode}`;
+      const inviteNotice = buildSpaceInviteNotice(inviteRoleLabel, invite.inviteCode, inviteTargetName);
       setSettingsNotice(inviteNotice);
       Alert.alert(
         inviteTargetName ? `${inviteRoleLabel} invite for ${inviteTargetName}` : `${inviteRoleLabel} invite ready`,
-        inviteTargetName
-          ? `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code. They will join this household and be added to ${inviteTargetName}.`
-          : `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code.`,
+        buildSpaceInviteAlertMessage(invite.inviteCode, inviteTargetName),
       );
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
@@ -5844,8 +5835,7 @@ function App() {
                   <Text style={styles.cardCopy}>Checking this invite code...</Text>
                 ) : invitePreview ? (
                   <Text style={styles.cardCopy}>
-                    This code joins {invitePreview.householdName}
-                    {invitePreview.spaceName ? ` and adds you to ${invitePreview.spaceName}.` : '.'}
+                    {buildInvitePreviewSummary(invitePreview.householdName, invitePreview.spaceName)}
                   </Text>
                 ) : invitePreviewError ? (
                   <Text style={styles.errorText}>{invitePreviewError}</Text>
