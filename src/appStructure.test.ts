@@ -19,35 +19,37 @@ describe('App structure', () => {
 
   it('keeps visible labels for owner AI settings fields', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('AI service for Sparkbox');
-    expect(appSource).toContain('Keep one shared AI service and model ready for Sparkbox, then update it here if the sign-in changes.');
-    expect(appSource).toContain('Default AI service');
-    expect(appSource).toContain('Default model');
-    expect(appSource).toContain('Response timeout');
-    expect(appSource).toContain('AI service');
-    expect(appSource).toContain('Model name');
-    expect(appSource).toContain('Access key');
-    expect(appSource).toContain('Service URL (optional)');
-    expect(appSource).toContain('Add another AI service');
-    expect(appSource).toContain('Use this when Sparkbox needs to connect to another AI service or refresh its sign-in.');
-    expect(appSource).toContain('Service name');
-    expect(appSource).toContain('Model ID');
-    expect(appSource).toContain('Timeout in seconds');
-    expect(appSource).toContain('Save AI setup');
-    expect(appSource).toContain('Local models on this device');
-    expect(appSource).toContain('value={describeAiProvider(ownerProviderConfig.defaultProvider)}');
-    expect(appSource).toContain('editable={false}');
+    expect(appSource).toContain('OwnerSettingsPane');
+    expect(ownerSettingsSource).toContain('AI service for Sparkbox');
+    expect(ownerSettingsSource).toContain('Keep one shared AI service and model ready for Sparkbox, then update it here if the sign-in changes.');
+    expect(ownerSettingsSource).toContain('Default AI service');
+    expect(ownerSettingsSource).toContain('Default model');
+    expect(ownerSettingsSource).toContain('Response timeout');
+    expect(ownerSettingsSource).toContain('AI service');
+    expect(ownerSettingsSource).toContain('Model name');
+    expect(ownerSettingsSource).toContain('Access key');
+    expect(ownerSettingsSource).toContain('Service URL (optional)');
+    expect(ownerSettingsSource).toContain('Add another AI service');
+    expect(ownerSettingsSource).toContain('Use this when Sparkbox needs to connect to another AI service or refresh its sign-in.');
+    expect(ownerSettingsSource).toContain('Service name');
+    expect(ownerSettingsSource).toContain('Model ID');
+    expect(ownerSettingsSource).toContain('Timeout in seconds');
+    expect(ownerSettingsSource).toContain('Save AI setup');
+    expect(ownerSettingsSource).toContain('Local models on this device');
+    expect(ownerSettingsSource).toContain('value={describeAiProvider(ownerProviderConfig.defaultProvider)}');
+    expect(ownerSettingsSource).toContain('editable={false}');
     expect(appSource).toContain("setOwnerOnboardProvider('');");
     expect(appSource).not.toContain("setOwnerOnboardProvider(providerConfig.defaultProvider || providers[0] || 'ollama');");
-    expect(appSource).not.toContain('Connect another AI service');
-    expect(appSource).not.toContain('fresh provider credentials or a new endpoint');
-    expect(appSource).not.toContain('refresh it here if credentials change');
-    expect(appSource).not.toContain('Shared AI setup');
-    expect(appSource).not.toContain('placeholder=\"Provider\"');
-    expect(appSource).not.toContain('placeholder=\"Model\"');
-    expect(appSource).not.toContain('placeholder=\"API key\"');
-    expect(appSource).not.toContain('placeholder=\"API URL (optional)\"');
+    expect(ownerSettingsSource).not.toContain('Connect another AI service');
+    expect(ownerSettingsSource).not.toContain('fresh provider credentials or a new endpoint');
+    expect(ownerSettingsSource).not.toContain('refresh it here if credentials change');
+    expect(ownerSettingsSource).not.toContain('Shared AI setup');
+    expect(ownerSettingsSource).not.toContain('placeholder=\"Provider\"');
+    expect(ownerSettingsSource).not.toContain('placeholder=\"Model\"');
+    expect(ownerSettingsSource).not.toContain('placeholder=\"API key\"');
+    expect(ownerSettingsSource).not.toContain('placeholder=\"API URL (optional)\"');
   });
 
   it('keeps relay messaging copy in a single delivery language', () => {
@@ -146,13 +148,13 @@ describe('App structure', () => {
 
   it('keeps diagnostics labels in delivery-friendly language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Check source:');
-    expect(appSource).toContain('Still to check:');
-    expect(appSource).toContain('Needs attention now:');
-    expect(appSource).not.toContain('Source:');
-    expect(appSource).not.toContain('Preflight:');
-    expect(appSource).not.toContain('Issues:');
+    expect(ownerSettingsSource).toContain('Check source:');
+    expect(ownerSettingsSource).toContain('Still to check:');
+    expect(ownerSettingsSource).toContain('Needs attention now:');
+    expect(ownerSettingsSource).not.toContain('Preflight:');
+    expect(ownerSettingsSource).not.toContain('Issues:');
   });
 
   it('keeps library copy away from filesystem and internal IA wording', () => {
@@ -230,6 +232,7 @@ describe('App structure', () => {
 
   it('keeps owner settings copy away from generic box wording', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Install them once on this device');
     expect(appSource).toContain('Install a family app once on this device');
@@ -239,17 +242,18 @@ describe('App structure', () => {
     expect(appSource).toContain('Install on this device');
     expect(appSource).toContain('removed from this device');
     expect(appSource).toContain('which Sparkbox devices are attached to this household');
-    expect(appSource).toContain('Restart and recovery');
-    expect(appSource).toContain('What Sparkbox is doing now');
-    expect(appSource).toContain('Device health and reset');
-    expect(appSource).toContain('Reset Sparkbox');
-    expect(appSource).toContain('Device tools');
-    expect(appSource).toContain('Refresh device');
-    expect(appSource).toContain('Try to reconnect Sparkbox');
-    expect(appSource).toContain('Check Sparkbox now');
-    expect(appSource).toContain('Connect service');
-    expect(appSource).toContain('health check');
-    expect(appSource).toContain('summary');
+    expect(appSource).toContain('OwnerSettingsPane');
+    expect(ownerSettingsSource).toContain('Restart and recovery');
+    expect(ownerSettingsSource).toContain('What Sparkbox is doing now');
+    expect(ownerSettingsSource).toContain('Device health and reset');
+    expect(ownerSettingsSource).toContain('Reset Sparkbox');
+    expect(ownerSettingsSource).toContain('Device tools');
+    expect(ownerSettingsSource).toContain('Refresh device');
+    expect(ownerSettingsSource).toContain('Try to reconnect Sparkbox');
+    expect(ownerSettingsSource).toContain('Check Sparkbox now');
+    expect(ownerSettingsSource).toContain('Connect service');
+    expect(ownerSettingsSource).toContain('health check');
+    expect(ownerSettingsSource).toContain('summary');
     expect(appSource).not.toContain('Install them once on this Box');
     expect(appSource).not.toContain('Install a family app once on this Box');
     expect(appSource).not.toContain('Installed on this Box');
@@ -258,18 +262,18 @@ describe('App structure', () => {
     expect(appSource).not.toContain('from this Box');
     expect(appSource).not.toContain('Install on this Box');
     expect(appSource).not.toContain('which Boxes are attached to this household');
-    expect(appSource).not.toContain('Runtime controls');
-    expect(appSource).not.toContain('Current activity');
-    expect(appSource).not.toContain('Diagnostics and reset');
-    expect(appSource).not.toContain('Factory reset');
-    expect(appSource).not.toContain('Owner advanced controls');
-    expect(appSource).not.toContain('Refresh advanced status');
-    expect(appSource).not.toContain('Refresh connection');
-    expect(appSource).not.toContain('Service controls');
-    expect(appSource).not.toContain('Activity right now');
-    expect(appSource).not.toContain('Device check and reset');
-    expect(appSource).not.toContain('Advanced device tools');
-    expect(appSource).not.toContain('Refresh device status');
+    expect(ownerSettingsSource).not.toContain('Runtime controls');
+    expect(ownerSettingsSource).not.toContain('Current activity');
+    expect(ownerSettingsSource).not.toContain('Diagnostics and reset');
+    expect(ownerSettingsSource).not.toContain('Factory reset');
+    expect(ownerSettingsSource).not.toContain('Owner advanced controls');
+    expect(ownerSettingsSource).not.toContain('Refresh advanced status');
+    expect(ownerSettingsSource).not.toContain('Refresh connection');
+    expect(ownerSettingsSource).not.toContain('Service controls');
+    expect(ownerSettingsSource).not.toContain('Activity right now');
+    expect(ownerSettingsSource).not.toContain('Device check and reset');
+    expect(ownerSettingsSource).not.toContain('Advanced device tools');
+    expect(ownerSettingsSource).not.toContain('Refresh device status');
   });
 
   it('keeps family app cards away from raw config dumps and raw risk labels', () => {
@@ -357,6 +361,7 @@ describe('App structure', () => {
 
   it('keeps owner console feedback attached to the action that triggered it', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
 
     expect(appSource).toContain("type OwnerConsoleContext = 'tools' | 'provider' | 'onboard' | 'service';");
     expect(appSource).toContain('const reconnect = await reconnectDevice(session.token, ownerDeviceId);');
@@ -365,10 +370,10 @@ describe('App structure', () => {
     expect(appSource).toContain("await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'provider' });");
     expect(appSource).toContain("await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'onboard' });");
     expect(appSource).toContain("await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'service' });");
-    expect(appSource).toContain("{renderOwnerConsoleFeedback('tools')}");
-    expect(appSource).toContain("{renderOwnerConsoleFeedback('provider')}");
-    expect(appSource).toContain("{renderOwnerConsoleFeedback('onboard')}");
-    expect(appSource).toContain("{renderOwnerConsoleFeedback('service')}");
+    expect(ownerSettingsSource).toContain("{renderOwnerConsoleFeedback('tools')}");
+    expect(ownerSettingsSource).toContain("{renderOwnerConsoleFeedback('provider')}");
+    expect(ownerSettingsSource).toContain("{renderOwnerConsoleFeedback('onboard')}");
+    expect(ownerSettingsSource).toContain("{renderOwnerConsoleFeedback('service')}");
   });
 
   it('keeps the signed-in onboarding card free of metadata-style account labels', () => {
