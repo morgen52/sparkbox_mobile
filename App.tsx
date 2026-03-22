@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
+import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
@@ -3957,217 +3958,60 @@ function App() {
 
                 {activeChatSessionId ? (
                   <>
-                <View style={styles.card}>
-                  <View style={styles.chatDetailHeader}>
-                    <View style={styles.chatDetailHeaderTopRow}>
-                      <Pressable
-                        style={[styles.secondaryButtonSmall, !activeChatSession ? styles.networkRowDisabled : null]}
-                        onPress={closeActiveChatDetail}
-                        disabled={!activeChatSession}
-                      >
-                        <Text style={styles.secondaryButtonText}>Back to chats</Text>
-                      </Pressable>
-                      {activeChatSession ? (
-                        <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
-                          {onlineDeviceAvailable ? 'Sparkbox online' : 'Sparkbox offline'}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.chatDetailHeaderBody}>
-                      <Text style={styles.chatDetailTitle}>
-                        {waitingForSpaces
-                          ? 'Loading chat...'
-                          : activeChatSession?.name || describeActiveChatFallbackTitle(activeSpaceCopyContext)}
-                      </Text>
-                      <Text style={styles.chatDetailSubtitle}>
-                        {waitingForSpaces
-                          ? 'Loading your spaces...'
-                          : activeChatSession
-                          ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible)
-                          : describeActiveChatEmptyStateCopy(activeSpaceCopyContext)}
-                      </Text>
-                      {sharedChatIsVisible && activeSharedChatParticipantSummary && !waitingForSpaces ? (
-                        <Text style={styles.chatDetailParticipants}>{activeSharedChatParticipantSummary}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-                  {waitingForSpaces ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  {sharedChatIsVisible && activeSpaceDetail && !waitingForSpaces ? (
-                    <View style={styles.scopeRow}>
-                      {activeSharedChatParticipantLabels.map((label) => {
-                        const isCurrentUser = label === 'You';
-                        return (
-                          <View
-                            key={`shared-chat-member-${label}`}
-                            style={[styles.groupParticipantPill, isCurrentUser ? styles.groupParticipantPillSelf : null]}
-                          >
-                            <Text
-                              style={[
-                                styles.groupParticipantLabel,
-                                isCurrentUser ? styles.groupParticipantLabelSelf : null,
-                              ]}
-                            >
-                              {label}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                      <View
-                        style={[
-                          styles.groupParticipantPill,
-                          onlineDeviceAvailable ? styles.groupParticipantPillOnline : styles.groupParticipantPillOffline,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.groupParticipantLabel,
-                            onlineDeviceAvailable ? styles.groupParticipantLabelOnline : styles.groupParticipantLabelOffline,
-                          ]}
-                        >
-                          {onlineDeviceAvailable ? 'Sparkbox' : 'Sparkbox offline'}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : null}
-                  {activeChatSession && canManageActiveChat && !waitingForSpaces ? (
-                    <View style={styles.inlineActions}>
-                      <Pressable style={styles.secondaryButtonSmall} onPress={() => openChatSessionEditor(activeChatSession)}>
-                        <Text style={styles.secondaryButtonText}>Edit settings</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => void clearCurrentChatSession()}
-                        disabled={chatBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Clear messages</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() =>
-                          Alert.alert('Delete this chat?', 'Its message history will be removed.', [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => void deleteCurrentChatSession() },
-                          ])
-                        }
-                        disabled={chatBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Delete chat</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {activeChatTimelineMessages.length === 0 ? (
-                    <Text style={styles.cardCopy}>No messages yet in this chat.</Text>
-                  ) : (
-                    chatTimelineGroups.map((group) =>
-                      group.kind === 'status' ? (
-                        <View key={group.id} style={styles.chatStatusNotice}>
-                          <View style={styles.chatStatusNoticeHeader}>
-                            <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
-                            {group.message.createdAt ? (
-                              <Text style={styles.chatStatusTimestamp}>
-                                {describeChatMessageTimestamp(group.message.createdAt)}
-                              </Text>
-                            ) : null}
-                          </View>
-                          <Text style={styles.chatStatusNoticeCopy}>
-                            {decodeChatMessageContent(group.message.content)}
-                          </Text>
-                          <Text style={styles.cardCopy}>{group.statusCopy}</Text>
-                          {group.message.failed && group.message.errorMessage ? (
-                            <Text style={styles.errorText}>{group.message.errorMessage}</Text>
-                          ) : null}
-                          {group.message.retryable && group.message.retryContent ? (
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.secondaryButtonSmall}
-                                onPress={() => void submitChatMessage(group.message.retryContent ?? undefined)}
-                                disabled={chatBusy}
-                              >
-                                <Text style={styles.secondaryButtonText}>Retry</Text>
-                              </Pressable>
-                            </View>
-                          ) : null}
-                        </View>
-                      ) : (
-                        <View
-                          key={group.id}
-                          style={[
-                            styles.chatMessageGroup,
-                            group.role === 'user' ? styles.chatMessageGroupUser : styles.chatMessageGroupAssistant,
-                          ]}
-                        >
-                          <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
-                          {group.messages.map((message, index) => (
-                            <View
-                              key={`${group.id}-${index}-${message.content}`}
-                              style={[
-                                styles.chatBubble,
-                                group.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
-                              ]}
-                            >
-                              {message.createdAt ? (
-                                <View style={styles.chatBubbleMetaRow}>
-                                  <Text
-                                    style={[
-                                      styles.chatBubbleTimestamp,
-                                      group.role === 'user' ? styles.chatBubbleTimestampUser : null,
-                                    ]}
-                                  >
-                                    {describeChatMessageTimestamp(message.createdAt)}
-                                  </Text>
-                                </View>
-                              ) : null}
-                              <Text
-                                style={[
-                                  styles.chatBubbleCopy,
-                                  group.role === 'user' ? styles.chatBubbleCopyUser : null,
-                                ]}
-                              >
-                                {decodeChatMessageContent(message.content)}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      ),
-                    )
-                  )}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>
-                    {waitingForSpaces ? 'Loading chat...' : sharedChatIsVisible ? 'Message the group' : 'Send a message'}
-                  </Text>
-                  <TextInput
-                    placeholder={
-                      waitingForSpaces
-                        ? 'Loading your spaces...'
-                        : describeChatComposerPlaceholder(
-                            activeSpaceCopyContext,
-                            Boolean(activeChatSession),
-                            sharedChatIsVisible,
-                          )
-                    }
-                    placeholderTextColor="#7e8a83"
-                    style={[styles.input, styles.textArea]}
-                    value={chatDraft}
-                    onChangeText={setChatDraft}
-                    multiline
-                    numberOfLines={4}
-                    editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && Boolean(activeChatSessionId)}
-                  />
-                  <View style={styles.inlineActions}>
-                    <Pressable
-                      style={[
-                        styles.primaryButtonSmall,
-                        waitingForSpaces || !onlineDeviceAvailable || !activeChatSessionId ? styles.networkRowDisabled : null,
-                      ]}
-                      onPress={() => void submitChatMessage()}
-                      disabled={waitingForSpaces || !onlineDeviceAvailable || chatBusy || !chatDraft.trim() || !activeChatSessionId}
-                    >
-                      {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send</Text>}
-                    </Pressable>
-                  </View>
-                </View>
+                <ChatDetailPane
+                  styles={styles}
+                  waitingForSpaces={waitingForSpaces}
+                  activeChatTitle={
+                    waitingForSpaces
+                      ? 'Loading chat...'
+                      : activeChatSession?.name || describeActiveChatFallbackTitle(activeSpaceCopyContext)
+                  }
+                  activeChatSubtitle={
+                    waitingForSpaces
+                      ? 'Loading your spaces...'
+                      : activeChatSession
+                        ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible)
+                        : describeActiveChatEmptyStateCopy(activeSpaceCopyContext)
+                  }
+                  participantSummary={
+                    sharedChatIsVisible && activeSharedChatParticipantSummary && !waitingForSpaces
+                      ? activeSharedChatParticipantSummary
+                      : ''
+                  }
+                  participantLabels={activeSharedChatParticipantLabels}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  showParticipantPills={sharedChatIsVisible && Boolean(activeSpaceDetail) && !waitingForSpaces}
+                  showManageActions={Boolean(activeChatSession) && canManageActiveChat && !waitingForSpaces}
+                  hasActiveChatSession={Boolean(activeChatSession)}
+                  chatBusy={chatBusy}
+                  chatTimelineGroups={chatTimelineGroups}
+                  hasMessages={activeChatTimelineMessages.length > 0}
+                  composerTitle={waitingForSpaces ? 'Loading chat...' : sharedChatIsVisible ? 'Message the group' : 'Send a message'}
+                  composerPlaceholder={
+                    waitingForSpaces
+                      ? 'Loading your spaces...'
+                      : describeChatComposerPlaceholder(
+                          activeSpaceCopyContext,
+                          Boolean(activeChatSession),
+                          sharedChatIsVisible,
+                        )
+                  }
+                  chatDraft={chatDraft}
+                  canSend={
+                    !waitingForSpaces &&
+                    onlineDeviceAvailable &&
+                    !chatBusy &&
+                    Boolean(activeChatSessionId) &&
+                    Boolean(chatDraft.trim())
+                  }
+                  onBack={closeActiveChatDetail}
+                  onEdit={() => activeChatSession && openChatSessionEditor(activeChatSession)}
+                  onClear={() => void clearCurrentChatSession()}
+                  onDelete={() => void deleteCurrentChatSession()}
+                  onRetry={(content) => void submitChatMessage(content)}
+                  onChangeDraft={setChatDraft}
+                  onSend={() => void submitChatMessage()}
+                />
                   </>
                 ) : null}
               </>

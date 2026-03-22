@@ -91,18 +91,21 @@ describe('App structure', () => {
 
   it('renders chat detail with a messenger header and explicit back behavior', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatDetailSource = readFileSync(resolve(__dirname, './components/ChatDetailPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('chatDetailHeader');
-    expect(appSource).toContain('Back to chats');
-    expect(appSource).toContain('chatDetailParticipants');
+    expect(chatDetailSource).toContain('chatDetailHeader');
+    expect(chatDetailSource).toContain('Back to chats');
+    expect(chatDetailSource).toContain('chatDetailParticipants');
     expect(appSource).toContain("hardwareBackPress");
   });
 
   it('renders grouped chat messages and separate status notices', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatDetailSource = readFileSync(resolve(__dirname, './components/ChatDetailPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('chatMessageGroup');
-    expect(appSource).toContain('chatStatusNotice');
+    expect(chatDetailSource).toContain('chatMessageGroup');
+    expect(chatDetailSource).toContain('chatStatusNotice');
+    expect(appSource).toContain('buildChatTimelineGroups');
   });
 
   it('swaps the chats tab body between inbox and active chat detail', () => {

@@ -1,0 +1,271 @@
+import React from 'react';
+import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
+
+type ChatTimelineMessage = {
+  content: string;
+  createdAt?: string | null;
+  failed?: boolean;
+  retryable?: boolean;
+  retryContent?: string | null;
+  errorMessage?: string | null;
+};
+
+type ChatTimelineGroup =
+  | {
+      kind: 'messages';
+      id: string;
+      role: 'user' | 'assistant';
+      senderLabel: string;
+      messages: ChatTimelineMessage[];
+    }
+  | {
+      kind: 'status';
+      id: string;
+      senderLabel: string;
+      statusCopy: string;
+      message: ChatTimelineMessage;
+    };
+
+type ChatDetailPaneProps = {
+  styles: Record<string, any>;
+  waitingForSpaces: boolean;
+  activeChatTitle: string;
+  activeChatSubtitle: string;
+  participantSummary: string;
+  participantLabels: string[];
+  onlineDeviceAvailable: boolean;
+  showParticipantPills: boolean;
+  showManageActions: boolean;
+  hasActiveChatSession: boolean;
+  chatBusy: boolean;
+  chatTimelineGroups: ChatTimelineGroup[];
+  hasMessages: boolean;
+  composerTitle: string;
+  composerPlaceholder: string;
+  chatDraft: string;
+  canSend: boolean;
+  onBack: () => void;
+  onEdit: () => void;
+  onClear: () => void;
+  onDelete: () => void;
+  onRetry: (content?: string) => void;
+  onChangeDraft: (value: string) => void;
+  onSend: () => void;
+};
+
+export function ChatDetailPane({
+  styles,
+  waitingForSpaces,
+  activeChatTitle,
+  activeChatSubtitle,
+  participantSummary,
+  participantLabels,
+  onlineDeviceAvailable,
+  showParticipantPills,
+  showManageActions,
+  hasActiveChatSession,
+  chatBusy,
+  chatTimelineGroups,
+  hasMessages,
+  composerTitle,
+  composerPlaceholder,
+  chatDraft,
+  canSend,
+  onBack,
+  onEdit,
+  onClear,
+  onDelete,
+  onRetry,
+  onChangeDraft,
+  onSend,
+}: ChatDetailPaneProps) {
+  return (
+    <>
+      <View style={styles.card}>
+        <View style={styles.chatDetailHeader}>
+          <View style={styles.chatDetailHeaderTopRow}>
+            <Pressable
+              style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
+              onPress={onBack}
+              disabled={!hasActiveChatSession}
+            >
+              <Text style={styles.secondaryButtonText}>Back to chats</Text>
+            </Pressable>
+            {hasActiveChatSession ? (
+              <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
+                {onlineDeviceAvailable ? 'Sparkbox online' : 'Sparkbox offline'}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.chatDetailHeaderBody}>
+            <Text style={styles.chatDetailTitle}>{activeChatTitle}</Text>
+            <Text style={styles.chatDetailSubtitle}>{activeChatSubtitle}</Text>
+            {participantSummary && !waitingForSpaces ? (
+              <Text style={styles.chatDetailParticipants}>{participantSummary}</Text>
+            ) : null}
+          </View>
+        </View>
+        {waitingForSpaces ? <ActivityIndicator color="#0b6e4f" /> : null}
+        {showParticipantPills ? (
+          <View style={styles.scopeRow}>
+            {participantLabels.map((label) => {
+              const isCurrentUser = label === 'You';
+              return (
+                <View
+                  key={`shared-chat-member-${label}`}
+                  style={[styles.groupParticipantPill, isCurrentUser ? styles.groupParticipantPillSelf : null]}
+                >
+                  <Text
+                    style={[
+                      styles.groupParticipantLabel,
+                      isCurrentUser ? styles.groupParticipantLabelSelf : null,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              );
+            })}
+            <View
+              style={[
+                styles.groupParticipantPill,
+                onlineDeviceAvailable ? styles.groupParticipantPillOnline : styles.groupParticipantPillOffline,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.groupParticipantLabel,
+                  onlineDeviceAvailable ? styles.groupParticipantLabelOnline : styles.groupParticipantLabelOffline,
+                ]}
+              >
+                {onlineDeviceAvailable ? 'Sparkbox' : 'Sparkbox offline'}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {showManageActions ? (
+          <View style={styles.inlineActions}>
+            <Pressable style={styles.secondaryButtonSmall} onPress={onEdit}>
+              <Text style={styles.secondaryButtonText}>Edit settings</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButtonSmall} onPress={onClear} disabled={chatBusy}>
+              <Text style={styles.secondaryButtonText}>Clear messages</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryButtonSmall}
+              onPress={() =>
+                Alert.alert('Delete this chat?', 'Its message history will be removed.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: onDelete },
+                ])
+              }
+              disabled={chatBusy}
+            >
+              <Text style={styles.secondaryButtonText}>Delete chat</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {!hasMessages ? (
+          <Text style={styles.cardCopy}>No messages yet in this chat.</Text>
+        ) : (
+          chatTimelineGroups.map((group) =>
+            group.kind === 'status' ? (
+              <View key={group.id} style={styles.chatStatusNotice}>
+                <View style={styles.chatStatusNoticeHeader}>
+                  <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
+                  {group.message.createdAt ? (
+                    <Text style={styles.chatStatusTimestamp}>
+                      {describeChatMessageTimestamp(group.message.createdAt)}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.chatStatusNoticeCopy}>
+                  {decodeChatMessageContent(group.message.content)}
+                </Text>
+                <Text style={styles.cardCopy}>{group.statusCopy}</Text>
+                {group.message.failed && group.message.errorMessage ? (
+                  <Text style={styles.errorText}>{group.message.errorMessage}</Text>
+                ) : null}
+                {group.message.retryable && group.message.retryContent ? (
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      style={styles.secondaryButtonSmall}
+                      onPress={() => onRetry(group.message.retryContent ?? undefined)}
+                      disabled={chatBusy}
+                    >
+                      <Text style={styles.secondaryButtonText}>Retry</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <View
+                key={group.id}
+                style={[
+                  styles.chatMessageGroup,
+                  group.role === 'user' ? styles.chatMessageGroupUser : styles.chatMessageGroupAssistant,
+                ]}
+              >
+                <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
+                {group.messages.map((message, index) => (
+                  <View
+                    key={`${group.id}-${index}-${message.content}`}
+                    style={[
+                      styles.chatBubble,
+                      group.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                    ]}
+                  >
+                    {message.createdAt ? (
+                      <View style={styles.chatBubbleMetaRow}>
+                        <Text
+                          style={[
+                            styles.chatBubbleTimestamp,
+                            group.role === 'user' ? styles.chatBubbleTimestampUser : null,
+                          ]}
+                        >
+                          {describeChatMessageTimestamp(message.createdAt)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.chatBubbleCopy,
+                        group.role === 'user' ? styles.chatBubbleCopyUser : null,
+                      ]}
+                    >
+                      {decodeChatMessageContent(message.content)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ),
+          )
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{composerTitle}</Text>
+        <TextInput
+          placeholder={composerPlaceholder}
+          placeholderTextColor="#7e8a83"
+          style={[styles.input, styles.textArea]}
+          value={chatDraft}
+          onChangeText={onChangeDraft}
+          multiline
+          numberOfLines={4}
+          editable={canSend || Boolean(chatDraft)}
+        />
+        <View style={styles.inlineActions}>
+          <Pressable
+            style={[styles.primaryButtonSmall, !canSend ? styles.networkRowDisabled : null]}
+            onPress={onSend}
+            disabled={!canSend}
+          >
+            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send</Text>}
+          </Pressable>
+        </View>
+      </View>
+    </>
+  );
+}
