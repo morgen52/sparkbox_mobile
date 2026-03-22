@@ -119,13 +119,14 @@ describe('App structure', () => {
 
   it('keeps task editor copy free of internal runtime wording', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const libraryPaneSource = readFileSync(resolve(__dirname, './components/LibraryPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Owners can switch to advanced controls when needed.');
     expect(appSource).toContain('Private routines stay simple here, and owners can fine-tune shared ones when needed.');
     expect(appSource).toContain('When should this happen?');
     expect(appSource).toContain('Run mode: Sparkbox routine');
     expect(appSource).toContain('Custom command');
-    expect(appSource).toContain('Latest note:');
+    expect(libraryPaneSource).toContain('Latest note:');
     expect(appSource).not.toContain('Owners can switch to an advanced runtime when needed.');
     expect(appSource).not.toContain('When should this run? (advanced schedule)');
     expect(appSource).not.toContain('Command type: zeroclaw');
@@ -156,28 +157,26 @@ describe('App structure', () => {
 
   it('keeps library copy away from filesystem and internal IA wording', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const libraryPaneSource = readFileSync(resolve(__dirname, './components/LibraryPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Library overview');
-    expect(appSource).toContain('Quick actions');
-    expect(appSource).toContain('The creation shortcuts live here so they are always easy to reach.');
-    expect(appSource).toContain('New folder');
-    expect(appSource).toContain('New task');
-    expect(appSource).toContain('android_ripple={{ color: \'rgba(23,53,42,0.14)\' }}');
-    expect(appSource).toContain('android_ripple={{ color: \'rgba(255,255,255,0.18)\' }}');
-    expect(appSource).toContain('accessibilityRole="button"');
-    expect(appSource).toContain("onPress={() => openFileEditor('mkdir')}");
-    expect(appSource).toContain('onPress={() => openTaskEditor()}');
-    expect(appSource).toContain('Pick a space to browse what Sparkbox has saved there.');
-    expect(appSource).toContain('Everything Sparkbox has saved for this space shows up here in one place.');
-    expect(appSource).toContain('Viewing folder:');
-    expect(appSource).toContain('routines and reminders stay with the right space');
-    expect(appSource).toContain('Shared moments and photos saved with this space.');
-    expect(appSource).toContain('the key details Sparkbox should remember');
+    expect(libraryPaneSource).toContain('Library overview');
+    expect(libraryPaneSource).toContain('Quick actions');
+    expect(libraryPaneSource).toContain('The creation shortcuts live here so they are always easy to reach.');
+    expect(libraryPaneSource).toContain('New folder');
+    expect(libraryPaneSource).toContain('New task');
+    expect(libraryPaneSource).toContain('android_ripple={{ color: \'rgba(23,53,42,0.14)\' }}');
+    expect(libraryPaneSource).toContain('android_ripple={{ color: \'rgba(255,255,255,0.18)\' }}');
+    expect(libraryPaneSource).toContain('accessibilityRole="button"');
+    expect(libraryPaneSource).toContain('Pick a space to browse what Sparkbox has saved there.');
+    expect(libraryPaneSource).toContain('Everything Sparkbox has saved for this space shows up here in one place.');
+    expect(libraryPaneSource).toContain('Viewing folder:');
+    expect(libraryPaneSource).toContain('routines and reminders stay with the right space');
+    expect(libraryPaneSource).toContain('the key details Sparkbox should remember');
     expect(appSource).not.toContain('long-term facts');
     expect(appSource).not.toContain('keep current');
     expect(appSource).not.toContain('treat as current');
-    expect(appSource).toContain('Bring Sparkbox online to browse or update the files for this space.');
-    expect(appSource).toContain('Bring Sparkbox online to load or update the routines for this space.');
+    expect(libraryPaneSource).toContain('Bring Sparkbox online to browse or update the files for this space.');
+    expect(libraryPaneSource).toContain('Bring Sparkbox online to load or update the routines for this space.');
     expect(appSource).not.toContain('Space library');
     expect(appSource).not.toContain('Pick a space to browse its accumulated Sparkbox context.');
     expect(appSource).not.toContain('one shared library');
@@ -422,9 +421,10 @@ describe('App structure', () => {
 
   it('keeps library fallback copy away from active-space jargon', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const libraryPaneSource = readFileSync(resolve(__dirname, './components/LibraryPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Things Sparkbox remembers for this space.');
-    expect(appSource).toContain("activeSpace ? activeSpace.name : 'this space'");
+    expect(libraryPaneSource).toContain("activeSpace?.name || 'this space'");
     expect(appSource).not.toContain('Things Sparkbox remembers for the active space.');
     expect(appSource).not.toContain('Files stay inside the active space');
     expect(appSource).not.toContain('Tasks stay attached to the active space');

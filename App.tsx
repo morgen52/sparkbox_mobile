@@ -27,6 +27,7 @@ import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModa
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatInboxPane } from './src/components/ChatInboxPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
+import { LibraryPane } from './src/components/LibraryPane';
 import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
@@ -3918,414 +3919,67 @@ function App() {
             ) : null}
 
             {libraryTabActive ? (
-              <>
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Library overview</Text>
-                  <Text style={styles.cardCopy}>
-                    {activeSpace
-                      ? `${activeSpace.name} (${activeSpaceKindLabel}) keeps its memories, summaries, photos, files, and tasks together.`
-                      : 'Pick a space to browse what Sparkbox has saved there.'}
-                  </Text>
-                  {libraryNotice ? <Text style={styles.noticeText}>{libraryNotice}</Text> : null}
-                  {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
-                  {libraryBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  <View style={styles.libraryGrid}>
-                    {libraryOverviewSections.map((section) => (
-                      <View key={section.title} style={styles.librarySectionCard}>
-                        <Text style={styles.librarySectionTitle}>{section.title}</Text>
-                        <Text style={styles.librarySectionCopy}>{section.copy}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={styles.cardCopy}>
-                    Everything Sparkbox has saved for this space shows up here in one place.
-                  </Text>
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Memories in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    Memories are the key details Sparkbox should remember for {activeSpace?.name || 'this space'}.
-                  </Text>
-                  {!canMutateActiveSpaceLibrary && activeSpace?.kind === 'shared' ? (
-                    <Text style={styles.cardCopy}>
-                      Owners update the shared memories and summaries here. Members can still read everything in this space library.
-                    </Text>
-                  ) : null}
-                  <View style={styles.inlineActions}>
-                    <TouchableOpacity
-                      style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
-                      onPress={() => void refreshLibrary()}
-                      disabled={!activeSpace || libraryBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </TouchableOpacity>
-                    {canMutateActiveSpaceLibrary ? (
-                      <TouchableOpacity
-                        style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
-                        onPress={() => openMemoryEditor()}
-                        disabled={!activeSpace || libraryBusy}
-                      >
-                        <Text style={styles.primaryButtonText}>New memory</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  {spaceLibrary.memories.length === 0 && !libraryBusy ? (
-                    <Text style={styles.cardCopy}>Nothing has been saved to Memories yet.</Text>
-                  ) : null}
-                  {spaceLibrary.memories.map((memory) => (
-                    <View key={memory.id} style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{memory.title}</Text>
-                        <Text style={memory.pinned ? styles.statusTagOnline : styles.tagMuted}>
-                          {memory.pinned ? 'pinned' : 'memory'}
-                        </Text>
-                      </View>
-                      <Text style={styles.cardCopy}>{memory.content}</Text>
-                      <Text style={styles.cardCopy}>
-                        Updated {describeUiDateTime(memory.updatedAt) || memory.updatedAt}
-                      </Text>
-                      {canMutateActiveSpaceLibrary ? (
-                        <View style={styles.inlineActions}>
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => openMemoryEditor(memory)}
-                            disabled={libraryBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Edit</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => confirmRemoveMemory(memory)}
-                            disabled={libraryBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Summaries in this space</Text>
-                  <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
-                  <View style={styles.inlineActions}>
-                    <TouchableOpacity
-                      style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
-                      onPress={() => void refreshLibrary()}
-                      disabled={!activeSpace || libraryBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </TouchableOpacity>
-                    {canMutateActiveSpaceLibrary ? (
-                      <TouchableOpacity
-                        style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
-                        onPress={() => void captureActiveSpaceSummary()}
-                        disabled={!activeChatSessionId || libraryBusy}
-                      >
-                        <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
-                  {spaceLibrary.summaries.length === 0 && !libraryBusy ? (
-                    <Text style={styles.cardCopy}>No summaries yet.</Text>
-                  ) : null}
-                  {spaceLibrary.summaries.map((summary) => (
-                    <View key={summary.id} style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{summary.title}</Text>
-                        <Text style={styles.tagMuted}>{summary.sourceLabel || 'summary'}</Text>
-                      </View>
-                      <Text style={styles.cardCopy}>{summary.content}</Text>
-                      <Text style={styles.cardCopy}>
-                        Created {describeUiDateTime(summary.createdAt) || summary.createdAt}
-                      </Text>
-                      {canMutateActiveSpaceLibrary ? (
-                        <View style={styles.inlineActions}>
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => saveSummaryAsMemory(summary)}
-                            disabled={libraryBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Save as memory</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => confirmRemoveSummary(summary)}
-                            disabled={libraryBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Photos in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    Photos belong to this space as shared moments, not just as generic uploads.
-                  </Text>
-                  {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
-                    <Text style={styles.cardCopy}>
-                      Owners manage shared photos here. Members can still browse and download what is already in this space.
-                    </Text>
-                  ) : null}
-                  <View style={styles.inlineActions}>
-                    <TouchableOpacity
-                      style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => void refreshFiles()}
-                      disabled={!onlineDeviceAvailable || filesBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Refresh photos</Text>
-                    </TouchableOpacity>
-                    {canMutateActiveSpaceFiles ? (
-                      <TouchableOpacity
-                        style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                        onPress={() => void pickAndUploadFiles()}
-                        disabled={!onlineDeviceAvailable || filesBusy}
-                      >
-                        <Text style={styles.primaryButtonText}>Upload photos</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  {photoEntries.length === 0 && !filesBusy ? (
-                    <Text style={styles.cardCopy}>{describeLibraryPhotoEmptyState(fileSpace)}</Text>
-                  ) : null}
-                  {photoEntries.map((entry) => (
-                    <View key={`photo-${entry.path}`} style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{entry.name}</Text>
-                        <Text style={styles.statusTagOnline}>photo</Text>
-                      </View>
-                      <Text style={styles.cardCopy}>
-                        {describeFileTimestamp(entry.modified || '')}
-                        {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
-                      </Text>
-                      <View style={styles.inlineActions}>
-                        <TouchableOpacity
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => void downloadFileEntry(entry)}
-                          disabled={filesBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Download</Text>
-                        </TouchableOpacity>
-                        {canManageFileEntry(entry) ? (
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => void deleteFileEntry(entry)}
-                            disabled={filesBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Files in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    {onlineDeviceAvailable
-                      ? `Files stay inside ${activeSpace ? activeSpace.name : 'this space'} so each space can keep its own working materials separate.`
-                      : 'Bring Sparkbox online to browse or update the files for this space.'}
-                  </Text>
-                  {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
-                    <Text style={styles.cardCopy}>
-                      Owners manage shared files and folders here. Members can still open and download what is already in this space.
-                    </Text>
-                  ) : null}
-                  {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
-                  {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
-                  <Text style={styles.cardCopy}>
-                    Viewing folder:{' '}
-                    {(currentFilePath || activeSpace?.name || (fileSpace === 'family' ? 'Shared space' : 'Private space')).replace(/^\/+/, '')}
-                  </Text>
-                  <View style={styles.inlineActions}>
-                    <TouchableOpacity
-                      style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => void refreshFiles()}
-                      disabled={!onlineDeviceAvailable || filesBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </TouchableOpacity>
-                    {canMutateActiveSpaceFiles ? (
-                      <TouchableOpacity
-                        style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                        onPress={() => void pickAndUploadFiles()}
-                        disabled={!onlineDeviceAvailable || filesBusy}
-                      >
-                        <Text style={styles.primaryButtonText}>Upload</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  {fileListing?.parent ? (
-                    <TouchableOpacity style={styles.secondaryButtonSmall} onPress={() => void refreshFiles(fileListing.parent || '')}>
-                      <Text style={styles.secondaryButtonText}>Go up</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{describeLibraryFileListTitle(fileSpace)}</Text>
-                  {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  {!filesBusy && (fileListing?.entries.length ?? 0) === 0 ? (
-                    <Text style={styles.cardCopy}>{describeLibraryFileListEmptyState(fileSpace)}</Text>
-                  ) : null}
-                  {fileListing?.entries.map((entry) => (
-                    <View key={entry.path} style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{entry.name}</Text>
-                        <Text style={entry.isDir ? styles.statusTagOnline : styles.statusTagOffline}>
-                          {entry.isDir ? 'folder' : 'file'}
-                        </Text>
-                      </View>
-                      <Text style={styles.cardCopy}>
-                        {describeFileTimestamp(entry.modified || '')}
-                        {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
-                      </Text>
-                      {fileSpace === 'family' && entry.uploadedByUserId ? (
-                        <Text style={styles.cardCopy}>
-                          {describeFileUploader(entry.uploadedByUserId, session.user.id, homeMembers)}
-                        </Text>
-                      ) : null}
-                      <View style={styles.inlineActions}>
-                        {entry.isDir ? (
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => void refreshFiles(entry.path)}
-                          >
-                            <Text style={styles.secondaryButtonText}>Open</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => void downloadFileEntry(entry)}
-                            disabled={filesBusy}
-                          >
-                            <Text style={styles.secondaryButtonText}>Download</Text>
-                          </TouchableOpacity>
-                        )}
-                        {canManageFileEntry(entry) ? (
-                          <>
-                            <TouchableOpacity
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => openFileEditor('rename', entry)}
-                              disabled={filesBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Rename</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => void deleteFileEntry(entry)}
-                              disabled={filesBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Delete</Text>
-                            </TouchableOpacity>
-                          </>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Tasks in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    {onlineDeviceAvailable
-                      ? `Tasks stay attached to ${activeSpace ? activeSpace.name : 'this space'} so routines and reminders stay with the right space.`
-                      : 'Bring Sparkbox online to load or update the routines for this space.'}
-                  </Text>
-                  {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
-                  {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
-                  <View style={styles.inlineActions}>
-                    <TouchableOpacity
-                      style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => void refreshTasks()}
-                      disabled={!onlineDeviceAvailable || tasksBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.cardCopy}>Use Quick actions above when you want to add a new routine.</Text>
-                  {!canManage && taskScope === 'family' ? (
-                    <Text style={styles.cardCopy}>
-                      Members can run shared routines here, but only owners can create or edit them.
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{describeLibraryTaskListTitle(taskScope)}</Text>
-                  {tasksBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  {!tasksBusy && tasks.length === 0 ? (
-                    <Text style={styles.cardCopy}>{describeLibraryTaskListEmptyState(taskScope)}</Text>
-                  ) : null}
-                  {tasks.map((task) => (
-                    <View key={task.id} style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{task.name}</Text>
-                        <Text style={task.enabled ? styles.statusTagOnline : styles.statusTagOffline}>
-                          {describeTaskEnabledState(task.enabled)}
-                        </Text>
-                      </View>
-                      <Text style={styles.cardCopy}>{describeTaskSchedule(task.cronExpr)}</Text>
-                      <Text style={styles.cardCopy}>
-                        {describeTaskExecution(task.commandType, task.scope)}
-                      </Text>
-                      {task.lastStatus ? (
-                        <Text style={styles.cardCopy}>
-                          Last run: {task.lastStatus}
-                          {task.lastRunAt ? ` · ${describeUiDateTime(task.lastRunAt) || task.lastRunAt}` : ''}
-                        </Text>
-                      ) : null}
-                      {task.lastOutput ? (
-                        <Text numberOfLines={3} style={styles.cardCopy}>
-                          Latest note: {task.lastOutput}
-                        </Text>
-                      ) : null}
-                      <View style={styles.inlineActions}>
-                        <TouchableOpacity
-                          style={[styles.secondaryButtonSmall, !canTriggerTask(task) ? styles.networkRowDisabled : null]}
-                          onPress={() => void runTaskNow(task)}
-                          disabled={!canTriggerTask(task) || tasksBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Run now</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => void openTaskHistory(task)}
-                          disabled={tasksBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>History</Text>
-                        </TouchableOpacity>
-                        {canEditTask(task) ? (
-                          <>
-                            <TouchableOpacity
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => openTaskEditor(task)}
-                              disabled={tasksBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Edit</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => void removeTask(task)}
-                              disabled={tasksBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Delete</Text>
-                            </TouchableOpacity>
-                          </>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </>
+              <LibraryPane
+                styles={styles}
+                activeSpace={activeSpace}
+                activeSpaceKindLabel={activeSpaceKindLabel}
+                activeSpaceDetail={activeSpaceDetail}
+                activeChatSessionId={activeChatSessionId}
+                activeSpaceNameFallback={fileSpace === 'family' ? 'Shared space' : 'Private space'}
+                fileSpace={fileSpace}
+                taskScope={taskScope}
+                onlineDeviceAvailable={onlineDeviceAvailable}
+                canCreateTasks={canCreateTasks}
+                canManage={canManage}
+                canMutateActiveSpaceFiles={canMutateActiveSpaceFiles}
+                canMutateActiveSpaceLibrary={canMutateActiveSpaceLibrary}
+                libraryBusy={libraryBusy}
+                filesBusy={filesBusy}
+                tasksBusy={tasksBusy}
+                libraryError={libraryError}
+                filesError={filesError}
+                tasksError={tasksError}
+                libraryNotice={libraryNotice}
+                filesNotice={filesNotice}
+                tasksNotice={tasksNotice}
+                currentFilePath={currentFilePath}
+                libraryOverviewSections={libraryOverviewSections}
+                memories={spaceLibrary.memories}
+                summaries={spaceLibrary.summaries}
+                photoEntries={photoEntries}
+                fileListing={fileListing}
+                tasks={tasks}
+                homeMembers={homeMembers}
+                currentUserId={session.user.id}
+                summaryEmptyStateCopy={summaryEmptyStateCopy}
+                taskEditorQuickActionsCopy="Use Quick actions above when you want to add a new routine."
+                onOpenFileEditor={() => openFileEditor('mkdir')}
+                onOpenTaskEditor={() => openTaskEditor()}
+                onRefreshLibrary={() => void refreshLibrary()}
+                onOpenMemoryEditor={() => openMemoryEditor()}
+                onEditMemory={(memory) => openMemoryEditor(memory)}
+                onDeleteMemory={(memory) => confirmRemoveMemory(memory)}
+                onCaptureSummary={() => void captureActiveSpaceSummary()}
+                onSaveSummaryAsMemory={(summary) => saveSummaryAsMemory(summary)}
+                onDeleteSummary={(summary) => confirmRemoveSummary(summary)}
+                onRefreshPhotos={() => void refreshFiles()}
+                onUploadPhotos={() => void pickAndUploadFiles()}
+                onDownloadPhoto={(entry) => void downloadFileEntry(entry)}
+                onDeletePhoto={(entry) => void deleteFileEntry(entry)}
+                canManageFileEntry={canManageFileEntry}
+                onRefreshFiles={(path) => void refreshFiles(path)}
+                onUploadFiles={() => void pickAndUploadFiles()}
+                onDownloadFile={(entry) => void downloadFileEntry(entry)}
+                onRenameFile={(entry) => openFileEditor('rename', entry)}
+                onDeleteFile={(entry) => void deleteFileEntry(entry)}
+                onRefreshTasks={() => void refreshTasks()}
+                canEditTask={canEditTask}
+                canTriggerTask={canTriggerTask}
+                onRunTask={(task) => void runTaskNow(task)}
+                onOpenTaskHistory={(task) => void openTaskHistory(task)}
+                onEditTask={(task) => openTaskEditor(task)}
+                onDeleteTask={(task) => void removeTask(task)}
+              />
             ) : null}
 
             {shellTab === 'settings' ? (
