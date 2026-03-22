@@ -208,14 +208,16 @@ describe('App structure', () => {
 
   it('keeps shared-space IA labels away from internal template language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const spaceCreatorSource = readFileSync(resolve(__dirname, './components/SpaceCreatorModal.tsx'), 'utf8');
+    const viewedSpaceCardSource = readFileSync(resolve(__dirname, './components/ViewedSpaceCard.tsx'), 'utf8');
 
-    expect(appSource).toContain("Space you're viewing");
-    expect(appSource).toContain('{activeSpaceTemplateLabel || \'Shared home\'}');
-    expect(appSource).toContain('Create a new shared space');
-    expect(appSource).toContain('Space type');
-    expect(appSource).not.toContain('Current shared space');
-    expect(appSource).not.toContain('Active space identity');
-    expect(appSource).not.toContain('Type: {activeSpaceTemplateLabel || \'Shared home\'}');
+    expect(viewedSpaceCardSource).toContain("Space you're viewing");
+    expect(viewedSpaceCardSource).toContain("{activeSpaceTemplateLabel || 'Shared home'}");
+    expect(spaceCreatorSource).toContain('Create a new shared space');
+    expect(spaceCreatorSource).toContain('Space type');
+    expect(viewedSpaceCardSource).not.toContain('Current shared space');
+    expect(viewedSpaceCardSource).not.toContain('Active space identity');
+    expect(viewedSpaceCardSource).not.toContain("Type: {activeSpaceTemplateLabel || 'Shared home'}");
     expect(appSource).not.toContain('Template:');
     expect(appSource).not.toContain('>Template<');
     expect(appSource).not.toContain('Household space');
@@ -297,11 +299,15 @@ describe('App structure', () => {
 
   it('keeps household membership actions in plain language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const viewedSpaceCardSource = readFileSync(resolve(__dirname, './components/ViewedSpaceCard.tsx'), 'utf8');
+    const spaceMembersModalSource = readFileSync(resolve(__dirname, './components/SpaceMembersEditorModal.tsx'), 'utf8');
 
     expect(appSource).toContain('adjust who can manage Sparkbox');
-    expect(appSource).toContain('Manage members');
-    expect(appSource).toContain('Invite to this space');
-    expect(appSource).toContain('You stay in this space automatically.');
+    expect(viewedSpaceCardSource).toContain('Manage members');
+    expect(viewedSpaceCardSource).toContain('Invite to this space');
+    expect(viewedSpaceCardSource).toContain('You stay in this space automatically.');
+    expect(spaceMembersModalSource).toContain('Manage members');
+    expect(spaceMembersModalSource).toContain('Need someone new first? Create a household invite');
     expect(appSource).toContain('Give owner access');
     expect(appSource).toContain('Remove owner access');
     expect(appSource).toContain('Invite someone');

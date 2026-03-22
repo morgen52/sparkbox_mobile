@@ -23,6 +23,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
+import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
+import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
   buildSetupFlowResetState,
@@ -4605,57 +4608,37 @@ function App() {
                   </View>
                 </View>
 
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Space you're viewing</Text>
-                  <Text style={styles.cardCopy}>
-                    {activeSpace
+                <ViewedSpaceCard
+                  styles={styles}
+                  activeSpaceName={activeSpace?.name || ''}
+                  activeSpaceKindLabel={activeSpaceKindLabel}
+                  activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'Shared home'}
+                  summaryCopy={
+                    activeSpace
                       ? describeCurrentSpaceSummaryCopy(
                           activeSpace.name,
                           activeSpaceKindLabel,
                           activeSpace.kind,
                           activeSpace.threadCount,
                         )
-                      : 'Pick a space in Chats so Library and Settings stay on that same space.'}
-                  </Text>
-                  {activeSpace ? (
-                    <View style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{activeSpace.name}</Text>
-                        <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
-                      </View>
-                      <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || 'Shared home'}</Text>
-                      <Text style={styles.cardCopy}>{describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)}</Text>
-                    </View>
-                  ) : null}
-                  {canManage && activeSpace?.kind === 'shared' ? (
-                    <>
-                      <Text style={styles.cardCopy}>
-                        Adjust who belongs in this space here. You stay in this space automatically.
-                      </Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={openSpaceMembersEditor}
-                          disabled={spaceMembersEditorBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Manage members</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() =>
-                            void generateInvite('member', {
-                              targetSpaceId: activeSpace.id,
-                              targetSpaceName: activeSpace.name,
-                            })
-                          }
-                          disabled={settingsBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Invite to this space</Text>
-                        </Pressable>
-                      </View>
-                    </>
-                  ) : null}
-                </View>
+                      : ''
+                  }
+                  countsCopy={
+                    activeSpace
+                      ? describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)
+                      : ''
+                  }
+                  canManageSharedSpace={canManage && activeSpace?.kind === 'shared'}
+                  settingsBusy={settingsBusy}
+                  spaceMembersEditorBusy={spaceMembersEditorBusy}
+                  onManageMembers={openSpaceMembersEditor}
+                  onInviteToSpace={() =>
+                    void generateInvite('member', {
+                      targetSpaceId: activeSpace?.id,
+                      targetSpaceName: activeSpace?.name,
+                    })
+                  }
+                />
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Your account</Text>
@@ -5329,90 +5312,26 @@ function App() {
             ) : null}
           </ScrollView>
 
-          <Modal
-            animationType="slide"
-            transparent
+          <SpaceCreatorModal
             visible={spaceCreatorOpen}
+            busy={spaceCreatorBusy}
+            error={spaceCreatorError}
+            spaceName={spaceName}
+            selectedTemplateLabel={describeSpaceTemplate(spaceTemplate)}
+            templateOptions={SPACE_TEMPLATE_OPTIONS.map((template) => ({
+              id: template,
+              label: describeSpaceTemplate(template),
+              active: spaceTemplate === template,
+            }))}
+            memberOptions={spaceMemberOptions}
+            selectedMemberIds={spaceMemberIds}
+            styles={styles}
             onRequestClose={() => setSpaceCreatorOpen(false)}
-          >
-            <View style={styles.scannerOverlay}>
-              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-                <Text style={styles.selectionLabel}>New shared space</Text>
-                <Text style={styles.selectionTitle}>Create a new shared space</Text>
-                <Text style={styles.selectionCopy}>
-                  Pick what this space is for, give it a clear name, and choose who belongs in it. You are always included.
-                </Text>
-                <TextInput
-                  placeholder="Space name"
-                  placeholderTextColor="#7e8a83"
-                  style={styles.input}
-                  value={spaceName}
-                  onChangeText={setSpaceName}
-                />
-                <Text style={styles.selectionLabel}>Space type</Text>
-                <View style={styles.scopeRow}>
-                  {SPACE_TEMPLATE_OPTIONS.map((template) => {
-                    const active = spaceTemplate === template;
-                    return (
-                      <Pressable
-                        key={template}
-                        style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                        onPress={() => setSpaceTemplate(template)}
-                      >
-                        <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                          {describeSpaceTemplate(template)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text style={styles.selectionCopy}>
-                  Best for: {describeSpaceTemplate(spaceTemplate)}
-                </Text>
-                <Text style={styles.selectionLabel}>Members</Text>
-                <Text style={styles.selectionCopy}>
-                  Add people now or leave this empty and invite them later.
-                </Text>
-                {spaceMemberOptions.length === 0 ? (
-                  <Text style={styles.cardCopy}>No one else has joined this household yet.</Text>
-                ) : (
-                  <View style={styles.scopeRow}>
-                    {spaceMemberOptions.map((member) => {
-                      const active = spaceMemberIds.includes(member.id);
-                      return (
-                        <Pressable
-                          key={member.id}
-                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                          onPress={() => toggleSpaceMember(member.id)}
-                        >
-                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {member.display_name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-                {spaceCreatorError ? <Text style={styles.errorText}>{spaceCreatorError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={styles.secondaryButtonSmall}
-                    onPress={() => setSpaceCreatorOpen(false)}
-                    disabled={spaceCreatorBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.primaryButtonSmall}
-                    onPress={() => void submitSpaceCreator()}
-                    disabled={spaceCreatorBusy}
-                  >
-                    {spaceCreatorBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Create space</Text>}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            onChangeSpaceName={setSpaceName}
+            onSelectTemplate={(templateId) => setSpaceTemplate(templateId as Exclude<SpaceTemplate, 'private' | 'household'>)}
+            onToggleMember={toggleSpaceMember}
+            onSubmit={() => void submitSpaceCreator()}
+          />
 
           <Modal
             animationType="slide"
@@ -5465,86 +5384,27 @@ function App() {
             </View>
           </Modal>
 
-          <Modal
-            animationType="slide"
-            transparent
+          <SpaceMembersEditorModal
             visible={spaceMembersEditorOpen}
+            activeSpaceName={activeSpace?.name || ''}
+            ownerDisplayName={session?.user.display_name || 'You'}
+            memberOptions={activeSharedSpaceMemberOptions}
+            selectedMemberIds={spaceMembersEditorIds}
+            error={spaceMembersEditorError}
+            busy={spaceMembersEditorBusy}
+            settingsBusy={settingsBusy}
+            showInviteButton={activeSpace?.kind === 'shared'}
+            styles={styles}
             onRequestClose={() => setSpaceMembersEditorOpen(false)}
-          >
-            <View style={styles.scannerOverlay}>
-              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-                <Text style={styles.selectionLabel}>Manage members</Text>
-                <Text style={styles.selectionTitle}>
-                  {activeSpace ? `Who belongs in ${activeSpace.name}?` : 'Update this shared space'}
-                </Text>
-                <Text style={styles.selectionCopy}>
-                  Pick the household members who should stay in this shared space. You stay in this space automatically.
-                </Text>
-                <View style={styles.deviceRowCard}>
-                  <Text style={styles.networkName}>{session?.user.display_name || 'You'}</Text>
-                  <Text style={styles.cardCopy}>Owner · Always included</Text>
-                </View>
-                {activeSharedSpaceMemberOptions.length === 0 ? (
-                  <Text style={styles.cardCopy}>No one else has joined this household yet.</Text>
-                ) : (
-                  <View style={styles.scopeRow}>
-                    {activeSharedSpaceMemberOptions.map((member) => {
-                      const active = spaceMembersEditorIds.includes(member.id);
-                      return (
-                        <Pressable
-                          key={member.id}
-                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                          onPress={() => toggleSpaceMembersEditorMember(member.id)}
-                        >
-                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {member.display_name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-                <Text style={styles.cardCopy}>
-                  Need someone new first? Create a household invite, then bring them back into this shared space.
-                </Text>
-                {spaceMembersEditorError ? <Text style={styles.errorText}>{spaceMembersEditorError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={styles.secondaryButtonSmall}
-                    onPress={() => setSpaceMembersEditorOpen(false)}
-                    disabled={spaceMembersEditorBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                  </Pressable>
-                  {activeSpace?.kind === 'shared' ? (
-                    <Pressable
-                      style={styles.secondaryButtonSmall}
-                      onPress={() =>
-                        void generateInvite('member', {
-                          targetSpaceId: activeSpace.id,
-                          targetSpaceName: activeSpace.name,
-                        })
-                      }
-                      disabled={spaceMembersEditorBusy || settingsBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>Invite to this space</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    style={styles.primaryButtonSmall}
-                    onPress={() => void submitSpaceMembersEditor()}
-                    disabled={spaceMembersEditorBusy}
-                  >
-                    {spaceMembersEditorBusy ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>Save members</Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            onToggleMember={toggleSpaceMembersEditorMember}
+            onInviteToSpace={() =>
+              void generateInvite('member', {
+                targetSpaceId: activeSpace?.id,
+                targetSpaceName: activeSpace?.name,
+              })
+            }
+            onSubmit={() => void submitSpaceMembersEditor()}
+          />
 
           <Modal
             animationType="slide"
