@@ -30,6 +30,7 @@ import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
+import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
@@ -4041,131 +4042,22 @@ function App() {
                   </View>
                 </View>
 
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Devices and Network</Text>
-                  <Text style={styles.cardCopy}>
-                    {canReprovisionDevice
-                      ? 'Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through Wi-Fi setup.'
-                      : 'Owners can change Wi-Fi from here. Members can still see which Sparkbox devices are attached to this household.'}
-                  </Text>
-                    {homeDevices.map((device, deviceIndex) => (
-                      <View key={device.device_id} style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>
-                          {describeDeviceLabel(device.device_id, deviceIndex, homeDevices.length)}
-                        </Text>
-                        <Text style={styles.cardCopy}>{describeDeviceStatus(device.status)}</Text>
-                      {canReprovisionDevice ? (
-                        <View style={styles.inlineActions}>
-                          <Pressable
-                            style={styles.secondaryButtonSmall}
-                            onPress={() => void beginDeviceReprovision(device)}
-                          >
-                            <Text style={styles.secondaryButtonText}>Change Wi-Fi</Text>
-                          </Pressable>
-                        </View>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-
-                {canManage ? (
-                  <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Manage family apps</Text>
-                    <Text style={styles.cardCopy}>
-                      Install a family app once on this device, then decide which spaces should actually use it.
-                    </Text>
-                    {familyAppsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                    {activeSpace && recommendedFamilyApps.length > 0 ? (
-                      <>
-                        <Text style={styles.selectionLabel}>Recommended for {activeSpace.name}</Text>
-                        {recommendedFamilyApps.map((app) => (
-                          <View key={`recommended-${app.slug}`} style={styles.deviceRowCard}>
-                            <View style={styles.deviceRowHeadline}>
-                              <Text style={styles.networkName}>{app.title}</Text>
-                              <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
-                            </View>
-                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
-                            <Text style={styles.cardCopy}>
-                              Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
-                            </Text>
-                            {app.capabilities.length > 0 ? (
-                              <Text style={styles.cardCopy}>
-                                What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
-                              </Text>
-                            ) : null}
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.primaryButtonSmall}
-                                onPress={() => void installSelectedFamilyApp(app.slug)}
-                                disabled={settingsBusy}
-                              >
-                                <Text style={styles.primaryButtonText}>Install on this device</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))}
-                      </>
-                    ) : null}
-                    {installedFamilyApps.length > 0 ? (
-                      <>
-                        <Text style={styles.selectionLabel}>Installed on this device</Text>
-                        {installedFamilyApps.map((app) => (
-                          <View key={`installed-${app.slug}`} style={styles.deviceRowCard}>
-                            <View style={styles.deviceRowHeadline}>
-                              <Text style={styles.networkName}>{app.title}</Text>
-                              <Text style={styles.statusTagOnline}>On this device</Text>
-                            </View>
-                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
-                            <Text style={styles.cardCopy}>
-                              Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
-                            </Text>
-                            <Text style={styles.cardCopy}>
-                              {app.supportsProactiveMessages ? 'Can take initiative' : 'Only speaks when asked'}
-                              {app.supportsPrivateRelay ? ' · Can help with private relays' : ''}
-                              {app.requiresOwnerConfirmation ? ' · Relays stay owner-approved' : ''}
-                            </Text>
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.secondaryButtonSmall}
-                                onPress={() => void uninstallInstalledFamilyApp(app.slug)}
-                                disabled={settingsBusy}
-                              >
-                                <Text style={styles.secondaryButtonText}>Remove from this device</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))}
-                      </>
-                    ) : null}
-                    <Text style={styles.selectionLabel}>Available for this device</Text>
-                    {availableFamilyApps.map((app) => (
-                      <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
-                          <View style={styles.deviceRowHeadline}>
-                            <Text style={styles.networkName}>{app.title}</Text>
-                            <Text style={styles.tagMuted}>{describeFamilyAppRiskLevel(app.riskLevel)}</Text>
-                          </View>
-                          {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
-                          <Text style={styles.cardCopy}>
-                            Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
-                          </Text>
-                          {app.capabilities.length > 0 ? (
-                            <Text style={styles.cardCopy}>
-                              What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
-                            </Text>
-                          ) : null}
-                          <View style={styles.inlineActions}>
-                            <Pressable
-                              style={styles.primaryButtonSmall}
-                              onPress={() => void installSelectedFamilyApp(app.slug)}
-                              disabled={settingsBusy}
-                            >
-                              <Text style={styles.primaryButtonText}>Install</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      ))}
-                  </View>
-                ) : null}
+                <SettingsDevicesPane
+                  styles={styles}
+                  canManage={canManage}
+                  canReprovisionDevice={canReprovisionDevice}
+                  settingsBusy={settingsBusy}
+                  familyAppsBusy={familyAppsBusy}
+                  activeSpaceName={activeSpace?.name || ''}
+                  activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'space'}
+                  homeDevices={homeDevices}
+                  recommendedFamilyApps={recommendedFamilyApps}
+                  installedFamilyApps={installedFamilyApps}
+                  availableFamilyApps={availableFamilyApps}
+                  onBeginDeviceReprovision={(device) => void beginDeviceReprovision(device)}
+                  onInstallSelectedFamilyApp={(slug) => void installSelectedFamilyApp(slug)}
+                  onUninstallInstalledFamilyApp={(slug) => void uninstallInstalledFamilyApp(slug)}
+                />
 
                 <OwnerSettingsPane
                   styles={styles}

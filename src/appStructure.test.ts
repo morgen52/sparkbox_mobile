@@ -233,15 +233,17 @@ describe('App structure', () => {
   it('keeps owner settings copy away from generic box wording', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
+    const settingsDevicesSource = readFileSync(resolve(__dirname, './components/SettingsDevicesPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Install them once on this device');
-    expect(appSource).toContain('Install a family app once on this device');
-    expect(appSource).toContain('Installed on this device');
-    expect(appSource).toContain('Available for this device');
+    expect(appSource).toContain('SettingsDevicesPane');
+    expect(settingsDevicesSource).toContain('Install a family app once on this device');
+    expect(settingsDevicesSource).toContain('Installed on this device');
+    expect(settingsDevicesSource).toContain('Available for this device');
     expect(appSource).toContain('enable that behavior on this device');
-    expect(appSource).toContain('Install on this device');
+    expect(settingsDevicesSource).toContain('Install on this device');
     expect(appSource).toContain('removed from this device');
-    expect(appSource).toContain('which Sparkbox devices are attached to this household');
+    expect(settingsDevicesSource).toContain('which Sparkbox devices are attached to this household');
     expect(appSource).toContain('OwnerSettingsPane');
     expect(ownerSettingsSource).toContain('Restart and recovery');
     expect(ownerSettingsSource).toContain('What Sparkbox is doing now');
@@ -255,9 +257,9 @@ describe('App structure', () => {
     expect(ownerSettingsSource).toContain('health check');
     expect(ownerSettingsSource).toContain('summary');
     expect(appSource).not.toContain('Install them once on this Box');
-    expect(appSource).not.toContain('Install a family app once on this Box');
-    expect(appSource).not.toContain('Installed on this Box');
-    expect(appSource).not.toContain('Available for this Box');
+    expect(settingsDevicesSource).not.toContain('Install a family app once on this Box');
+    expect(settingsDevicesSource).not.toContain('Installed on this Box');
+    expect(settingsDevicesSource).not.toContain('Available for this Box');
     expect(appSource).not.toContain('on this Box');
     expect(appSource).not.toContain('from this Box');
     expect(appSource).not.toContain('Install on this Box');
@@ -298,11 +300,12 @@ describe('App structure', () => {
 
   it('keeps family-app help text away from relay capability jargon', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const settingsDevicesSource = readFileSync(resolve(__dirname, './components/SettingsDevicesPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Can help with private relays');
-    expect(appSource).toContain('Relays stay owner-approved');
-    expect(appSource).not.toContain('Helps with private relay');
-    expect(appSource).not.toContain('Needs owner confirmation');
+    expect(settingsDevicesSource).toContain('Can help with private relays');
+    expect(settingsDevicesSource).toContain('Relays stay owner-approved');
+    expect(settingsDevicesSource).not.toContain('Helps with private relay');
+    expect(settingsDevicesSource).not.toContain('Needs owner confirmation');
   });
 
   it('keeps household membership actions in plain language', () => {
