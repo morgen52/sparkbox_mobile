@@ -486,32 +486,35 @@ describe('App structure', () => {
 
   it('keeps onboarding copy away from provisioning jargon', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const setupFlowSource = readFileSync(resolve(__dirname, './components/SetupFlowPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Find it first. Bring it online second.');
-    expect(appSource).toContain('guide it onto home Wi-Fi');
-    expect(appSource).toContain('Scan the device label, reserve Sparkbox for');
-    expect(appSource).toContain('Sparkbox is already in your household. Get it ready for Wi-Fi again.');
-    expect(appSource).toContain('Get Sparkbox ready');
-    expect(appSource).toContain('temporary setup network');
-    expect(appSource).toContain('Paste the Sparkbox setup code or setup link.');
+    expect(appSource).toContain('SetupFlowPane');
+    expect(setupFlowSource).toContain('Find it first. Bring it online second.');
+    expect(setupFlowSource).toContain('guide it onto home Wi-Fi');
+    expect(setupFlowSource).toContain('Scan the device label, reserve Sparkbox for');
+    expect(setupFlowSource).toContain('Sparkbox is already in your household. Get it ready for Wi-Fi again.');
+    expect(setupFlowSource).toContain('Get Sparkbox ready');
+    expect(setupFlowSource).toContain('temporary setup network');
+    expect(setupFlowSource).toContain('Paste the Sparkbox setup code or setup link.');
     expect(appSource).toContain('Scan the Sparkbox label or paste the setup code first.');
-    expect(appSource).toContain('Sign-in may be required');
-    expect(appSource).toContain('Not supported');
-    expect(appSource).not.toContain('Attach first. Bring it online second.');
-    expect(appSource).not.toContain('Sparkbox setup mode');
-    expect(appSource).not.toContain('Attach Sparkbox');
-    expect(appSource).not.toContain('re-claim');
-    expect(appSource).not.toContain('temporary hotspot');
-    expect(appSource).not.toContain('claim link');
-    expect(appSource).not.toContain('Portal possible');
-    expect(appSource).not.toContain('Unsupported');
+    expect(setupFlowSource).toContain('Sign-in may be required');
+    expect(setupFlowSource).toContain('Not supported');
+    expect(setupFlowSource).not.toContain('Attach first. Bring it online second.');
+    expect(setupFlowSource).not.toContain('Sparkbox setup mode');
+    expect(setupFlowSource).not.toContain('Attach Sparkbox');
+    expect(setupFlowSource).not.toContain('re-claim');
+    expect(setupFlowSource).not.toContain('temporary hotspot');
+    expect(setupFlowSource).not.toContain('claim link');
+    expect(setupFlowSource).not.toContain('Portal possible');
+    expect(setupFlowSource).not.toContain('Unsupported');
   });
 
   it('keeps camera permission recovery actionable in the scan flow', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const setupFlowSource = readFileSync(resolve(__dirname, './components/SetupFlowPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Allow camera access in Settings, or paste the Sparkbox setup code manually.');
-    expect(appSource).toContain('Open app settings');
-    expect(appSource).not.toContain('Camera permission is required to scan the Sparkbox QR code.');
+    expect(setupFlowSource).toContain('Open app settings');
+    expect(setupFlowSource).not.toContain('Camera permission is required to scan the Sparkbox QR code.');
   });
 });

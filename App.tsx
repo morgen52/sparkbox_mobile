@@ -31,12 +31,11 @@ import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
-import { AuthSetupCard, SignedInSetupCard } from './src/components/SetupAccountCard';
+import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
   buildSetupFlowResetState,
-  describeActivationStatus,
   describeActivityEvent,
   describeChatListTimestamp,
   describeChatMessageTimestamp,
@@ -165,8 +164,6 @@ import {
   canRemoveHouseholdMember,
   canManageHousehold,
   describeDeviceLabel,
-  describeDeviceStatus,
-  describeSetupDeviceLabel,
   describeHouseholdRole,
   hasOnlineDevice,
   type ShellTab,
@@ -4407,341 +4404,81 @@ function App() {
     <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
       <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>Sparkbox setup</Text>
-          <Text style={styles.title}>Find it first. Bring it online second.</Text>
-          <Text style={styles.subtitle}>
-            {claimStepVisible
-              ? `Scan the device label, reserve Sparkbox for ${householdName}, then guide it onto home Wi-Fi.`
-              : 'Sparkbox is already in your household. Get it ready for Wi-Fi again.'}
-          </Text>
-        </View>
-
-        {canReturnToShell ? (
-          <View style={styles.inlineActions}>
-            <Pressable style={styles.secondaryButtonSmall} onPress={returnToShell}>
-              <Text style={styles.secondaryButtonText}>Back to household</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={styles.stepRail}>
-          {[1, 2, 3, 4].map((step) => {
-            const done = step < activeStep;
-            const current = step === activeStep;
-            return (
-              <View
-                key={step}
-                style={[
-                  styles.stepRailItem,
-                  done ? styles.stepRailItemDone : null,
-                  current ? styles.stepRailItemCurrent : null,
-                ]}
-              >
-                <Text style={[
-                  styles.stepRailNumber,
-                  done || current ? styles.stepRailNumberActive : null,
-                ]}>
-                  {step}
-                </Text>
-                <Text style={[
-                  styles.stepRailLabel,
-                  done || current ? styles.stepRailLabelActive : null,
-                ]}>
-                  {setupStepLabels[step - 1]}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {!session ? (
-          <AuthSetupCard
-            styles={styles}
-            authCardTitle={authCardTitle}
-            authCardCopy={authCardCopy}
-            authMode={authMode}
-            email={email}
-            displayName={displayName}
-            inviteCode={inviteCode}
-            password={password}
-            invitePreviewBusy={invitePreviewBusy}
-            invitePreviewError={invitePreviewError}
-            invitePreview={invitePreview}
-            authError={authError}
-            authBusy={authBusy}
-            authSubmitLabel={authSubmitLabel}
-            onLayout={(event) => captureStepOffset(1, event)}
-            onChangeAuthMode={(mode) => {
-              setAuthMode(mode);
-              setAuthError('');
-            }}
-            onChangeEmail={setEmail}
-            onChangeDisplayName={setDisplayName}
-            onChangeInviteCode={setInviteCode}
-            onChangePassword={setPassword}
-            onSubmit={() => void submitAuth()}
-            renderInvitePreviewSummary={buildInvitePreviewSummary}
-          />
-        ) : (
-          <SignedInSetupCard
-            styles={styles}
-            displayName={session.user.display_name}
-            householdName={session.household.name}
-            canReturnToShell={canReturnToShell}
-            onLogout={() => void logout()}
-            onReturnToShell={returnToShell}
-            onResetFlow={resetFlow}
-          />
-        )}
-
-        {session && claimStepVisible ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(1, event)}>
-            <Text style={styles.cardTitle}>1. Scan the Sparkbox label</Text>
-            {step1Collapsed ? (
-              <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(claimPayload?.deviceId)}</Text>
-                <Text style={styles.stepSummaryCopy}>
-                  Reserved for {householdName}. The app can now guide Sparkbox onto home Wi-Fi.
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.cardCopy}>
-                  This reserves the device for your household immediately. Wi-Fi comes next.
-                </Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  multiline
-                  numberOfLines={4}
-                  placeholder="Paste the Sparkbox setup code or setup link."
-                  placeholderTextColor="#7e8a83"
-                  style={[styles.input, styles.textArea]}
-                  value={claimInput}
-                  onChangeText={applyClaimInput}
-                />
-                {claimPayload ? (
-                  <View style={styles.claimPreview}>
-                    <Text style={styles.claimPreviewLabel}>Sparkbox found</Text>
-                    <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(claimPayload.deviceId)}</Text>
-                    <Text style={styles.cardCopy}>Your setup code is ready. Wi-Fi comes next.</Text>
-                  </View>
-                ) : null}
-                {claimError ? <Text style={styles.errorText}>{claimError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable style={styles.primaryButtonSmall} onPress={() => void openScanner()}>
-                    <Text style={styles.primaryButtonText}>Scan QR</Text>
-                  </Pressable>
-                  {claimError === CAMERA_PERMISSION_RECOVERY_MESSAGE ? (
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => void Linking.openSettings()}>
-                      <Text style={styles.secondaryButtonText}>Open app settings</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable style={styles.secondaryButtonSmall} onPress={() => void startClaim()} disabled={claimBusy}>
-                    {claimBusy ? <ActivityIndicator color="#0f5132" /> : <Text style={styles.secondaryButtonText}>Get Sparkbox ready</Text>}
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </View>
-        ) : null}
-
-        {session && !claimStepVisible ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(1, event)}>
-            <Text style={styles.cardTitle}>1. Get Sparkbox ready</Text>
-            {step1Collapsed ? (
-              <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
-                <Text style={styles.stepSummaryCopy}>
-                  This device is already in your household. You only need to get it ready for Wi-Fi updates.
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.cardCopy}>
-                  No QR scan is needed. If Sparkbox is in a new place, power it on and wait for{' '}
-                  {HOTSPOT_SSID}. If it is still on the old network, use this screen when the hotspot appears.
-                </Text>
-                <View style={styles.claimPreview}>
-                  <Text style={styles.claimPreviewLabel}>Device</Text>
-                  <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
-                </View>
-                {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
-              </>
-            )}
-          </View>
-        ) : null}
-
-        {step2Visible ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(2, event)}>
-            <Text style={styles.cardTitle}>2. Connect to Sparkbox</Text>
-            {step2Collapsed ? (
-              <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{HOTSPOT_SSID}</Text>
-                <Text style={styles.stepSummaryCopy}>
-                  Your phone reached Sparkbox. Home Wi-Fi setup is next.
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.cardCopy}>
-                  Sparkbox now shares a temporary setup network. The app will try to switch your phone automatically.
-                </Text>
-                {hotspotStage === 'joining_setup' || provisionBusy ? (
-                  <View style={styles.row}>
-                    <ActivityIndicator color="#0b6e4f" />
-                    <Text style={styles.loadingInline}>{provisionMessage}</Text>
-                  </View>
-                ) : null}
-                {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
-                {setupFlowKind === 'reprovision' && hotspotStage === 'idle' ? (
-                  <Pressable
-                    style={styles.primaryButton}
-                    onPress={() => void beginHotspotOnboarding(setupDeviceId || '', '')}
-                    disabled={!setupDeviceId}
-                  >
-                    <Text style={styles.primaryButtonText}>Connect to {HOTSPOT_SSID}</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  style={setupFlowKind === 'reprovision' && hotspotStage === 'idle' ? styles.secondaryButton : styles.primaryButton}
-                  onPress={() => void openInternetPanel()}
-                  disabled={setupFlowKind === 'first_run' && !pairingToken}
-                >
-                  <Text
-                    style={
-                      setupFlowKind === 'reprovision' && hotspotStage === 'idle'
-                        ? styles.secondaryButtonText
-                        : styles.primaryButtonText
-                    }
-                  >
-                    Open Wi-Fi settings
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        ) : null}
-
-        {step3Visible ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(3, event)}>
-            <Text style={styles.cardTitle}>3. Choose home Wi-Fi</Text>
-            {step3Collapsed ? (
-              <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{homeWifiTarget?.ssid || selectedSsid || previousInternetSsid || 'Home Wi-Fi selected'}</Text>
-                <Text style={styles.stepSummaryCopy}>
-                  Sparkbox is already using this choice to leave setup and finish activation.
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.cardCopy}>
-                  {hotspotStage === 'local_setup'
-                    ? `Your phone is on ${HOTSPOT_SSID}. Choose the Wi-Fi Sparkbox should join next.`
-                    : 'Sparkbox has your Wi-Fi choice and is now using it to finish setup.'}
-                </Text>
-                {hotspotStage === 'failed' && bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
-                {hotspotStage === 'local_setup' ? (
-                  <>
-                    <View style={styles.inlineActions}>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => void refreshNetworks()}
-                        disabled={networksBusy || provisionBusy}
-                      >
-                        {networksBusy ? <ActivityIndicator color="#17352a" /> : <Text style={styles.secondaryButtonText}>Refresh nearby Wi-Fi</Text>}
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={openManualEntry}
-                        disabled={provisionBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>Enter manually</Text>
-                      </Pressable>
-                    </View>
-                    {networks.map((network) => {
-                      const unsupported = network.support_level === 'unsupported';
-                      const selected = selectedNetwork?.ssid === network.ssid && networkSheetOpen && !manualEntry;
-                      return (
-                        <Pressable
-                          key={network.ssid}
-                          style={[
-                            styles.networkRow,
-                            unsupported ? styles.networkRowDisabled : null,
-                            selected ? styles.selectionCard : null,
-                          ]}
-                          onPress={() => chooseNetwork(network)}
-                          disabled={unsupported || provisionBusy}
-                        >
-                          <View style={styles.networkLeft}>
-                            <Text style={styles.networkName}>{network.ssid}</Text>
-                            <Text style={styles.networkMeta}>
-                              {network.requires_password ? String(network.security || 'secured').toUpperCase() : 'Open'} · {Math.round(Number(network.signal_percent || 0))}%
-                            </Text>
-                            {network.support_reason ? <Text style={styles.networkWarning}>{network.support_reason}</Text> : null}
-                          </View>
-                          <View style={styles.networkTags}>
-                            {network.known ? <Text style={styles.tag}>Saved</Text> : null}
-                            {network.support_level === 'warning' ? <Text style={styles.tagWarning}>Sign-in may be required</Text> : null}
-                            {unsupported ? <Text style={styles.tagMuted}>Not supported</Text> : null}
-                            {!unsupported ? (
-                              <View style={[styles.rowAction, selected ? null : styles.rowActionDisabled]}>
-                                <Text style={[styles.linkText, !selected ? styles.linkTextDisabled : null]}>{selected ? 'Selected' : 'Choose'}</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </>
-                ) : null}
-              </>
-            )}
-          </View>
-        ) : null}
-
-        {step4Visible ? (
-          <View style={styles.card} onLayout={(event) => captureStepOffset(4, event)}>
-            <Text style={styles.cardTitle}>4. Activation</Text>
-            <Text style={styles.cardCopy}>{provisionMessage}</Text>
-            {setupPageState?.status ? (
-              <Text style={styles.statusText}>Setup progress: {describeActivationStatus(setupPageState.status)}</Text>
-            ) : null}
-            {provisionBusy && !portalUrl ? <ActivityIndicator color="#0b6e4f" /> : null}
-            {portalUrl ? (
-              <View style={styles.portalBox}>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() => void Linking.openURL(portalUrl)}
-                >
-                  <Text style={styles.primaryButtonText}>Open sign-in page</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() => void startCloudVerification()}
-                >
-                  <Text style={styles.secondaryButtonText}>Check again after sign-in</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {completedDeviceId ? (
-              <View style={styles.successBox}>
-                <Text style={styles.successTitle}>Sparkbox is ready</Text>
-                <Text style={styles.successCopy}>
-                  {describeSetupDeviceLabel(completedDeviceId)} is online in {householdName}. You can now go back to the household app and chat normally.
-                </Text>
-                {canReturnToShell ? (
-                  <View style={styles.inlineActions}>
-                    <Pressable style={styles.primaryButtonSmall} onPress={returnToShell}>
-                      <Text style={styles.primaryButtonText}>Back to household</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        <SetupFlowPane
+          styles={styles}
+          householdName={householdName}
+          session={session}
+          canReturnToShell={canReturnToShell}
+          returnToShell={returnToShell}
+          resetFlow={resetFlow}
+          logout={() => void logout()}
+          claimStepVisible={claimStepVisible}
+          activeStep={activeStep}
+          setupStepLabels={setupStepLabels}
+          step1Collapsed={step1Collapsed}
+          step2Visible={step2Visible}
+          step2Collapsed={step2Collapsed}
+          step3Visible={step3Visible}
+          step3Collapsed={step3Collapsed}
+          step4Visible={step4Visible}
+          authCardTitle={authCardTitle}
+          authCardCopy={authCardCopy}
+          authMode={authMode}
+          email={email}
+          displayName={displayName}
+          inviteCode={inviteCode}
+          password={password}
+          invitePreviewBusy={invitePreviewBusy}
+          invitePreviewError={invitePreviewError}
+          invitePreview={invitePreview}
+          authError={authError}
+          authBusy={authBusy}
+          authSubmitLabel={authSubmitLabel}
+          claimInput={claimInput}
+          claimPayload={claimPayload}
+          claimError={claimError}
+          cameraPermissionRecoveryMessage={CAMERA_PERMISSION_RECOVERY_MESSAGE}
+          claimBusy={claimBusy}
+          bleError={bleError}
+          setupDeviceId={setupDeviceId}
+          hotspotSsid={HOTSPOT_SSID}
+          hotspotStage={hotspotStage}
+          setupFlowKind={setupFlowKind}
+          pairingToken={pairingToken}
+          provisionBusy={provisionBusy}
+          provisionMessage={provisionMessage}
+          homeWifiTarget={homeWifiTarget}
+          selectedSsid={selectedSsid}
+          previousInternetSsid={previousInternetSsid}
+          networksBusy={networksBusy}
+          networks={networks}
+          selectedNetwork={selectedNetwork}
+          networkSheetOpen={networkSheetOpen}
+          manualEntry={manualEntry}
+          portalUrl={portalUrl}
+          completedDeviceId={completedDeviceId}
+          setupPageState={setupPageState}
+          onCaptureStepOffset={captureStepOffset}
+          onChangeAuthMode={(mode) => {
+            setAuthMode(mode);
+            setAuthError('');
+          }}
+          onChangeEmail={setEmail}
+          onChangeDisplayName={setDisplayName}
+          onChangeInviteCode={setInviteCode}
+          onChangePassword={setPassword}
+          onSubmitAuth={() => void submitAuth()}
+          renderInvitePreviewSummary={buildInvitePreviewSummary}
+          onApplyClaimInput={applyClaimInput}
+          onOpenScanner={() => void openScanner()}
+          onStartClaim={() => void startClaim()}
+          onBeginHotspotOnboarding={() => void beginHotspotOnboarding(setupDeviceId || '', '')}
+          onOpenInternetPanel={() => void openInternetPanel()}
+          onRefreshNetworks={() => void refreshNetworks()}
+          onOpenManualEntry={openManualEntry}
+          onChooseNetwork={chooseNetwork}
+          onStartCloudVerification={() => void startCloudVerification()}
+        />
       </ScrollView>
 
       <Modal
