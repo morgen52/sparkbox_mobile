@@ -32,6 +32,7 @@ import { LibraryPane } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
+import { SetupUtilityModals } from './src/components/SetupUtilityModals';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
@@ -4481,116 +4482,33 @@ function App() {
         />
       </ScrollView>
 
-      <Modal
-        animationType="slide"
-        presentationStyle="overFullScreen"
-        transparent
-        visible={fileEditorOpen}
-        onRequestClose={() => setFileEditorOpen(false)}
-      >
-        <View style={styles.networkSheetBackdrop}>
-          <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{fileEditorMode === 'rename' ? 'Rename item' : 'New folder'}</Text>
-            <Text style={styles.selectionTitle}>
-              {fileEditorMode === 'rename' ? fileTargetEntry?.name || 'Rename' : 'Create folder'}
-            </Text>
-            <Text style={styles.selectionCopy}>
-              {fileEditorMode === 'rename'
-                ? 'Use a short, clear name. Sparkbox keeps the item in the same folder.'
-                : 'Create a new folder here so files for this space stay organized.'}
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={fileEditorMode === 'rename' ? 'New name' : 'Folder name'}
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={fileEditorValue}
-              onChangeText={setFileEditorValue}
-            />
-            {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
-            <View style={styles.inlineActions}>
-              <Pressable
-                style={styles.secondaryButtonSmall}
-                onPress={() => setFileEditorOpen(false)}
-                disabled={filesBusy}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.primaryButtonSmall}
-                onPress={() => void submitFileEditor()}
-                disabled={filesBusy}
-              >
-                {filesBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{fileEditorMode === 'rename' ? 'Rename' : 'Create folder'}</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        animationType="slide"
-        presentationStyle="overFullScreen"
-        transparent
-        visible={networkSheetOpen}
-        onRequestClose={() => setNetworkSheetOpen(false)}
-      >
-        <View style={styles.networkSheetBackdrop}>
-          <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{manualEntry || !selectedNetwork ? 'Manual entry' : 'Connect Sparkbox'}</Text>
-            <Text style={styles.selectionTitle}>
-              {selectedSsid || previousInternetSsid || 'Enter your home Wi-Fi'}
-            </Text>
-            <Text style={styles.selectionCopy}>
-              {selectedNetwork?.known
-                ? 'Sparkbox has used this Wi-Fi before. Leave the password blank unless it changed.'
-                : 'Enter the Wi-Fi password, then Sparkbox will leave setup and join this network.'}
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Wi-Fi name"
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={selectedSsid}
-              onChangeText={setSelectedSsid}
-              editable={manualEntry || !selectedNetwork}
-            />
-            {(selectedNetwork?.requires_password ?? true) || manualEntry || !selectedNetwork ? (
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                placeholder={selectedNetwork?.known ? 'Password (optional if unchanged)' : 'Wi-Fi password'}
-                placeholderTextColor="#7e8a83"
-                style={styles.input}
-                value={wifiPassword}
-                onChangeText={setWifiPassword}
-              />
-            ) : null}
-            <View style={styles.inlineActions}>
-              <Pressable
-                style={styles.secondaryButtonSmall}
-                onPress={() => setNetworkSheetOpen(false)}
-                disabled={provisionBusy}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButtonSmall, !canSubmitWifi ? styles.networkRowDisabled : null]}
-                onPress={() => {
-                  setNetworkSheetOpen(false);
-                  void submitWifi();
-                }}
-                disabled={!canSubmitWifi}
-              >
-                {provisionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Connect</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <SetupUtilityModals
+        styles={styles}
+        fileEditorOpen={fileEditorOpen}
+        fileEditorMode={fileEditorMode}
+        fileTargetEntry={fileTargetEntry}
+        fileEditorValue={fileEditorValue}
+        filesError={filesError}
+        filesBusy={filesBusy}
+        networkSheetOpen={networkSheetOpen}
+        manualEntry={manualEntry}
+        selectedNetwork={selectedNetwork}
+        selectedSsid={selectedSsid}
+        previousInternetSsid={previousInternetSsid}
+        wifiPassword={wifiPassword}
+        canSubmitWifi={canSubmitWifi}
+        provisionBusy={provisionBusy}
+        onCloseFileEditor={() => setFileEditorOpen(false)}
+        onChangeFileEditorValue={setFileEditorValue}
+        onSubmitFileEditor={() => void submitFileEditor()}
+        onCloseNetworkSheet={() => setNetworkSheetOpen(false)}
+        onChangeSelectedSsid={setSelectedSsid}
+        onChangeWifiPassword={setWifiPassword}
+        onSubmitWifi={() => {
+          setNetworkSheetOpen(false);
+          void submitWifi();
+        }}
+      />
 
       <Modal
         animationType="slide"

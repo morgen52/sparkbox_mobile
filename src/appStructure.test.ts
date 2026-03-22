@@ -199,10 +199,10 @@ describe('App structure', () => {
   });
 
   it('keeps file editor copy away from current-file-space jargon', () => {
-    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const setupUtilitySource = readFileSync(resolve(__dirname, './components/SetupUtilityModals.tsx'), 'utf8');
 
-    expect(appSource).toContain('Create a new folder here so files for this space stay organized.');
-    expect(appSource).not.toContain('Create a new folder in the current file space.');
+    expect(setupUtilitySource).toContain('Create a new folder here so files for this space stay organized.');
+    expect(setupUtilitySource).not.toContain('Create a new folder in the current file space.');
   });
 
   it('keeps memory deletion copy away from current-memory jargon', () => {
