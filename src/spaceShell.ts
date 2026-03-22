@@ -341,7 +341,7 @@ export function describeChatComposerPlaceholder(
 ): string {
   if (hasActiveChatSession) {
     if (sharedChatIsVisible) {
-      return 'Send to everyone in this space';
+      return 'Message the group';
     }
     return spaceDetail?.kind === 'shared' ? 'Ask Sparkbox in this chat' : 'Ask Sparkbox about this topic';
   }

@@ -405,7 +405,7 @@ describe('space identity helpers', () => {
     expect(describeActiveChatEmptyStateCopy(copyContext)).toBe(
       'Pick the main group chat or another shared chat to keep everyone in one running conversation.',
     );
-    expect(describeChatComposerPlaceholder(copyContext, true, true)).toBe('Send to everyone in this space');
+    expect(describeChatComposerPlaceholder(copyContext, true, true)).toBe('Message the group');
     expect(describeChatComposerPlaceholder(copyContext, true, false)).toBe('Ask Sparkbox in this chat');
   });
 

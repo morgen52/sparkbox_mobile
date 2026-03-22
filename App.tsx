@@ -10,6 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   LayoutChangeEvent,
   Linking,
   Modal,
@@ -23,8 +24,38 @@ import {
 } from 'react-native';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
+  buildSetupFlowResetState,
+  describeActivationStatus,
+  describeActivityEvent,
+  describeAiProvider,
+  describeChatListTimestamp,
+  describeChatMessageTimestamp,
+  decodeChatMessageContent,
+  describeDiagnosticsSource,
+  describeDeviceActionNotice,
+  describeLibraryFileListEmptyState,
+  describeLibraryFileListTitle,
+  describeLibraryPhotoEmptyState,
+  describeLibraryTaskListEmptyState,
+  describeLibraryTaskListTitle,
+  describeFileTimestamp,
+  describeFileUploader,
+  describeInviteExpiry,
+  describeInviteRole,
+  describeServiceAvailabilityError,
+  describeTaskEnabledState,
+  describeTaskExecution,
+  describeTaskRunFinishedAt,
+  describeTaskRunOutput,
+  describeTaskRunStartedAt,
+  describeTaskRunStatus,
+  describeTaskSchedule,
+  describeUiDateTime,
+  describeShellSubtitle,
+  formatByteSize,
   PHASE_ONE_TABS,
   resolvePhaseOneSurface,
+  summarizeOwnerServiceOutput,
   type PhaseOneSurface,
 } from './src/appShell';
 import {
@@ -77,6 +108,7 @@ import {
   openSpaceSideChannel,
   openSpaceThreadSession,
   relayHouseholdSpaceMessage,
+  reconnectDevice,
   renameHouseholdPath,
   resetDeviceToSetupMode,
   type HouseholdTaskScope,
@@ -118,24 +150,82 @@ import {
   type SpaceTemplate,
 } from './src/householdApi';
 import {
+  canChangeMemberRole,
   canReprovisionDeviceFromSettings,
+  canRemoveHouseholdMember,
   canManageHousehold,
+  describeDeviceLabel,
+  describeDiagnosticsNetworkSummary,
+  describeDiagnosticsIssueReasons,
+  describeDiagnosticsPreflightReasons,
+  describeDiagnosticsWifiConnection,
+  describeDeviceStatus,
+  describeSetupDeviceLabel,
+  describeHouseholdRole,
+  describeOwnerConsoleInference,
+  describeOwnerConsoleModelStatus,
+  describeOwnerRuntimeActiveRequest,
+  describeOwnerRuntimeQueueEntry,
+  describeOwnerRuntimeQueueSummary,
+  describeOwnerServiceActionLabel,
+  describeOwnerConsoleRuntimeStatus,
   hasOnlineDevice,
   type ShellTab,
 } from './src/householdState';
 import {
+  buildChatScopeResetState,
+  buildSpaceScopedResetState,
   buildSpaceScopedFilePath,
   buildSharedChatParticipantLabels,
+  buildSharedChatParticipantSummary,
+  canCreateChatSession,
   canManageChatSession,
+  canManageSpaceFamilyApps,
+  canMutateSpaceFiles,
+  canMutateSpaceLibrary,
+  describeActiveChatEmptyStateCopy,
+  describeActiveChatFallbackTitle,
+  describeActiveChatSessionCopy,
+  describeChatEditorPrimaryActionLabel,
+  describeChatEditorTitle,
+  describeChatEditorVerb,
+  describeChatNamePlaceholder,
+  describeChatSessionBadge,
+  describeChatSessionCreatePermissionError,
+  describeChatSessionEmptyStateCopy,
+  describeChatSessionOpenError,
+  describeChatSessionPrimaryActionLabel,
+  describeChatSessionPreview,
+  describeChatSessionPurpose,
   describeChatAccess,
+  describeChatComposerPlaceholder,
   describeChatSendPhase,
+  shouldAppendAssistantReply,
+  describeCaptureSummaryActionLabel,
+  describeCurrentSpaceSummaryCopy,
+  describeFamilyAppRiskLevel,
+  describeSummaryEmptyStateCopy,
+  describeSummarySectionCopy,
+  describeSpaceCounts,
   describeSpaceKind,
+  describeSpaceSummaryCaptureMissingChatCopy,
+  describeSpaceThreadEmptyStateCopy,
+  describeSpaceThreadRowBadge,
+  describeSpaceThreadRowCopy,
   describeSpaceTemplate,
+  describeSpaceThreadSectionCopy,
+  describeSpaceThreadSectionTitle,
+  formatFamilyAppCapabilities,
+  formatFamilyAppConfigSummary,
   formatSpaceTemplateList,
   getRelayTargets,
+  isSharedGroupChatSession,
+  looksLikeSharedGroupChatSession,
   mapSpaceKindToLegacyScope,
   resolveActiveSpaceId,
   resolveRelayTargetUserId,
+  resolveSpaceCopyContext,
+  resolveTaskSpaceId,
   stripSpaceScopedFilePath,
   type ChatSendPhase,
 } from './src/spaceShell';
@@ -164,6 +254,16 @@ const CLOUD_API_BASE =
   'https://morgen52.site/familyserver';
 
 const STORAGE_KEY = 'sparkbox.mobile.session';
+const ACTIVE_SPACE_STORAGE_KEY_PREFIX = 'sparkbox.mobile.activeSpace';
+const CAMERA_PERMISSION_RECOVERY_MESSAGE =
+  'Allow camera access in Settings, or paste the Sparkbox setup code manually.';
+
+function buildActiveSpaceStorageKey(session: Session | null): string {
+  if (!session) {
+    return '';
+  }
+  return `${ACTIVE_SPACE_STORAGE_KEY_PREFIX}.${session.user.household_id}.${session.user.id}`;
+}
 const HOTSPOT_SSID = 'Sparkbox-Setup';
 
 type ClaimPayload = {
@@ -171,6 +271,8 @@ type ClaimPayload = {
   claimCode: string;
   raw: string;
 };
+
+type OwnerConsoleContext = 'tools' | 'provider' | 'onboard' | 'service';
 
 const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'household'>> = [
   'partner',
@@ -216,7 +318,89 @@ type ChatTimelineMessage = HouseholdChatSessionMessage & {
   errorMessage?: string | null;
 };
 
-const CHAT_PENDING_FALLBACK = 'Sparkbox 正在认真准备，不会丢下这条消息。';
+type ChatTimelineGroup =
+  | {
+      kind: 'messages';
+      id: string;
+      role: 'user' | 'assistant';
+      senderLabel: string;
+      messages: ChatTimelineMessage[];
+    }
+  | {
+      kind: 'status';
+      id: string;
+      senderLabel: string;
+      statusCopy: string;
+      message: ChatTimelineMessage;
+    };
+
+const CHAT_PENDING_FALLBACK = 'Sparkbox is still preparing a reply for this message.';
+
+function describeTimelineSenderLabel(message: ChatTimelineMessage, chatSendPhase: ChatSendPhase): string {
+  if (message.pending) {
+    return describeChatSendPhase(chatSendPhase) || 'Sparkbox';
+  }
+  if (message.role === 'user') {
+    return message.senderDisplayName || 'You';
+  }
+  return 'Sparkbox';
+}
+
+function buildChatTimelineGroups(
+  messages: ChatTimelineMessage[],
+  chatSendPhase: ChatSendPhase,
+  chatPendingIndicator: string,
+): ChatTimelineGroup[] {
+  const groups: ChatTimelineGroup[] = [];
+  let currentGroup: Extract<ChatTimelineGroup, { kind: 'messages' }> | null = null;
+
+  const pushCurrentGroup = () => {
+    if (currentGroup) {
+      groups.push(currentGroup);
+      currentGroup = null;
+    }
+  };
+
+  messages.forEach((message, index) => {
+    const senderLabel = describeTimelineSenderLabel(message, chatSendPhase);
+    if (message.pending || message.failed) {
+      pushCurrentGroup();
+      groups.push({
+        kind: 'status',
+        id: `status-${index}-${message.role}`,
+        senderLabel,
+        statusCopy: message.pending
+          ? chatSendPhase === 'streaming'
+            ? `Sparkbox is still replying${chatPendingIndicator}`
+            : `The first reply can take 1 to 5 minutes${chatPendingIndicator}`
+          : message.errorMessage || 'Could not send that message.',
+        message,
+      });
+      return;
+    }
+
+    if (
+      currentGroup &&
+      currentGroup.role === message.role &&
+      currentGroup.senderLabel === senderLabel
+    ) {
+      currentGroup.messages.push(message);
+      return;
+    }
+
+    pushCurrentGroup();
+    currentGroup = {
+      kind: 'messages',
+      id: `group-${index}-${message.role}`,
+      role: message.role,
+      senderLabel,
+      messages: [message],
+    };
+  });
+
+  pushCurrentGroup();
+  return groups;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -366,7 +550,7 @@ function App() {
   const [networkSheetOpen, setNetworkSheetOpen] = useState(false);
 
   const [provisionBusy, setProvisionBusy] = useState(false);
-  const [provisionMessage, setProvisionMessage] = useState('Scan the QR code to attach Sparkbox, then let the app switch to setup mode.');
+  const [provisionMessage, setProvisionMessage] = useState('Scan the QR code to get Sparkbox ready for Wi-Fi.');
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [completedDeviceId, setCompletedDeviceId] = useState('');
   const [hotspotStage, setHotspotStage] = useState<HotspotStage>('idle');
@@ -387,6 +571,8 @@ function App() {
   const [spacesError, setSpacesError] = useState('');
   const [spaces, setSpaces] = useState<HouseholdSpaceSummary[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState('');
+  const [preferredActiveSpaceId, setPreferredActiveSpaceId] = useState('');
+  const [loadedActiveSpaceStorageKey, setLoadedActiveSpaceStorageKey] = useState('');
   const [activeSpaceDetail, setActiveSpaceDetail] = useState<HouseholdSpaceDetail | null>(null);
   const [spaceCreatorOpen, setSpaceCreatorOpen] = useState(false);
   const [spaceCreatorBusy, setSpaceCreatorBusy] = useState(false);
@@ -456,6 +642,7 @@ function App() {
   const [ownerConsoleBusy, setOwnerConsoleBusy] = useState(false);
   const [ownerConsoleError, setOwnerConsoleError] = useState('');
   const [ownerConsoleNotice, setOwnerConsoleNotice] = useState('');
+  const [ownerConsoleContext, setOwnerConsoleContext] = useState<OwnerConsoleContext>('tools');
   const [ownerDeviceId, setOwnerDeviceId] = useState('');
   const [ownerStatus, setOwnerStatus] = useState<DeviceConfigStatus | null>(null);
   const [ownerProviders, setOwnerProviders] = useState<string[]>([]);
@@ -466,7 +653,7 @@ function App() {
     providerTimeoutSecs: 120,
   });
   const [ownerInference, setOwnerInference] = useState<DeviceInferenceDetail | null>(null);
-  const [ownerOnboardProvider, setOwnerOnboardProvider] = useState('ollama');
+  const [ownerOnboardProvider, setOwnerOnboardProvider] = useState('');
   const [ownerOnboardModel, setOwnerOnboardModel] = useState('');
   const [ownerOnboardApiKey, setOwnerOnboardApiKey] = useState('');
   const [ownerOnboardApiUrl, setOwnerOnboardApiUrl] = useState('');
@@ -512,6 +699,15 @@ function App() {
     hotspotStage !== 'idle' ||
     Boolean(completedDeviceId);
   const setupFlowRequested = Boolean(reprovisionDeviceId);
+  const activeSpaceStorageKey = buildActiveSpaceStorageKey(session);
+  const renderOwnerConsoleFeedback = (context: OwnerConsoleContext) =>
+    ownerConsoleContext === context ? (
+      <>
+        {ownerConsoleError ? <Text style={styles.errorText}>{ownerConsoleError}</Text> : null}
+        {ownerConsoleNotice ? <Text style={styles.noticeText}>{ownerConsoleNotice}</Text> : null}
+        {ownerConsoleBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+      </>
+    ) : null;
 
   useEffect(() => {
     void (async () => {
@@ -597,6 +793,34 @@ function App() {
   }, [hotspotStage, portalUrl]);
 
   useEffect(() => {
+    if (!activeSpaceStorageKey) {
+      setPreferredActiveSpaceId('');
+      setLoadedActiveSpaceStorageKey('');
+      return;
+    }
+
+    let cancelled = false;
+    setLoadedActiveSpaceStorageKey('');
+    void (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(activeSpaceStorageKey);
+        if (cancelled) {
+          return;
+        }
+        setPreferredActiveSpaceId(stored ?? '');
+      } finally {
+        if (!cancelled) {
+          setLoadedActiveSpaceStorageKey(activeSpaceStorageKey);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSpaceStorageKey]);
+
+  useEffect(() => {
     const targetY = stepOffsetsRef.current[activeStep];
     if (typeof targetY !== 'number') {
       return;
@@ -624,34 +848,69 @@ function App() {
     ? [...activeChatMessages, chatPendingMessage]
     : activeChatMessages;
   const chatPendingIndicator = '.'.repeat((chatPendingNoteIndex % 3) + 1);
+  const chatTimelineGroups = buildChatTimelineGroups(activeChatTimelineMessages, chatSendPhase, chatPendingIndicator);
   const canManageActiveChat =
     !!activeChatSession &&
     canManageChatSession({
       currentUserRole: session?.user.role,
       currentUserId: session?.user.id,
       sessionOwnerUserId: activeChatSession.ownerUserId,
+      sessionScope: activeChatSession.scope,
+      spaceKind: activeSpaceDetail?.kind ?? activeSpace?.kind,
     });
+  const canCreateActiveChat = canCreateChatSession({
+    currentUserRole: session?.user.role,
+    sessionScope: chatScope,
+    spaceKind: activeSpaceDetail?.kind ?? activeSpace?.kind,
+  });
+  const activeSpaceCopyContext = resolveSpaceCopyContext(activeSpaceDetail, activeSpace);
   const activeSharedChatParticipantLabels = buildSharedChatParticipantLabels(activeSpaceDetail, session?.user.id);
-  const sharedChatIsVisible = Boolean(activeChatSession && activeSpaceDetail?.kind === 'shared');
+  const activeSharedChatParticipantSummary = buildSharedChatParticipantSummary(activeSpaceDetail, session?.user.id);
+  const sharedChatIsVisible = activeChatSession
+    ? looksLikeSharedGroupChatSession(activeChatSession.name, activeChatSession.scope, activeSpaceCopyContext)
+    : false;
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
+  const waitingForSpaces =
+    Boolean(session?.token) &&
+    shellSurface === 'shell' &&
+    shellTab === 'chats' &&
+    !activeSpace &&
+    spaces.length === 0 &&
+    !spacesError &&
+    (!activeSpaceStorageKey || loadedActiveSpaceStorageKey === activeSpaceStorageKey);
+  const householdMembersCopy = canManage
+    ? 'Owners can invite people, adjust who can manage Sparkbox, and remove members here. Sparkbox always keeps at least one owner.'
+    : 'See who is in this household here. Ask an owner if someone needs to join, needs owner access, or should be removed.';
+  const canMutateActiveSpaceLibrary = canMutateSpaceLibrary({
+    spaceKind: activeSpace?.kind,
+    currentUserRole: session?.user.role,
+  });
+  const canManageActiveSpaceFamilyApps = canManageSpaceFamilyApps(session?.user.role);
+  const canMutateActiveSpaceFiles = canMutateSpaceFiles({
+    spaceKind: activeSpace?.kind,
+    currentUserRole: session?.user.role,
+    fileSpace,
+  });
+  const taskEditorCopy = canManage
+    ? 'Choose what Sparkbox should do and when it should happen. Owners can switch to advanced controls when needed.'
+    : 'Choose what Sparkbox should do and when it should happen. Private routines stay simple here, and owners can fine-tune shared ones when needed.';
   const activeChatSpaceId = activeSpaceId || undefined;
   const activeFileSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
   const activeFileLegacyPrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
-  const activeTaskSpaceId =
-    activeSpace?.kind === 'shared' && activeSpace.template !== 'household' ? activeSpace.id : '';
+  const activeTaskSpaceId = resolveTaskSpaceId(activeSpace);
   const libraryOverviewSections = [
     {
       title: 'Memories',
-      copy: activeSpace ? `Things Sparkbox remembers for ${activeSpace.name}.` : 'Things Sparkbox remembers for the active space.',
+      copy: activeSpace ? `Things Sparkbox remembers for ${activeSpace.name}.` : 'Things Sparkbox remembers for this space.',
     },
     {
       title: 'Summaries',
-      copy: 'Quick recaps that help you catch up without opening every thread.',
+      copy: 'Quick recaps that help you catch up without opening every chat.',
     },
     {
       title: 'Photos',
-      copy: 'Shared moments and visual context saved with this space.',
+      copy: 'Shared moments and photos saved with this space.',
     },
     {
       title: 'Files',
@@ -683,22 +942,34 @@ function App() {
   const chatSpotlightEnabledApps = enabledFamilyAppCards.slice(0, 2);
   const chatSpotlightRecommendedInstalledApps = installedFamilyAppsAvailableForActiveSpace.slice(0, 2);
   const chatSpotlightRecommendedCatalogApps = recommendedFamilyApps.slice(0, 2);
+  const summaryEmptyStateCopy = describeSummaryEmptyStateCopy(
+    activeSpaceDetail,
+    canMutateActiveSpaceLibrary,
+    activeChatSession?.name || '',
+  );
   const authCardTitle =
     authMode === 'login'
       ? 'Sign in'
       : authMode === 'register'
         ? 'Create your household'
-        : 'Join a household';
+        : 'Join household';
   const authCardCopy =
     authMode === 'login'
-      ? 'Use the same cloud account that owns Sparkbox.'
+      ? 'Use the same account that owns Sparkbox.'
       : authMode === 'register'
-        ? 'Create the owner account that will claim and set up Sparkbox first.'
+        ? 'Create the first owner account for this Sparkbox household.'
         : 'Enter the invite code from an owner to join an existing Sparkbox household.';
   const authSubmitLabel =
     authMode === 'login' ? 'Sign in' : authMode === 'register' ? 'Create account' : 'Join household';
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
   const canReturnToShell = Boolean(session) && homeLoaded && homeDevices.length > 0;
+  const householdShellLoading =
+    Boolean(session) &&
+    shellSurface !== 'shell' &&
+    !homeLoaded &&
+    !homeError &&
+    !setupFlowRequested &&
+    !onboardingInProgress;
 
   function canEditTask(task: HouseholdTaskSummary): boolean {
     if (canManage) {
@@ -718,6 +989,9 @@ function App() {
   }
 
   function canManageFileEntry(entry: HouseholdFileEntry): boolean {
+    if (!canMutateActiveSpaceFiles) {
+      return false;
+    }
     if (fileSpace === 'private') {
       return true;
     }
@@ -751,8 +1025,7 @@ function App() {
   }
 
   function returnToShell(): void {
-    resetFlow();
-    setShellTab('chats');
+    resetSetupFlowState();
     setShellSurface('shell');
   }
 
@@ -793,6 +1066,10 @@ function App() {
     if (!session?.token || !activeSpaceId) {
       return;
     }
+    if (!canMutateActiveSpaceLibrary) {
+      setLibraryError('Only owners can change shared memories and summaries.');
+      return;
+    }
     const title = memoryTitle.trim();
     const content = memoryContent.trim();
     if (!title || !content) {
@@ -830,6 +1107,10 @@ function App() {
     if (!session?.token || !activeSpaceId) {
       return;
     }
+    if (!canMutateActiveSpaceLibrary) {
+      setLibraryError('Only owners can change shared memories and summaries.');
+      return;
+    }
     setLibraryBusy(true);
     setLibraryError('');
     try {
@@ -844,7 +1125,7 @@ function App() {
   }
 
   function confirmRemoveMemory(memory: SpaceMemory): void {
-    Alert.alert('Delete this memory?', 'Sparkbox will stop using it as current memory for this space.', [
+    Alert.alert('Delete this memory?', 'Sparkbox will stop using it as a saved memory for this space.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void removeMemory(memory) },
     ]);
@@ -852,7 +1133,11 @@ function App() {
 
   async function captureActiveSpaceSummary(): Promise<void> {
     if (!session?.token || !activeSpaceId || !activeChatSessionId || !activeChatSession) {
-      setLibraryError('Open a topic chat first so Sparkbox knows what to summarize.');
+      setLibraryError(describeSpaceSummaryCaptureMissingChatCopy(activeSpaceDetail));
+      return;
+    }
+    if (!canMutateActiveSpaceLibrary) {
+      setLibraryError('Only owners can change shared memories and summaries.');
       return;
     }
     setLibraryBusy(true);
@@ -875,6 +1160,10 @@ function App() {
     if (!session?.token || !activeSpaceId) {
       return;
     }
+    if (!canMutateActiveSpaceLibrary) {
+      setLibraryError('Only owners can change shared memories and summaries.');
+      return;
+    }
     setLibraryBusy(true);
     setLibraryError('');
     try {
@@ -893,6 +1182,10 @@ function App() {
 
   async function removeSpaceSummary(summaryId: string, title: string): Promise<void> {
     if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    if (!canMutateActiveSpaceLibrary) {
+      setLibraryError('Only owners can change shared memories and summaries.');
       return;
     }
     setLibraryBusy(true);
@@ -936,7 +1229,9 @@ function App() {
       setHomeLoaded(true);
     } catch (error) {
       setHomeLoaded(false);
-      setHomeError(error instanceof Error ? error.message : 'Could not load your household.');
+      setHomeError(
+        error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load your household.',
+      );
       throw error;
     } finally {
       if (!options.silent) {
@@ -956,7 +1251,7 @@ function App() {
     try {
       const nextSpaces = await getHouseholdSpaces(session.token);
       setSpaces(nextSpaces);
-      setActiveSpaceId((current) => resolveActiveSpaceId(nextSpaces, current));
+      setActiveSpaceId((current) => resolveActiveSpaceId(nextSpaces, current, preferredActiveSpaceId));
     } catch (error) {
       setSpacesError(error instanceof Error ? error.message : 'Could not load Sparkbox spaces.');
     } finally {
@@ -1062,6 +1357,8 @@ function App() {
       setHomeRecentActivity([]);
       setSpaces([]);
       setActiveSpaceId('');
+      setPreferredActiveSpaceId('');
+      setLoadedActiveSpaceStorageKey('');
       setActiveSpaceDetail(null);
       setChatSessions([]);
       setActiveChatSessionId('');
@@ -1090,6 +1387,9 @@ function App() {
     if ((onboardingInProgress || setupFlowRequested) && !completedDeviceId) {
       return;
     }
+    if (activeSpaceStorageKey && loadedActiveSpaceStorageKey !== activeSpaceStorageKey) {
+      return;
+    }
 
     let cancelled = false;
     void (async () => {
@@ -1106,7 +1406,15 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [completedDeviceId, onboardingInProgress, session?.token, setupFlowRequested]);
+  }, [activeSpaceStorageKey, completedDeviceId, loadedActiveSpaceStorageKey, onboardingInProgress, session?.token, setupFlowRequested]);
+
+  useEffect(() => {
+    if (!activeSpaceStorageKey || loadedActiveSpaceStorageKey !== activeSpaceStorageKey || !activeSpaceId) {
+      return;
+    }
+    setPreferredActiveSpaceId((current) => (current === activeSpaceId ? current : activeSpaceId));
+    void AsyncStorage.setItem(activeSpaceStorageKey, activeSpaceId).catch(() => undefined);
+  }, [activeSpaceId, activeSpaceStorageKey, loadedActiveSpaceStorageKey]);
 
   useEffect(() => {
     if (!activeSpace) {
@@ -1150,6 +1458,18 @@ function App() {
   }, [relayTargetUserId, relayTargets]);
 
   useEffect(() => {
+    const resetState = buildSpaceScopedResetState();
+    setChatSessions(resetState.chatSessions);
+    setActiveChatSessionId(resetState.activeChatSessionId);
+    setActiveChatSession(resetState.activeChatSession);
+    setChatDraft(resetState.chatDraft);
+    setSpaceLibrary(resetState.spaceLibrary);
+    setFileListing(resetState.fileListing);
+    setTasks(resetState.tasks);
+    setChatError('');
+    setLibraryError('');
+    setFilesError('');
+    setTasksError('');
     setRelayComposerOpen(false);
     setRelayTargetUserId('');
     setRelayMessage('');
@@ -1303,7 +1623,7 @@ function App() {
         if (cancelled) {
           return;
         }
-        setTasksError(error instanceof Error ? error.message : 'Could not load household tasks.');
+        setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load household tasks.');
       } finally {
         if (!cancelled) {
           setTasksBusy(false);
@@ -1453,10 +1773,11 @@ function App() {
     setSettingsError('');
     try {
       const invite = await createHouseholdInvitation(session.token, role);
-      setSettingsNotice(`${role === 'owner' ? 'Owner' : 'Member'} invite ready: ${invite.inviteCode}`);
+      const inviteRoleLabel = describeInviteRole(role);
+      setSettingsNotice(`${inviteRoleLabel} invite ready: ${invite.inviteCode}`);
       Alert.alert(
-        role === 'owner' ? 'Owner invite ready' : 'Member invite ready',
-        `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join, and enter this code.`,
+        `${inviteRoleLabel} invite ready`,
+        `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code.`,
       );
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
@@ -1477,7 +1798,7 @@ function App() {
     if (app?.requiresOwnerConfirmation && !confirmed) {
       Alert.alert(
         `Install ${app.title}?`,
-        'This family app touches sensitive family interactions. Install it only if you want Sparkbox to expose that behavior on this Box.',
+        'This family app touches sensitive family interactions. Install it only if you want Sparkbox to enable that behavior on this device.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Install', onPress: () => void installSelectedFamilyApp(slug, true) },
@@ -1495,7 +1816,7 @@ function App() {
         }
         return [...current, installed];
       });
-      setSettingsNotice(`${installed.title} installed on this Box.`);
+      setSettingsNotice(`${installed.title} installed on this device.`);
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : 'Could not install this family app.');
     } finally {
@@ -1531,7 +1852,7 @@ function App() {
       setActiveSpaceDetail(detail);
       setSettingsNotice(`${app?.title || slug} is now enabled in ${activeSpace.name}.`);
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : 'Could not enable this family app in the active space.');
+      setSettingsError(error instanceof Error ? error.message : 'Could not turn on this family app in this space.');
     } finally {
       setSettingsBusy(false);
     }
@@ -1560,7 +1881,7 @@ function App() {
                 setActiveSpaceDetail(detail);
                 setSettingsNotice(`${app?.title || slug} is no longer active in ${activeSpace.name}.`);
               } catch (error) {
-                setSettingsError(error instanceof Error ? error.message : 'Could not disable this family app in the active space.');
+                setSettingsError(error instanceof Error ? error.message : 'Could not turn off this family app in this space.');
               } finally {
                 setSettingsBusy(false);
               }
@@ -1578,7 +1899,7 @@ function App() {
     const app = installedFamilyApps.find((item) => item.slug === slug) ?? familyAppsCatalog.find((item) => item.slug === slug) ?? null;
     Alert.alert(
       `Remove ${app?.title || slug}?`,
-      'This removes the family app from this Box and turns it off in every space.',
+      'This removes the family app from this device and turns it off in every space.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1595,7 +1916,7 @@ function App() {
                   const detail = await getHouseholdSpaceDetail(session.token!, activeSpaceId);
                   setActiveSpaceDetail(detail);
                 }
-                setSettingsNotice(`${app?.title || slug} was removed from this Box.`);
+                setSettingsNotice(`${app?.title || slug} was removed from this device.`);
               } catch (error) {
                 setSettingsError(error instanceof Error ? error.message : 'Could not remove this family app.');
               } finally {
@@ -1647,7 +1968,7 @@ function App() {
     setSettingsError('');
     try {
       await revokeHouseholdInvitation(session.token, invite.id);
-      setSettingsNotice(`Revoked ${invite.role} invite.`);
+      setSettingsNotice(`Revoked ${describeInviteRole(invite.role).toLowerCase()} invite.`);
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : 'Could not revoke invite.');
@@ -1661,6 +1982,10 @@ function App() {
     nextRole: 'owner' | 'member',
   ): Promise<void> {
     if (!session?.token || !canManage || member.role === nextRole) {
+      return;
+    }
+    if (!canChangeMemberRole(homeMembers, member, nextRole)) {
+      setSettingsError('Sparkbox must keep at least one owner in the household.');
       return;
     }
     setSettingsBusy(true);
@@ -1683,6 +2008,10 @@ function App() {
     if (!session?.token || !canManage) {
       return;
     }
+    if (!canRemoveHouseholdMember(homeMembers, member)) {
+      setSettingsError('Sparkbox must keep at least one owner in the household.');
+      return;
+    }
     setSettingsBusy(true);
     setSettingsError('');
     try {
@@ -1696,47 +2025,56 @@ function App() {
     }
   }
 
-  function resetFlow(): void {
-    setSetupFlowKind('first_run');
-    setReprovisionDeviceId('');
+  function resetSetupFlowState(): void {
+    const resetState = buildSetupFlowResetState();
+    setSetupFlowKind(resetState.setupFlowKind);
+    setReprovisionDeviceId(resetState.reprovisionDeviceId);
     setClaimInput('');
     setClaimPayload(null);
-    setPairingToken('');
-    setClaimError('');
-    setBleError('');
+    setPairingToken(resetState.pairingToken);
+    setClaimError(resetState.claimError);
+    setBleError(resetState.bleError);
+    setScannerOpen(false);
     setNetworks([]);
-    setSelectedSsid('');
+    setSelectedSsid(resetState.selectedSsid);
     setSelectedNetwork(null);
-    setWifiPassword('');
-    setManualEntry(false);
-    setNetworkSheetOpen(false);
-    setProvisionBusy(false);
-    setProvisionMessage('Scan the QR code to attach Sparkbox, then let the app switch to setup mode.');
-    setPortalUrl(null);
-    setCompletedDeviceId('');
-    setHotspotStage('idle');
-    setInviteCode('');
+    setWifiPassword(resetState.wifiPassword);
+    setManualEntry(resetState.manualEntry);
+    setNetworkSheetOpen(resetState.networkSheetOpen);
+    setProvisionBusy(resetState.provisionBusy);
+    setProvisionMessage(resetState.provisionMessage);
+    setPortalUrl(resetState.portalUrl);
+    setCompletedDeviceId(resetState.completedDeviceId);
+    setHotspotStage(resetState.hotspotStage);
+    setInviteCode(resetState.inviteCode);
     setHomeWifiTarget(null);
-    setPreviousInternetSsid(null);
-    setSetupPageState(null);
-    setSetupNetworksLoaded(false);
+    setPreviousInternetSsid(resetState.previousInternetSsid);
+    setSetupPageState(resetState.setupPageState);
+    setSetupNetworksLoaded(resetState.setupNetworksLoaded);
+  }
+
+  function resetShellState(): void {
+    const resetState = buildSpaceScopedResetState();
     setSettingsBusy(false);
     setSettingsError('');
     setSettingsNotice('');
     setChatScope('family');
-    setChatSessions([]);
-    setActiveChatSessionId('');
-    setActiveChatSession(null);
+    setChatSessions(resetState.chatSessions);
+    setActiveChatSessionId(resetState.activeChatSessionId);
+    setActiveChatSession(resetState.activeChatSession);
     setChatBusy(false);
+    setChatSendPhase('idle');
+    setChatPendingMessage(null);
+    setChatPendingNoteIndex(0);
     setChatError('');
-    setChatDraft('');
+    setChatDraft(resetState.chatDraft);
     setChatSessionEditorOpen(false);
     setEditingChatSession(null);
     setChatSessionName('');
     setChatSessionSystemPrompt('');
     setChatSessionTemperature('0.7');
     setChatSessionMaxTokens('2048');
-    setSpaceLibrary({ memories: [], summaries: [] });
+    setSpaceLibrary(resetState.spaceLibrary);
     setLibraryBusy(false);
     setLibraryError('');
     setLibraryNotice('');
@@ -1745,7 +2083,7 @@ function App() {
     setMemoryTitle('');
     setMemoryContent('');
     setMemoryPinned(false);
-    setTasks([]);
+    setTasks(resetState.tasks);
     setTasksBusy(false);
     setTasksError('');
     setTasksNotice('');
@@ -1771,7 +2109,7 @@ function App() {
     setSpaceName('');
     setSpaceTemplate('partner');
     setSpaceMemberIds([]);
-    setFileListing(null);
+    setFileListing(resetState.fileListing);
     setFilesBusy(false);
     setFilesError('');
     setFilesNotice('');
@@ -1785,6 +2123,11 @@ function App() {
     setDiagnosticsPayload(null);
     verificationStartedRef.current = false;
     lastOpenedPortalUrlRef.current = null;
+  }
+
+  function resetFlow(): void {
+    resetSetupFlowState();
+    resetShellState();
   }
 
   function applyClaimInput(rawValue: string): void {
@@ -1801,7 +2144,7 @@ function App() {
       return;
     }
     if (!claimPayload) {
-      setClaimError('Scan the Sparkbox label or paste a claim link first.');
+      setClaimError('Scan the Sparkbox label or paste the setup code first.');
       return;
     }
     setClaimBusy(true);
@@ -1829,7 +2172,7 @@ function App() {
 
   async function beginHotspotOnboarding(deviceId: string, nextPairingToken: string): Promise<void> {
     if (!deviceId) {
-      setBleError('Pick a Sparkbox before entering setup mode.');
+      setBleError('Pick a Sparkbox before starting Wi-Fi setup.');
       return;
     }
     setBleError('');
@@ -2031,7 +2374,7 @@ function App() {
     if (!cameraPermission?.granted) {
       const result = await requestCameraPermission();
       if (!result.granted) {
-        setClaimError('Camera permission is required to scan the Sparkbox QR code.');
+        setClaimError(CAMERA_PERMISSION_RECOVERY_MESSAGE);
         return;
       }
     }
@@ -2039,27 +2382,26 @@ function App() {
   }
 
   function beginNewDeviceOnboarding(): void {
-    resetFlow();
+    resetSetupFlowState();
     setSetupFlowKind('first_run');
-    setHomeLoaded(false);
     setHomeError('');
     setShellSurface('onboarding');
   }
 
   async function beginDeviceReprovision(device: DeviceSummary): Promise<void> {
-    resetFlow();
+    resetSetupFlowState();
     setSetupFlowKind('reprovision');
     setReprovisionDeviceId(device.device_id);
     setHomeError('');
     setBleError('');
     if (session?.token && device.online) {
       setProvisionBusy(true);
-      setProvisionMessage('Asking Sparkbox to reopen setup mode for Wi-Fi changes...');
+      setProvisionMessage('Asking Sparkbox to get ready again for Wi-Fi changes...');
       try {
         await startDeviceReprovision(session.token, device.device_id);
-        setProvisionMessage('Sparkbox is reopening setup mode. Wait for Sparkbox-Setup, then continue.');
+        setProvisionMessage('Sparkbox is getting ready again. Wait for Sparkbox-Setup, then continue.');
       } catch (error) {
-        setBleError(error instanceof Error ? error.message : 'Could not ask Sparkbox to re-enter setup mode.');
+        setBleError(error instanceof Error ? error.message : 'Could not get Sparkbox ready again.');
         setProvisionMessage(
           'If Sparkbox is already in a new place, power it on and wait for Sparkbox-Setup to appear.',
         );
@@ -2068,7 +2410,7 @@ function App() {
       }
     } else {
       setProvisionMessage(
-        'Bring Sparkbox back into setup mode. If it is in a new place, power it on and wait for Sparkbox-Setup to appear.',
+        'Get Sparkbox ready again. If it is in a new place, power it on and wait for Sparkbox-Setup to appear.',
       );
     }
     setPreviousInternetSsid(await getCurrentSsid().catch(() => null));
@@ -2097,6 +2439,22 @@ function App() {
     } finally {
       setChatBusy(false);
     }
+  }
+
+  function handleChatScopeChange(nextScope: ChatSessionScope): void {
+    if (nextScope === chatScope) {
+      return;
+    }
+    const resetState = buildChatScopeResetState();
+    setChatScope(nextScope);
+    setChatSessions(resetState.chatSessions);
+    setActiveChatSessionId(resetState.activeChatSessionId);
+    setActiveChatSession(resetState.activeChatSession);
+    setChatDraft(resetState.chatDraft);
+    setChatError('');
+    setChatSendPhase('idle');
+    setChatPendingMessage(null);
+    setChatPendingNoteIndex(0);
   }
 
   async function openCurrentSpaceSideChannel(): Promise<void> {
@@ -2194,13 +2552,17 @@ function App() {
       setActiveChatSession(detail);
       setActiveSpaceDetail(refreshedSpace);
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not open this topic yet.');
+      setChatError(error instanceof Error ? error.message : describeChatSessionOpenError(activeSpaceDetail));
     } finally {
       setChatBusy(false);
     }
   }
 
   function openChatSessionEditor(sessionItem?: HouseholdChatSessionSummary): void {
+    if (!sessionItem && !canCreateActiveChat) {
+      setChatError(describeChatSessionCreatePermissionError(activeSpaceDetail, chatScope));
+      return;
+    }
     if (sessionItem) {
       setEditingChatSession(sessionItem);
       setChatSessionName(sessionItem.name);
@@ -2326,7 +2688,11 @@ function App() {
         setChatError(response.error);
         setChatPendingMessage({
           role: 'assistant',
-          content: streamedMessage || (timedOut ? 'Sparkbox 这次准备第一段回复太久了。' : 'Sparkbox 这次没有顺利把回复发出来。'),
+          content:
+            streamedMessage ||
+            (timedOut
+              ? 'Sparkbox is taking longer than usual to send the first reply.'
+              : 'Sparkbox could not send the reply this time.'),
           senderDisplayName: null,
           pending: false,
           failed: true,
@@ -2336,14 +2702,16 @@ function App() {
         });
         return;
       }
-      setActiveChatSession((current) =>
-        current
-          ? {
-              ...current,
-              messages: [...current.messages, { role: 'assistant', content: response.message, senderDisplayName: null }],
-            }
-          : current,
-      );
+      if (shouldAppendAssistantReply(response.message)) {
+        setActiveChatSession((current) =>
+          current
+            ? {
+                ...current,
+                messages: [...current.messages, { role: 'assistant', content: response.message, senderDisplayName: null }],
+              }
+            : current,
+        );
+      }
       try {
         const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
         setActiveChatSession(detail);
@@ -2380,7 +2748,7 @@ function App() {
       setChatError(error instanceof Error ? error.message : 'Chat is unavailable right now.');
       setChatPendingMessage({
         role: 'assistant',
-        content: 'Sparkbox 这次没有顺利回上来。',
+        content: 'Sparkbox could not send the reply this time.',
         senderDisplayName: null,
         pending: false,
         failed: true,
@@ -2435,6 +2803,22 @@ function App() {
     }
   }
 
+  function closeActiveChatDetail(): void {
+    setActiveChatSessionId('');
+    setChatError('');
+  }
+
+  useEffect(() => {
+    if (shellSurface !== 'shell' || shellTab !== 'chats' || !activeChatSessionId) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeActiveChatDetail();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [activeChatSessionId, shellSurface, shellTab]);
+
   function openTaskEditor(task?: HouseholdTaskSummary): void {
     if (task) {
       setEditingTask(task);
@@ -2468,7 +2852,7 @@ function App() {
       });
       setTasks(nextTasks);
     } catch (error) {
-      setTasksError(error instanceof Error ? error.message : 'Could not load household tasks.');
+      setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load household tasks.');
     } finally {
       setTasksBusy(false);
     }
@@ -2486,7 +2870,7 @@ function App() {
       setTaskHistoryRuns(runs);
       setTaskHistoryOpen(true);
     } catch (error) {
-      setTasksError(error instanceof Error ? error.message : 'Could not load task history.');
+      setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load task history.');
     } finally {
       setTasksBusy(false);
     }
@@ -2540,7 +2924,7 @@ function App() {
       await refreshTasks();
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
-      setTasksError(error instanceof Error ? error.message : 'Could not save the task.');
+      setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not save the task.');
     } finally {
       setTasksBusy(false);
     }
@@ -2558,7 +2942,7 @@ function App() {
       await refreshTasks();
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
-      setTasksError(error instanceof Error ? error.message : 'Could not run the task.');
+      setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not run the task.');
     } finally {
       setTasksBusy(false);
     }
@@ -2576,7 +2960,7 @@ function App() {
       await refreshTasks();
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
-      setTasksError(error instanceof Error ? error.message : 'Could not remove the task.');
+      setTasksError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not remove the task.');
     } finally {
       setTasksBusy(false);
     }
@@ -2597,7 +2981,7 @@ function App() {
       );
       setFileListing(mapListingToActiveSpace(listing));
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : 'Could not load files right now.');
+      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load files right now.');
     } finally {
       setFilesBusy(false);
     }
@@ -2641,7 +3025,7 @@ function App() {
       setFileEditorOpen(false);
       await refreshFiles();
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : 'Could not save this change.');
+      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not save this change.');
     } finally {
       setFilesBusy(false);
     }
@@ -2660,7 +3044,7 @@ function App() {
       setFilesNotice(`Removed ${entry.name}.`);
       await refreshFiles();
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : 'Could not remove this file.');
+      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not remove this file.');
     } finally {
       setFilesBusy(false);
     }
@@ -2702,7 +3086,7 @@ function App() {
       setFilesNotice(`Uploaded ${response.saved.map((item) => item.name).join(', ')}.`);
       await refreshFiles();
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : 'Could not upload files.');
+      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not upload files.');
     } finally {
       setFilesBusy(false);
     }
@@ -2736,7 +3120,7 @@ function App() {
         setFilesNotice(`Downloaded ${entry.name}.`);
       }
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : 'Could not download this file.');
+      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not download this file.');
     } finally {
       setFilesBusy(false);
     }
@@ -2768,7 +3152,7 @@ function App() {
     setDiagnosticsError('');
     try {
       await resetDeviceToSetupMode(session.token, device.device_id);
-      setSettingsNotice(`${device.device_id} was reset to setup mode.`);
+      setSettingsNotice(describeDeviceActionNotice('reset_ready'));
       setDiagnosticsPayload(null);
       setDiagnosticsDeviceId('');
       await refreshHouseholdSummary({ silent: true });
@@ -2779,13 +3163,19 @@ function App() {
     }
   }
 
-  async function refreshOwnerConsole(deviceId = ownerDeviceId): Promise<void> {
+  async function refreshOwnerConsole(
+    deviceId = ownerDeviceId,
+    options?: { preserveFeedback?: boolean; context?: OwnerConsoleContext },
+  ): Promise<void> {
     if (!session?.token || !deviceId) {
       return;
     }
+    setOwnerConsoleContext(options?.context ?? 'tools');
     setOwnerConsoleBusy(true);
     setOwnerConsoleError('');
-    setOwnerConsoleNotice('');
+    if (!options?.preserveFeedback) {
+      setOwnerConsoleNotice('');
+    }
     try {
       const [status, providers, models, providerConfig, inference] = await Promise.all([
         getDeviceConfigStatus(session.token, deviceId),
@@ -2798,7 +3188,7 @@ function App() {
       setOwnerProviders(providers);
       setOwnerModels(models);
       setOwnerProviderConfig(providerConfig);
-      setOwnerOnboardProvider(providerConfig.defaultProvider || providers[0] || 'ollama');
+      setOwnerOnboardProvider('');
       setOwnerOnboardModel(providerConfig.defaultModel || '');
       setOwnerInference(inference);
     } catch (error) {
@@ -2808,17 +3198,37 @@ function App() {
     }
   }
 
+  async function reconnectOwnerDevice(): Promise<void> {
+    if (!session?.token || !ownerDeviceId) {
+      return;
+    }
+    setOwnerConsoleContext('tools');
+    setOwnerConsoleBusy(true);
+    setOwnerConsoleError('');
+    setOwnerConsoleNotice('');
+    try {
+      const reconnect = await reconnectDevice(session.token, ownerDeviceId);
+      setOwnerConsoleNotice(reconnect.detail);
+      await refreshHouseholdSummary({ silent: true });
+      await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'tools' });
+    } catch (error) {
+      setOwnerConsoleError(error instanceof Error ? error.message : 'Could not reconnect Sparkbox.');
+      setOwnerConsoleBusy(false);
+    }
+  }
+
   async function saveOwnerProviderSettings(): Promise<void> {
     if (!session?.token || !ownerDeviceId) {
       return;
     }
+    setOwnerConsoleContext('provider');
     setOwnerConsoleBusy(true);
     setOwnerConsoleError('');
     setOwnerConsoleNotice('');
     try {
       await updateDeviceProviderConfig(session.token, ownerDeviceId, ownerProviderConfig);
-      setOwnerConsoleNotice(`Saved provider settings for ${ownerDeviceId}.`);
-      await refreshOwnerConsole(ownerDeviceId);
+      setOwnerConsoleNotice(describeDeviceActionNotice('provider_saved'));
+      await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'provider' });
     } catch (error) {
       setOwnerConsoleError(error instanceof Error ? error.message : 'Could not save provider settings.');
       setOwnerConsoleBusy(false);
@@ -2829,6 +3239,7 @@ function App() {
     if (!session?.token || !ownerDeviceId) {
       return;
     }
+    setOwnerConsoleContext('onboard');
     setOwnerConsoleBusy(true);
     setOwnerConsoleError('');
     setOwnerConsoleNotice('');
@@ -2840,8 +3251,8 @@ function App() {
         apiUrl: ownerOnboardApiUrl,
       });
       setOwnerServiceOutput(result.output);
-      setOwnerConsoleNotice(`Re-onboard finished for ${ownerDeviceId}.`);
-      await refreshOwnerConsole(ownerDeviceId);
+      setOwnerConsoleNotice(describeDeviceActionNotice('re_onboard_finished'));
+      await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'onboard' });
     } catch (error) {
       setOwnerConsoleError(error instanceof Error ? error.message : 'Could not re-onboard provider settings.');
       setOwnerConsoleBusy(false);
@@ -2855,14 +3266,15 @@ function App() {
     if (!session?.token || !ownerDeviceId) {
       return;
     }
+    setOwnerConsoleContext('service');
     setOwnerConsoleBusy(true);
     setOwnerConsoleError('');
     setOwnerConsoleNotice('');
     try {
       const result = await controlDeviceService(session.token, ownerDeviceId, serviceName, action);
       setOwnerServiceOutput(result.output);
-      setOwnerConsoleNotice(`${serviceName} ${action} requested for ${ownerDeviceId}.`);
-      await refreshOwnerConsole(ownerDeviceId);
+      setOwnerConsoleNotice(describeDeviceActionNotice('service_requested', serviceName, action));
+      await refreshOwnerConsole(ownerDeviceId, { preserveFeedback: true, context: 'service' });
     } catch (error) {
       setOwnerConsoleError(error instanceof Error ? error.message : 'Could not control this service.');
       setOwnerConsoleBusy(false);
@@ -2883,6 +3295,19 @@ function App() {
     );
   }
 
+  if (householdShellLoading && session) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <StatusBar style="dark" />
+        <View style={styles.centered}>
+          <ActivityIndicator color="#0b6e4f" />
+          <Text style={styles.loadingText}>Opening {session.household.name}…</Text>
+          <Text style={styles.cardCopy}>Loading your spaces, chats, and device status.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (shellSurface === 'shell' && session) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -2892,11 +3317,12 @@ function App() {
             <Text style={styles.eyebrow}>Sparkbox</Text>
             <Text style={styles.title}>{householdName}</Text>
             <Text style={styles.subtitle}>
-              {shellTab === 'chats'
-                ? "Choose a space first, then move into that space's topics and chats."
-                : shellTab === 'library'
-                  ? "See each space's context, then manage files and routines inside it."
-                  : 'Manage the Box, the active space, family apps, and your signed-in Sparkbox session.'}
+              {describeShellSubtitle({
+                shellTab,
+                activeSpaceName: activeSpace?.name || '',
+                activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+                spacesReady: !waitingForSpaces,
+              })}
             </Text>
           </View>
 
@@ -2918,216 +3344,220 @@ function App() {
           </View>
 
           <ScrollView contentContainerStyle={styles.content}>
-            {shellTab === 'settings' ? (
+            {shellTab === 'chats' ? (
               <>
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Household overview</Text>
-                  <Text style={styles.cardCopy}>
-                    {homeBusy
-                      ? 'Refreshing your household status...'
-                      : onlineDeviceAvailable
-                        ? 'Sparkbox is ready for household chat.'
-                        : 'Household history stays available even when Sparkbox is offline.'}
-                  </Text>
-                  {homeError ? <Text style={styles.errorText}>{homeError}</Text> : null}
-                  {homeBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  <View style={styles.inlineActions}>
-                    <Pressable style={styles.primaryButtonSmall} onPress={() => setShellTab('chats')}>
-                      <Text style={styles.primaryButtonText}>Open chat</Text>
-                    </Pressable>
+                {!activeChatSessionId ? (
+                  <>
+                <View style={styles.chatInboxHeader}>
+                  <View style={styles.chatInboxHeaderTopRow}>
+                    <View style={styles.chatInboxHeaderBody}>
+                      <Text style={styles.chatInboxHeaderTitle}>Chats</Text>
+                      <Text style={styles.chatInboxHeaderCopy}>
+                        {describeShellSubtitle({
+                          shellTab: 'chats',
+                          activeSpaceName: activeSpace?.name || '',
+                          activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+                          spacesReady: !waitingForSpaces,
+                        })}
+                      </Text>
+                    </View>
                     {canManage ? (
-                      <Pressable style={styles.secondaryButtonSmall} onPress={beginNewDeviceOnboarding}>
-                        <Text style={styles.secondaryButtonText}>Set up another device</Text>
+                      <Pressable
+                        style={styles.secondaryButtonSmall}
+                        onPress={openSpaceCreator}
+                        disabled={spacesBusy}
+                      >
+                        <Text style={styles.secondaryButtonText}>Create shared space</Text>
                       </Pressable>
                     ) : null}
+                  </View>
+                  {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
+                  {spacesBusy && spaces.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  <View style={styles.chatInboxSpaceRow}>
+                    {spaces.map((space) => {
+                      const active = space.id === activeSpaceId;
+                      return (
+                        <Pressable
+                          key={space.id}
+                          style={[styles.chatInboxSpaceChip, active ? styles.chatInboxSpaceChipActive : null]}
+                          onPress={() => setActiveSpaceId(space.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.chatInboxSpaceChipLabel,
+                              active ? styles.chatInboxSpaceChipLabelActive : null,
+                            ]}
+                          >
+                            {space.name}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.chatInboxSpaceChipMeta,
+                              active ? styles.chatInboxSpaceChipMetaActive : null,
+                            ]}
+                          >
+                            {describeSpaceCounts(space.kind, space.threadCount, space.memberCount)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Active space identity</Text>
+                  <Text style={styles.cardTitle}>Chats in this space</Text>
                   <Text style={styles.cardCopy}>
-                    {activeSpace
-                      ? `${activeSpace.name} is the current ${activeSpaceKindLabel.toLowerCase()} and it already has ${activeSpace.threadCount} topics.`
-                      : 'Pick a space in Chats so Library and Settings can follow that space identity.'}
-                  </Text>
-                  {activeSpace ? (
-                    <View style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{activeSpace.name}</Text>
-                        <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
-                      </View>
-                      <Text style={styles.cardCopy}>
-                        Template: {activeSpaceTemplateLabel || 'Household space'}
-                      </Text>
-                      <Text style={styles.cardCopy}>
-                        {activeSpace.threadCount} topics · {activeSpace.memberCount} members
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Devices</Text>
-                  {homeDevices.length === 0 ? (
-                    <Text style={styles.cardCopy}>No devices connected yet.</Text>
-                  ) : (
-                    homeDevices.map((device) => (
-                      <View key={device.device_id} style={styles.deviceRowCard}>
-                        <View style={styles.deviceRowHeadline}>
-                          <Text style={styles.networkName}>{device.device_id}</Text>
-                          <Text style={device.online ? styles.statusTagOnline : styles.statusTagOffline}>
-                            {device.online ? 'online' : 'offline'}
-                          </Text>
-                        </View>
-                        <Text style={styles.cardCopy}>Status: {device.status}</Text>
-                        {device.attention_reason ? <Text style={styles.cardCopy}>Attention: {device.attention_reason}</Text> : null}
-                      </View>
-                    ))
-                  )}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Recent Activity</Text>
-                  {homeRecentActivity.length === 0 ? (
-                    <Text style={styles.cardCopy}>No household activity yet.</Text>
-                  ) : (
-                    homeRecentActivity.slice(0, 5).map((event) => (
-                      <View key={event.id} style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>{event.actor_name}</Text>
-                        <Text style={styles.cardCopy}>
-                          {event.details || event.event_type}
-                        </Text>
-                      </View>
-                    ))
-                  )}
-                </View>
-              </>
-            ) : null}
-
-            {shellTab === 'chats' ? (
-              <>
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Spaces</Text>
-                  <Text style={styles.cardCopy}>
-                    Start with the people and context. Every space keeps its own topics, memory, and shared history.
-                  </Text>
-                  {canManage ? (
-                    <View style={styles.inlineActions}>
-                      <Pressable
-                        style={styles.primaryButtonSmall}
-                        onPress={openSpaceCreator}
-                        disabled={spacesBusy}
-                      >
-                        <Text style={styles.primaryButtonText}>Create shared space</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
-                  {spacesBusy && spaces.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  {spaces.map((space) => {
-                    const active = space.id === activeSpaceId;
-                    return (
-                      <Pressable
-                        key={space.id}
-                        style={[styles.deviceRowCard, active ? styles.selectionCard : null]}
-                        onPress={() => setActiveSpaceId(space.id)}
-                      >
-                        <View style={styles.deviceRowHeadline}>
-                          <Text style={styles.networkName}>{space.name}</Text>
-                          <Text style={active ? styles.statusTagOnline : styles.tagMuted}>{describeSpaceKind(space.kind)}</Text>
-                        </View>
-                        <Text style={styles.cardCopy}>
-                          {space.threadCount} topics · {space.memberCount} members
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Topic chat</Text>
-                  <Text style={styles.cardCopy}>
-                    {onlineDeviceAvailable
+                    {waitingForSpaces
+                      ? 'Loading your spaces...'
+                      : onlineDeviceAvailable
                       ? activeSpace
-                        ? `Current space: ${activeSpace.name} (${activeSpaceKindLabel})`
-                        : 'Select a space to open its topics.'
+                        ? `Viewing ${activeSpace.name} (${activeSpaceKindLabel})`
+                        : 'Select a space to open its chats.'
                       : 'Sparkbox is offline right now. You can still browse chat history and settings.'}
                   </Text>
                   {chatSendPhase !== 'idle' ? (
                     <Text style={styles.selectionLabel}>{describeChatSendPhase(chatSendPhase)}</Text>
                   ) : null}
                   {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
-                  <View style={styles.scopeRow}>
-                    {(['family', 'private'] as ChatSessionScope[]).map((scope) => {
-                      const active = chatScope === scope;
-                      return (
-                        <Pressable
-                          key={scope}
-                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                          onPress={() => setChatScope(scope)}
-                        >
-                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                            {describeChatAccess(scope)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <View style={styles.inlineActions}>
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshChatSessions()} disabled={chatBusy}>
-                      <Text style={styles.secondaryButtonText}>Refresh</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => openChatSessionEditor()}
-                      disabled={!onlineDeviceAvailable || chatBusy}
-                    >
-                      <Text style={styles.primaryButtonText}>New topic</Text>
-                    </Pressable>
-                  </View>
-                  {chatBusy && chatSessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  {chatSessions.length === 0 ? (
-                    <Text style={styles.cardCopy}>
-                      No topics yet. Start one when this space needs Sparkbox.
-                    </Text>
+                  {waitingForSpaces ? (
+                    <ActivityIndicator color="#0b6e4f" />
                   ) : (
-                    chatSessions.map((sessionItem) => {
-                      const active = sessionItem.id === activeChatSessionId;
-                      return (
-                        <Pressable
-                          key={sessionItem.id}
-                          style={[styles.deviceRowCard, active ? styles.selectionCard : null]}
-                          onPress={() => setActiveChatSessionId(sessionItem.id)}
-                        >
-                          <View style={styles.deviceRowHeadline}>
-                            <Text style={styles.networkName}>{sessionItem.name}</Text>
-                            <Text style={active ? styles.statusTagOnline : styles.tagMuted}>
-                              {describeChatAccess(sessionItem.scope)}
-                            </Text>
-                          </View>
-                          <Text style={styles.cardCopy}>
-                            {sessionItem.updatedAt ? `Updated ${sessionItem.updatedAt}` : 'New chat'}
-                          </Text>
-                          {sessionItem.systemPrompt ? (
-                            <Text numberOfLines={2} style={styles.cardCopy}>
-                              Focus: {sessionItem.systemPrompt}
-                            </Text>
-                          ) : null}
+                    <>
+                      <View style={styles.scopeRow}>
+                        {(['family', 'private'] as ChatSessionScope[]).map((scope) => {
+                          const active = chatScope === scope;
+                          return (
+                            <Pressable
+                              key={scope}
+                              style={[styles.scopePill, active ? styles.scopePillActive : null]}
+                              onPress={() => handleChatScopeChange(scope)}
+                            >
+                              <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
+                                {describeChatAccess(scope)}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                      <View style={styles.inlineActions}>
+                        <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshChatSessions()} disabled={chatBusy}>
+                          <Text style={styles.secondaryButtonText}>Refresh</Text>
                         </Pressable>
-                      );
-                    })
+                        <Pressable
+                          style={[
+                            styles.primaryButtonSmall,
+                            !onlineDeviceAvailable || !canCreateActiveChat ? styles.networkRowDisabled : null,
+                          ]}
+                          onPress={() => openChatSessionEditor()}
+                          disabled={!onlineDeviceAvailable || chatBusy || !canCreateActiveChat}
+                        >
+                          <Text style={styles.primaryButtonText}>
+                            {describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope)}
+                          </Text>
+                        </Pressable>
+                      </View>
+                      {chatBusy && chatSessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
+                      {chatSessions.length === 0 ? (
+                        <Text style={styles.cardCopy}>{describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope)}</Text>
+                      ) : (
+                        chatSessions.map((sessionItem) => {
+                          const active = sessionItem.id === activeChatSessionId;
+                          const sharedGroupSession = looksLikeSharedGroupChatSession(
+                            sessionItem.name,
+                            sessionItem.scope,
+                            activeSpaceCopyContext,
+                          );
+                          const sharedGroupFallback = looksLikeSharedGroupChatSession(
+                            sessionItem.name,
+                            sessionItem.scope,
+                            activeSpaceCopyContext,
+                          );
+                          const previewText = describeChatSessionPreview(
+                            {
+                              lastMessagePreview: decodeChatMessageContent(sessionItem.lastMessagePreview ?? ''),
+                              lastMessageRole: sessionItem.lastMessageRole,
+                              lastMessageSenderDisplayName: sessionItem.lastMessageSenderDisplayName,
+                            },
+                            session?.user.display_name,
+                          );
+                          const previewFallback =
+                            sharedGroupSession && activeSharedChatParticipantSummary
+                              ? activeSharedChatParticipantSummary
+                              : sharedGroupFallback
+                              ? 'Everyone in this space keeps talking together here with Sparkbox helping everyone stay in sync.'
+                              : describeChatSessionPurpose({
+                                  sessionName: sessionItem.name,
+                                  scope: sessionItem.scope,
+                                  spaceDetail: activeSpaceCopyContext,
+                                });
+                          const sessionTimestamp = describeChatListTimestamp(
+                            sessionItem.lastMessageCreatedAt || sessionItem.updatedAt,
+                          );
+                          const sessionBadge = describeChatSessionBadge({
+                            sessionName: sessionItem.name,
+                            scope: sessionItem.scope,
+                            spaceDetail: activeSpaceCopyContext,
+                            active,
+                          });
+                          const avatarLabel = sharedGroupSession ? 'G' : sessionItem.scope === 'private' ? 'S' : '#';
+                          return (
+                            <Pressable
+                              key={sessionItem.id}
+                              style={[styles.chatSessionRow, active ? styles.chatSessionRowActive : null]}
+                              onPress={() => setActiveChatSessionId(sessionItem.id)}
+                            >
+                              <View style={styles.chatSessionAvatarRail}>
+                                <View
+                                  style={[
+                                    styles.chatSessionAvatarBubble,
+                                    sharedGroupSession
+                                      ? styles.chatSessionAvatarBubbleGroup
+                                      : sessionItem.scope === 'private'
+                                      ? styles.chatSessionAvatarBubblePrivate
+                                      : styles.chatSessionAvatarBubbleShared,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.chatSessionAvatarLabel,
+                                      sharedGroupSession ? styles.chatSessionAvatarLabelOnDark : null,
+                                    ]}
+                                  >
+                                    {avatarLabel}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.chatSessionBody}>
+                                <Text numberOfLines={1} style={styles.chatSessionTitle}>
+                                  {sessionItem.name}
+                                </Text>
+                                <Text numberOfLines={2} style={styles.chatSessionPreview}>
+                                  {previewText || previewFallback}
+                                </Text>
+                              </View>
+                              <View style={styles.chatSessionMeta}>
+                                {sessionTimestamp ? <Text style={styles.chatSessionTimestamp}>{sessionTimestamp}</Text> : null}
+                                <Text style={active ? styles.statusTagOnline : styles.tagMuted}>{sessionBadge}</Text>
+                              </View>
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </>
                   )}
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Topics</Text>
+                  <Text style={styles.cardTitle}>
+                    {waitingForSpaces ? 'Chats in this space' : describeSpaceThreadSectionTitle(activeSpaceCopyContext)}
+                  </Text>
                   <Text style={styles.cardCopy}>
-                    {activeSpaceDetail
-                      ? `${activeSpaceDetail.name} stays easier to follow when each conversation has its own topic.`
-                      : 'Pick a space to see the topics Sparkbox keeps ready for it.'}
+                    {waitingForSpaces ? 'Loading your spaces...' : describeSpaceThreadSectionCopy(activeSpaceCopyContext)}
                   </Text>
                   {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
-                  {activeSpaceDetail?.threads.length ? (
+                  {waitingForSpaces ? (
+                    <ActivityIndicator color="#0b6e4f" />
+                  ) : activeSpaceDetail?.threads.length ? (
                     activeSpaceDetail.threads.map((thread) => (
                       <Pressable
                         key={thread.id}
@@ -3137,28 +3567,26 @@ function App() {
                         <View style={styles.deviceRowHeadline}>
                           <Text style={styles.networkName}>{thread.title}</Text>
                           <Text style={styles.tagMuted}>
-                            {activeSpaceDetail.kind === 'shared'
-                              ? thread.chatSessionId && thread.chatSessionId === activeChatSessionId
-                                ? 'open group'
-                                : 'group topic'
-                              : thread.chatSessionId && thread.chatSessionId === activeChatSessionId
-                                ? 'open'
-                                : 'topic'}
+                            {describeSpaceThreadRowBadge(
+                              activeSpaceCopyContext,
+                              thread.title,
+                              Boolean(thread.chatSessionId),
+                              thread.chatSessionId === activeChatSessionId,
+                            )}
                           </Text>
                         </View>
                         <Text style={styles.cardCopy}>
-                          {activeSpaceDetail.kind === 'shared'
-                            ? thread.chatSessionId
-                              ? 'Continue this shared group chat with everyone in the space.'
-                              : 'Start this shared group chat with everyone in the space.'
-                            : thread.chatSessionId
-                              ? 'Continue this topic.'
-                              : 'Start this topic with Sparkbox.'}
+                          {describeSpaceThreadRowCopy(
+                            activeSpaceCopyContext,
+                            thread.title,
+                            Boolean(thread.chatSessionId),
+                            thread.chatSessionId === activeChatSessionId,
+                          )}
                         </Text>
                       </Pressable>
                     ))
                   ) : (
-                    <Text style={styles.cardCopy}>No topics yet.</Text>
+                    <Text style={styles.cardCopy}>{describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext)}</Text>
                   )}
                   {activeSpaceDetail?.kind === 'shared' ? (
                     <>
@@ -3174,7 +3602,7 @@ function App() {
                           onPress={openRelayComposer}
                           disabled={relayTargets.length === 0}
                         >
-                          <Text style={styles.primaryButtonText}>请 Sparkbox 帮我转述</Text>
+                          <Text style={styles.primaryButtonText}>Have Sparkbox relay it privately</Text>
                         </Pressable>
                       </View>
                     </>
@@ -3202,15 +3630,15 @@ function App() {
                   ) : null}
                   {enabledFamilyAppCards.length ? (
                     <>
-                      <Text style={styles.selectionLabel}>Enabled in this space</Text>
+                      <Text style={styles.selectionLabel}>On in this space</Text>
                       {enabledFamilyAppCards.map((app) => (
                         <View key={app.slug} style={styles.deviceRowCard}>
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                            <Text style={styles.statusTagOnline}>enabled</Text>
+                            <Text style={styles.statusTagOnline}>Ready here</Text>
                           </View>
                           <Text style={styles.cardCopy}>
-                            {app.meta?.entryCopy || app.meta?.description || 'This family app is enabled in the active space.'}
+                            {app.meta?.entryCopy || app.meta?.description || 'This family app is ready in this space.'}
                           </Text>
                           {app.meta?.starterPrompts?.length ? (
                             <View style={styles.scopeRow}>
@@ -3226,19 +3654,19 @@ function App() {
                             </View>
                           ) : null}
                           <Text style={styles.cardCopy}>
-                            {Object.entries(app.config)
-                              .map(([key, value]) => `${key}: ${String(value)}`)
-                              .join(' · ') || 'Enabled for this space'}
+                            {formatFamilyAppConfigSummary(app.config)}
                           </Text>
-                          <View style={styles.inlineActions}>
-                            <Pressable
-                              style={styles.secondaryButtonSmall}
-                              onPress={() => void disableFamilyAppForActiveSpace(app.slug)}
-                              disabled={settingsBusy}
-                            >
-                              <Text style={styles.secondaryButtonText}>Disable here</Text>
-                            </Pressable>
-                          </View>
+                          {canManageActiveSpaceFamilyApps ? (
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.secondaryButtonSmall}
+                                onPress={() => void disableFamilyAppForActiveSpace(app.slug)}
+                                disabled={settingsBusy}
+                              >
+                                <Text style={styles.secondaryButtonText}>Disable here</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
                         </View>
                       ))}
                     </>
@@ -3250,7 +3678,7 @@ function App() {
                         <View key={`ready-${app.slug}`} style={styles.deviceRowCard}>
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
-                            <Text style={styles.tagMuted}>{app.riskLevel}</Text>
+                            <Text style={styles.tagMuted}>{describeFamilyAppRiskLevel(app.riskLevel)}</Text>
                           </View>
                           <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
                           <View style={styles.inlineActions}>
@@ -3272,7 +3700,7 @@ function App() {
                   <View style={styles.card}>
                     <Text style={styles.cardTitle}>Inspiration for {activeSpace.name}</Text>
                     <Text style={styles.cardCopy}>
-                      Family apps help Sparkbox feel more useful in everyday life. Install them once on this Box, then turn them on only in the spaces where they fit.
+                      Family apps help Sparkbox feel more useful in everyday life. Install them once on this device, then turn them on only in the spaces where they fit.
                     </Text>
                     {chatSpotlightEnabledApps.length > 0 ? (
                       <>
@@ -3281,10 +3709,10 @@ function App() {
                           <View key={`chat-enabled-${app.slug}`} style={styles.deviceRowCard}>
                             <View style={styles.deviceRowHeadline}>
                               <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                              <Text style={styles.statusTagOnline}>enabled</Text>
+                              <Text style={styles.statusTagOnline}>Ready here</Text>
                             </View>
                             <Text style={styles.cardCopy}>
-                              {app.meta?.entryCopy || app.meta?.description || 'Sparkbox is already using this family app in the active space.'}
+                              {app.meta?.entryCopy || app.meta?.description || 'Sparkbox is already using this family app in this space.'}
                             </Text>
                             {app.meta?.starterPrompts?.length ? (
                               <View style={styles.scopeRow}>
@@ -3310,7 +3738,7 @@ function App() {
                           <View key={`chat-ready-${app.slug}`} style={styles.deviceRowCard}>
                             <View style={styles.deviceRowHeadline}>
                               <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
-                              <Text style={styles.tagMuted}>installed</Text>
+                              <Text style={styles.tagMuted}>On this device</Text>
                             </View>
                             <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
                             <View style={styles.inlineActions}>
@@ -3342,7 +3770,7 @@ function App() {
                                 onPress={() => void installSelectedFamilyApp(app.slug)}
                                 disabled={settingsBusy}
                               >
-                                <Text style={styles.primaryButtonText}>Install on this Box</Text>
+                                <Text style={styles.primaryButtonText}>Install on this device</Text>
                               </Pressable>
                             </View>
                           </View>
@@ -3356,67 +3784,84 @@ function App() {
                     </View>
                   </View>
                 ) : null}
+                  </>
+                ) : null}
 
+                {activeChatSessionId ? (
+                  <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{activeChatSession?.name || 'Active topic chat'}</Text>
-                  <Text style={styles.cardCopy}>
-                    {activeChatSession
-                      ? sharedChatIsVisible && activeSpaceDetail
-                        ? `${activeSpaceDetail.name} uses this topic as one shared group chat for everyone in the space, with AIBox carrying the running context forward.`
-                        : `This is where Sparkbox keeps the running context for ${activeChatSession.name}.`
-                      : 'Pick or create a topic chat to keep this conversation grounded in one clear subject.'}
-                  </Text>
-                  {sharedChatIsVisible && activeSpaceDetail ? (
-                    <View style={styles.selectionCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.selectionLabel}>Shared Group Chat</Text>
+                  <View style={styles.chatDetailHeader}>
+                    <View style={styles.chatDetailHeaderTopRow}>
+                      <Pressable
+                        style={[styles.secondaryButtonSmall, !activeChatSession ? styles.networkRowDisabled : null]}
+                        onPress={closeActiveChatDetail}
+                        disabled={!activeChatSession}
+                      >
+                        <Text style={styles.secondaryButtonText}>Back to chats</Text>
+                      </Pressable>
+                      {activeChatSession ? (
                         <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
-                          {onlineDeviceAvailable ? 'AIBox online' : 'AIBox offline'}
+                          {onlineDeviceAvailable ? 'Sparkbox online' : 'Sparkbox offline'}
                         </Text>
-                      </View>
-                      <Text style={styles.selectionCopy}>
-                        Everyone in {activeSpaceDetail.name} is speaking in the same thread here, and Sparkbox replies back into that shared context.
+                      ) : null}
+                    </View>
+                    <View style={styles.chatDetailHeaderBody}>
+                      <Text style={styles.chatDetailTitle}>
+                        {waitingForSpaces
+                          ? 'Loading chat...'
+                          : activeChatSession?.name || describeActiveChatFallbackTitle(activeSpaceCopyContext)}
                       </Text>
-                      <View style={styles.scopeRow}>
-                        {activeSharedChatParticipantLabels.map((label) => {
-                          const isCurrentUser = label === 'You';
-                          return (
-                            <View
-                              key={`shared-chat-member-${label}`}
-                              style={[styles.groupParticipantPill, isCurrentUser ? styles.groupParticipantPillSelf : null]}
+                      <Text style={styles.chatDetailSubtitle}>
+                        {waitingForSpaces
+                          ? 'Loading your spaces...'
+                          : activeChatSession
+                          ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible)
+                          : describeActiveChatEmptyStateCopy(activeSpaceCopyContext)}
+                      </Text>
+                      {sharedChatIsVisible && activeSharedChatParticipantSummary && !waitingForSpaces ? (
+                        <Text style={styles.chatDetailParticipants}>{activeSharedChatParticipantSummary}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  {waitingForSpaces ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  {sharedChatIsVisible && activeSpaceDetail && !waitingForSpaces ? (
+                    <View style={styles.scopeRow}>
+                      {activeSharedChatParticipantLabels.map((label) => {
+                        const isCurrentUser = label === 'You';
+                        return (
+                          <View
+                            key={`shared-chat-member-${label}`}
+                            style={[styles.groupParticipantPill, isCurrentUser ? styles.groupParticipantPillSelf : null]}
+                          >
+                            <Text
+                              style={[
+                                styles.groupParticipantLabel,
+                                isCurrentUser ? styles.groupParticipantLabelSelf : null,
+                              ]}
                             >
-                              <Text
-                                style={[
-                                  styles.groupParticipantLabel,
-                                  isCurrentUser ? styles.groupParticipantLabelSelf : null,
-                                ]}
-                              >
-                                {label}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                        <View
+                              {label}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                      <View
+                        style={[
+                          styles.groupParticipantPill,
+                          onlineDeviceAvailable ? styles.groupParticipantPillOnline : styles.groupParticipantPillOffline,
+                        ]}
+                      >
+                        <Text
                           style={[
-                            styles.groupParticipantPill,
-                            onlineDeviceAvailable ? styles.groupParticipantPillOnline : styles.groupParticipantPillOffline,
+                            styles.groupParticipantLabel,
+                            onlineDeviceAvailable ? styles.groupParticipantLabelOnline : styles.groupParticipantLabelOffline,
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.groupParticipantLabel,
-                              onlineDeviceAvailable
-                                ? styles.groupParticipantLabelOnline
-                                : styles.groupParticipantLabelOffline,
-                            ]}
-                          >
-                            {onlineDeviceAvailable ? 'AIBox' : 'AIBox offline'}
-                          </Text>
-                        </View>
+                          {onlineDeviceAvailable ? 'Sparkbox' : 'Sparkbox offline'}
+                        </Text>
                       </View>
                     </View>
                   ) : null}
-                  {activeChatSession && canManageActiveChat ? (
+                  {activeChatSession && canManageActiveChat && !waitingForSpaces ? (
                     <View style={styles.inlineActions}>
                       <Pressable style={styles.secondaryButtonSmall} onPress={() => openChatSessionEditor(activeChatSession)}>
                         <Text style={styles.secondaryButtonText}>Edit settings</Text>
@@ -3445,68 +3890,94 @@ function App() {
                   {activeChatTimelineMessages.length === 0 ? (
                     <Text style={styles.cardCopy}>No messages yet in this chat.</Text>
                   ) : (
-                    activeChatTimelineMessages.map((message, index) => (
-                      <View
-                        key={`${message.role}-${index}-${message.content}`}
-                        style={[
-                          styles.chatBubble,
-                          message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
-                          message.pending ? styles.chatBubblePending : null,
-                        ]}
-                      >
-                        <Text style={styles.selectionLabel}>
-                          {message.pending
-                            ? describeChatSendPhase(chatSendPhase) || 'Sparkbox'
-                            : message.role === 'user'
-                            ? message.senderDisplayName || 'You'
-                            : 'Sparkbox'}
-                        </Text>
-                        <Text
+                    chatTimelineGroups.map((group) =>
+                      group.kind === 'status' ? (
+                        <View key={group.id} style={styles.chatStatusNotice}>
+                          <View style={styles.chatStatusNoticeHeader}>
+                            <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
+                            {group.message.createdAt ? (
+                              <Text style={styles.chatStatusTimestamp}>
+                                {describeChatMessageTimestamp(group.message.createdAt)}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <Text style={styles.chatStatusNoticeCopy}>
+                            {decodeChatMessageContent(group.message.content)}
+                          </Text>
+                          <Text style={styles.cardCopy}>{group.statusCopy}</Text>
+                          {group.message.failed && group.message.errorMessage ? (
+                            <Text style={styles.errorText}>{group.message.errorMessage}</Text>
+                          ) : null}
+                          {group.message.retryable && group.message.retryContent ? (
+                            <View style={styles.inlineActions}>
+                              <Pressable
+                                style={styles.secondaryButtonSmall}
+                                onPress={() => void submitChatMessage(group.message.retryContent ?? undefined)}
+                                disabled={chatBusy}
+                              >
+                                <Text style={styles.secondaryButtonText}>Retry</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : (
+                        <View
+                          key={group.id}
                           style={[
-                            styles.chatBubbleCopy,
-                            message.role === 'user' ? styles.chatBubbleCopyUser : null,
-                            message.pending ? styles.chatBubbleCopyPending : null,
+                            styles.chatMessageGroup,
+                            group.role === 'user' ? styles.chatMessageGroupUser : styles.chatMessageGroupAssistant,
                           ]}
                         >
-                          {message.content}
-                        </Text>
-                        {message.pending ? (
-                          <Text style={styles.cardCopy}>
-                            {chatSendPhase === 'streaming'
-                              ? `Sparkbox 正在继续回答${chatPendingIndicator}`
-                              : `首次响应可能需要 1–5 分钟${chatPendingIndicator}`}
-                          </Text>
-                        ) : null}
-                        {message.failed ? (
-                          <>
-                            {message.errorMessage ? <Text style={styles.errorText}>{message.errorMessage}</Text> : null}
-                            {message.retryable && message.retryContent ? (
-                              <View style={styles.inlineActions}>
-                                <Pressable
-                                  style={styles.secondaryButtonSmall}
-                                  onPress={() => void submitChatMessage(message.retryContent ?? undefined)}
-                                  disabled={chatBusy}
-                                >
-                                  <Text style={styles.secondaryButtonText}>Retry</Text>
-                                </Pressable>
-                              </View>
-                            ) : null}
-                          </>
-                        ) : null}
-                      </View>
-                    ))
+                          <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
+                          {group.messages.map((message, index) => (
+                            <View
+                              key={`${group.id}-${index}-${message.content}`}
+                              style={[
+                                styles.chatBubble,
+                                group.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                              ]}
+                            >
+                              {message.createdAt ? (
+                                <View style={styles.chatBubbleMetaRow}>
+                                  <Text
+                                    style={[
+                                      styles.chatBubbleTimestamp,
+                                      group.role === 'user' ? styles.chatBubbleTimestampUser : null,
+                                    ]}
+                                  >
+                                    {describeChatMessageTimestamp(message.createdAt)}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              <Text
+                                style={[
+                                  styles.chatBubbleCopy,
+                                  group.role === 'user' ? styles.chatBubbleCopyUser : null,
+                                ]}
+                              >
+                                {decodeChatMessageContent(message.content)}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ),
+                    )
                   )}
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{sharedChatIsVisible ? 'Message the group' : 'Send a message'}</Text>
+                  <Text style={styles.cardTitle}>
+                    {waitingForSpaces ? 'Loading chat...' : sharedChatIsVisible ? 'Message the group' : 'Send a message'}
+                  </Text>
                   <TextInput
                     placeholder={
-                      activeChatSession
-                        ? sharedChatIsVisible
-                          ? 'Send to everyone in this space'
-                          : 'Ask Sparkbox about this topic'
-                        : 'Pick a topic chat first'
+                      waitingForSpaces
+                        ? 'Loading your spaces...'
+                        : describeChatComposerPlaceholder(
+                            activeSpaceCopyContext,
+                            Boolean(activeChatSession),
+                            sharedChatIsVisible,
+                          )
                     }
                     placeholderTextColor="#7e8a83"
                     style={[styles.input, styles.textArea]}
@@ -3514,32 +3985,34 @@ function App() {
                     onChangeText={setChatDraft}
                     multiline
                     numberOfLines={4}
-                    editable={onlineDeviceAvailable && !chatBusy && Boolean(activeChatSessionId)}
+                    editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && Boolean(activeChatSessionId)}
                   />
                   <View style={styles.inlineActions}>
                     <Pressable
                       style={[
                         styles.primaryButtonSmall,
-                        !onlineDeviceAvailable || !activeChatSessionId ? styles.networkRowDisabled : null,
+                        waitingForSpaces || !onlineDeviceAvailable || !activeChatSessionId ? styles.networkRowDisabled : null,
                       ]}
                       onPress={() => void submitChatMessage()}
-                      disabled={!onlineDeviceAvailable || chatBusy || !chatDraft.trim() || !activeChatSessionId}
+                      disabled={waitingForSpaces || !onlineDeviceAvailable || chatBusy || !chatDraft.trim() || !activeChatSessionId}
                     >
                       {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send</Text>}
                     </Pressable>
                   </View>
                 </View>
+                  </>
+                ) : null}
               </>
             ) : null}
 
             {shellTab === 'library' ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Space library</Text>
+                  <Text style={styles.cardTitle}>Library overview</Text>
                   <Text style={styles.cardCopy}>
                     {activeSpace
                       ? `${activeSpace.name} (${activeSpaceKindLabel}) keeps its memories, summaries, photos, files, and tasks together.`
-                      : 'Pick a space to browse its accumulated Sparkbox context.'}
+                      : 'Pick a space to browse what Sparkbox has saved there.'}
                   </Text>
                   {libraryNotice ? <Text style={styles.noticeText}>{libraryNotice}</Text> : null}
                   {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
@@ -3553,15 +4026,20 @@ function App() {
                     ))}
                   </View>
                   <Text style={styles.cardCopy}>
-                    Some sections still map to legacy storage and scheduler data, but they now live in one space library.
+                    Everything Sparkbox has saved for this space shows up here in one place.
                   </Text>
                 </View>
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Memories in this space</Text>
                   <Text style={styles.cardCopy}>
-                    Memories are the current long-term facts Sparkbox should keep for {activeSpace?.name || 'this space'}.
+                    Memories are the key details Sparkbox should remember for {activeSpace?.name || 'this space'}.
                   </Text>
+                  {!canMutateActiveSpaceLibrary && activeSpace?.kind === 'shared' ? (
+                    <Text style={styles.cardCopy}>
+                      Owners update the shared memories and summaries here. Members can still read everything in this space library.
+                    </Text>
+                  ) : null}
                   <View style={styles.inlineActions}>
                     <Pressable
                       style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
@@ -3570,13 +4048,15 @@ function App() {
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
                     </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
-                      onPress={() => openMemoryEditor()}
-                      disabled={!activeSpace || libraryBusy}
-                    >
-                      <Text style={styles.primaryButtonText}>New memory</Text>
-                    </Pressable>
+                    {canMutateActiveSpaceLibrary ? (
+                      <Pressable
+                        style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
+                        onPress={() => openMemoryEditor()}
+                        disabled={!activeSpace || libraryBusy}
+                      >
+                        <Text style={styles.primaryButtonText}>New memory</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   {spaceLibrary.memories.length === 0 && !libraryBusy ? (
                     <Text style={styles.cardCopy}>Nothing has been saved to Memories yet.</Text>
@@ -3590,32 +4070,34 @@ function App() {
                         </Text>
                       </View>
                       <Text style={styles.cardCopy}>{memory.content}</Text>
-                      <Text style={styles.cardCopy}>Updated {memory.updatedAt}</Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => openMemoryEditor(memory)}
-                          disabled={libraryBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Edit</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => confirmRemoveMemory(memory)}
-                          disabled={libraryBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Delete</Text>
-                        </Pressable>
-                      </View>
+                      <Text style={styles.cardCopy}>
+                        Updated {describeUiDateTime(memory.updatedAt) || memory.updatedAt}
+                      </Text>
+                      {canMutateActiveSpaceLibrary ? (
+                        <View style={styles.inlineActions}>
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => openMemoryEditor(memory)}
+                            disabled={libraryBusy}
+                          >
+                            <Text style={styles.secondaryButtonText}>Edit</Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => confirmRemoveMemory(memory)}
+                            disabled={libraryBusy}
+                          >
+                            <Text style={styles.secondaryButtonText}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Summaries in this space</Text>
-                  <Text style={styles.cardCopy}>
-                    Summaries are read-only snapshots Sparkbox can generate from a topic so other family members can catch up quickly.
-                  </Text>
+                  <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
                   <View style={styles.inlineActions}>
                     <Pressable
                       style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
@@ -3624,19 +4106,17 @@ function App() {
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
                     </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
-                      onPress={() => void captureActiveSpaceSummary()}
-                      disabled={!activeChatSessionId || libraryBusy}
-                    >
-                      <Text style={styles.primaryButtonText}>Capture active topic</Text>
-                    </Pressable>
+                    {canMutateActiveSpaceLibrary ? (
+                      <Pressable
+                        style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
+                        onPress={() => void captureActiveSpaceSummary()}
+                        disabled={!activeChatSessionId || libraryBusy}
+                      >
+                        <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
-                  {activeChatSession ? (
-                    <Text style={styles.cardCopy}>Current topic: {activeChatSession.name}</Text>
-                  ) : (
-                    <Text style={styles.cardCopy}>Pick a topic in Chats first if you want Sparkbox to snapshot that conversation.</Text>
-                  )}
+                  <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
                   {spaceLibrary.summaries.length === 0 && !libraryBusy ? (
                     <Text style={styles.cardCopy}>No summaries yet.</Text>
                   ) : null}
@@ -3647,23 +4127,27 @@ function App() {
                         <Text style={styles.tagMuted}>{summary.sourceLabel || 'summary'}</Text>
                       </View>
                       <Text style={styles.cardCopy}>{summary.content}</Text>
-                      <Text style={styles.cardCopy}>Created {summary.createdAt}</Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => saveSummaryAsMemory(summary)}
-                          disabled={libraryBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Save as memory</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.secondaryButtonSmall}
-                          onPress={() => confirmRemoveSummary(summary)}
-                          disabled={libraryBusy}
-                        >
-                          <Text style={styles.secondaryButtonText}>Delete</Text>
-                        </Pressable>
-                      </View>
+                      <Text style={styles.cardCopy}>
+                        Created {describeUiDateTime(summary.createdAt) || summary.createdAt}
+                      </Text>
+                      {canMutateActiveSpaceLibrary ? (
+                        <View style={styles.inlineActions}>
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => saveSummaryAsMemory(summary)}
+                            disabled={libraryBusy}
+                          >
+                            <Text style={styles.secondaryButtonText}>Save as memory</Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => confirmRemoveSummary(summary)}
+                            disabled={libraryBusy}
+                          >
+                            <Text style={styles.secondaryButtonText}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -3673,6 +4157,11 @@ function App() {
                   <Text style={styles.cardCopy}>
                     Photos belong to this space as shared moments, not just as generic uploads.
                   </Text>
+                  {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
+                    <Text style={styles.cardCopy}>
+                      Owners manage shared photos here. Members can still browse and download what is already in this space.
+                    </Text>
+                  ) : null}
                   <View style={styles.inlineActions}>
                     <Pressable
                       style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
@@ -3681,16 +4170,18 @@ function App() {
                     >
                       <Text style={styles.secondaryButtonText}>Refresh photos</Text>
                     </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => void pickAndUploadFiles()}
-                      disabled={!onlineDeviceAvailable || filesBusy}
-                    >
-                      <Text style={styles.primaryButtonText}>Upload photos</Text>
-                    </Pressable>
+                    {canMutateActiveSpaceFiles ? (
+                      <Pressable
+                        style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                        onPress={() => void pickAndUploadFiles()}
+                        disabled={!onlineDeviceAvailable || filesBusy}
+                      >
+                        <Text style={styles.primaryButtonText}>Upload photos</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   {photoEntries.length === 0 && !filesBusy ? (
-                    <Text style={styles.cardCopy}>No shared photos detected in the current folder yet.</Text>
+                    <Text style={styles.cardCopy}>{describeLibraryPhotoEmptyState(fileSpace)}</Text>
                   ) : null}
                   {photoEntries.map((entry) => (
                     <View key={`photo-${entry.path}`} style={styles.deviceRowCard}>
@@ -3699,8 +4190,8 @@ function App() {
                         <Text style={styles.statusTagOnline}>photo</Text>
                       </View>
                       <Text style={styles.cardCopy}>
-                        {entry.modified ? `Updated ${entry.modified}` : 'Stored on Sparkbox'}
-                        {typeof entry.size === 'number' ? ` · ${entry.size} bytes` : ''}
+                        {describeFileTimestamp(entry.modified || '')}
+                        {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
                       </Text>
                       <View style={styles.inlineActions}>
                         <Pressable
@@ -3728,13 +4219,19 @@ function App() {
                   <Text style={styles.cardTitle}>Files in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Files stay inside ${activeSpace ? activeSpace.name : 'the active space'} so each space can keep its own working materials separate.`
-                      : 'Sparkbox needs to be online before files can be browsed or changed.'}
+                      ? `Files stay inside ${activeSpace ? activeSpace.name : 'this space'} so each space can keep its own working materials separate.`
+                      : 'Bring Sparkbox online to browse or update the files for this space.'}
                   </Text>
+                  {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
+                    <Text style={styles.cardCopy}>
+                      Owners manage shared files and folders here. Members can still open and download what is already in this space.
+                    </Text>
+                  ) : null}
                   {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
                   {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
                   <Text style={styles.cardCopy}>
-                    Location: /{currentFilePath || activeSpace?.name || (fileSpace === 'family' ? 'family' : 'private')}
+                    Viewing folder:{' '}
+                    {(currentFilePath || activeSpace?.name || (fileSpace === 'family' ? 'Shared space' : 'Private space')).replace(/^\/+/, '')}
                   </Text>
                   <View style={styles.inlineActions}>
                     <Pressable
@@ -3744,20 +4241,24 @@ function App() {
                     >
                       <Text style={styles.secondaryButtonText}>Refresh</Text>
                     </Pressable>
-                    <Pressable
-                      style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => openFileEditor('mkdir')}
-                      disabled={!onlineDeviceAvailable || filesBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>New folder</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                      onPress={() => void pickAndUploadFiles()}
-                      disabled={!onlineDeviceAvailable || filesBusy}
-                    >
-                      <Text style={styles.primaryButtonText}>Upload</Text>
-                    </Pressable>
+                    {canMutateActiveSpaceFiles ? (
+                      <Pressable
+                        style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                        onPress={() => openFileEditor('mkdir')}
+                        disabled={!onlineDeviceAvailable || filesBusy}
+                      >
+                        <Text style={styles.secondaryButtonText}>New folder</Text>
+                      </Pressable>
+                    ) : null}
+                    {canMutateActiveSpaceFiles ? (
+                      <Pressable
+                        style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+                        onPress={() => void pickAndUploadFiles()}
+                        disabled={!onlineDeviceAvailable || filesBusy}
+                      >
+                        <Text style={styles.primaryButtonText}>Upload</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   {fileListing?.parent ? (
                     <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshFiles(fileListing.parent || '')}>
@@ -3767,10 +4268,10 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{fileSpace === 'family' ? 'Shared space files' : 'Private space files'}</Text>
+                  <Text style={styles.cardTitle}>{describeLibraryFileListTitle(fileSpace)}</Text>
                   {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {!filesBusy && (fileListing?.entries.length ?? 0) === 0 ? (
-                    <Text style={styles.cardCopy}>Nothing is stored here yet.</Text>
+                    <Text style={styles.cardCopy}>{describeLibraryFileListEmptyState(fileSpace)}</Text>
                   ) : null}
                   {fileListing?.entries.map((entry) => (
                     <View key={entry.path} style={styles.deviceRowCard}>
@@ -3781,12 +4282,12 @@ function App() {
                         </Text>
                       </View>
                       <Text style={styles.cardCopy}>
-                        {entry.modified ? `Updated ${entry.modified}` : 'Stored on Sparkbox'}
-                        {typeof entry.size === 'number' ? ` · ${entry.size} bytes` : ''}
+                        {describeFileTimestamp(entry.modified || '')}
+                        {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
                       </Text>
                       {fileSpace === 'family' && entry.uploadedByUserId ? (
                         <Text style={styles.cardCopy}>
-                          {entry.uploadedByUserId === session.user.id ? 'Uploaded by you' : `Uploaded by ${entry.uploadedByUserId}`}
+                          {describeFileUploader(entry.uploadedByUserId, session.user.id, homeMembers)}
                         </Text>
                       ) : null}
                       <View style={styles.inlineActions}>
@@ -3828,17 +4329,13 @@ function App() {
                     </View>
                   ))}
                 </View>
-              </>
-            ) : null}
 
-            {shellTab === 'library' ? (
-              <>
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Tasks in this space</Text>
                   <Text style={styles.cardCopy}>
                     {onlineDeviceAvailable
-                      ? `Tasks stay attached to ${activeSpace ? activeSpace.name : 'the active space'} so routines and reminders do not spill into the wrong people context.`
-                      : 'Sparkbox needs to be online before tasks can be loaded or changed.'}
+                      ? `Tasks stay attached to ${activeSpace ? activeSpace.name : 'this space'} so routines and reminders stay with the right space.`
+                      : 'Bring Sparkbox online to load or update the routines for this space.'}
                   </Text>
                   {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
                   {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
@@ -3866,36 +4363,32 @@ function App() {
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>{taskScope === 'family' ? 'Shared space routines' : 'Private space routines'}</Text>
+                  <Text style={styles.cardTitle}>{describeLibraryTaskListTitle(taskScope)}</Text>
                   {tasksBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                   {!tasksBusy && tasks.length === 0 ? (
-                    <Text style={styles.cardCopy}>
-                      {taskScope === 'family'
-                        ? 'No shared Sparkbox tasks yet.'
-                        : 'No private Sparkbox tasks yet.'}
-                    </Text>
+                    <Text style={styles.cardCopy}>{describeLibraryTaskListEmptyState(taskScope)}</Text>
                   ) : null}
                   {tasks.map((task) => (
                     <View key={task.id} style={styles.deviceRowCard}>
                       <View style={styles.deviceRowHeadline}>
                         <Text style={styles.networkName}>{task.name}</Text>
                         <Text style={task.enabled ? styles.statusTagOnline : styles.statusTagOffline}>
-                          {task.enabled ? 'enabled' : 'paused'}
+                          {describeTaskEnabledState(task.enabled)}
                         </Text>
                       </View>
-                      <Text style={styles.cardCopy}>Schedule: {task.cronExpr}</Text>
+                      <Text style={styles.cardCopy}>{describeTaskSchedule(task.cronExpr)}</Text>
                       <Text style={styles.cardCopy}>
-                        Runs as: {task.commandType} · Visibility: {task.scope}
+                        {describeTaskExecution(task.commandType, task.scope)}
                       </Text>
                       {task.lastStatus ? (
                         <Text style={styles.cardCopy}>
                           Last run: {task.lastStatus}
-                          {task.lastRunAt ? ` · ${task.lastRunAt}` : ''}
+                          {task.lastRunAt ? ` · ${describeUiDateTime(task.lastRunAt) || task.lastRunAt}` : ''}
                         </Text>
                       ) : null}
                       {task.lastOutput ? (
                         <Text numberOfLines={3} style={styles.cardCopy}>
-                          Output: {task.lastOutput}
+                          Latest note: {task.lastOutput}
                         </Text>
                       ) : null}
                       <View style={styles.inlineActions}>
@@ -3941,9 +4434,56 @@ function App() {
             {shellTab === 'settings' ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Settings</Text>
+                  <Text style={styles.cardTitle}>Household overview</Text>
                   <Text style={styles.cardCopy}>
-                    Signed in as {session.user.display_name}. Role: {session.user.role}.
+                    {homeBusy
+                      ? 'Refreshing your household status...'
+                      : onlineDeviceAvailable
+                        ? 'Sparkbox is ready for household chat.'
+                        : 'Household history stays available even when Sparkbox is offline.'}
+                  </Text>
+                  {homeError ? <Text style={styles.errorText}>{homeError}</Text> : null}
+                  {homeBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  <View style={styles.inlineActions}>
+                    <Pressable style={styles.primaryButtonSmall} onPress={() => setShellTab('chats')}>
+                      <Text style={styles.primaryButtonText}>Open group chat</Text>
+                    </Pressable>
+                    {canManage ? (
+                      <Pressable style={styles.secondaryButtonSmall} onPress={beginNewDeviceOnboarding}>
+                        <Text style={styles.secondaryButtonText}>Set up another device</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Space you're viewing</Text>
+                  <Text style={styles.cardCopy}>
+                    {activeSpace
+                      ? describeCurrentSpaceSummaryCopy(
+                          activeSpace.name,
+                          activeSpaceKindLabel,
+                          activeSpace.kind,
+                          activeSpace.threadCount,
+                        )
+                      : 'Pick a space in Chats so Library and Settings stay on that same space.'}
+                  </Text>
+                  {activeSpace ? (
+                    <View style={styles.deviceRowCard}>
+                      <View style={styles.deviceRowHeadline}>
+                        <Text style={styles.networkName}>{activeSpace.name}</Text>
+                        <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
+                      </View>
+                      <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || 'Shared home'}</Text>
+                      <Text style={styles.cardCopy}>{describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Your account</Text>
+                  <Text style={styles.cardCopy}>
+                    {session.user.display_name} · {describeHouseholdRole(session.user.role)} access
                   </Text>
                   {settingsNotice ? <Text style={styles.noticeText}>{settingsNotice}</Text> : null}
                   {settingsError ? <Text style={styles.errorText}>{settingsError}</Text> : null}
@@ -3958,13 +4498,15 @@ function App() {
                   <Text style={styles.cardTitle}>Devices and Network</Text>
                   <Text style={styles.cardCopy}>
                     {canReprovisionDevice
-                      ? 'Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through setup mode.'
-                      : 'Owners can change Wi-Fi from here. Members can still see which Box is currently attached to this household.'}
+                      ? 'Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through Wi-Fi setup.'
+                      : 'Owners can change Wi-Fi from here. Members can still see which Sparkbox devices are attached to this household.'}
                   </Text>
-                  {homeDevices.map((device) => (
-                    <View key={device.device_id} style={styles.deviceRowCard}>
-                      <Text style={styles.networkName}>{device.device_id}</Text>
-                      <Text style={styles.cardCopy}>{device.status}</Text>
+                    {homeDevices.map((device, deviceIndex) => (
+                      <View key={device.device_id} style={styles.deviceRowCard}>
+                        <Text style={styles.networkName}>
+                          {describeDeviceLabel(device.device_id, deviceIndex, homeDevices.length)}
+                        </Text>
+                        <Text style={styles.cardCopy}>{describeDeviceStatus(device.status)}</Text>
                       {canReprovisionDevice ? (
                         <View style={styles.inlineActions}>
                           <Pressable
@@ -3983,7 +4525,7 @@ function App() {
                   <View style={styles.card}>
                     <Text style={styles.cardTitle}>Manage family apps</Text>
                     <Text style={styles.cardCopy}>
-                      Install a family app once on this Box, then decide which spaces should actually use it. This is the owner control room for Box behaviors.
+                      Install a family app once on this device, then decide which spaces should actually use it.
                     </Text>
                     {familyAppsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                     {activeSpace && recommendedFamilyApps.length > 0 ? (
@@ -4000,7 +4542,9 @@ function App() {
                               Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                             </Text>
                             {app.capabilities.length > 0 ? (
-                              <Text style={styles.cardCopy}>What it helps with: {app.capabilities.join(' · ')}</Text>
+                              <Text style={styles.cardCopy}>
+                                What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
+                              </Text>
                             ) : null}
                             <View style={styles.inlineActions}>
                               <Pressable
@@ -4008,7 +4552,7 @@ function App() {
                                 onPress={() => void installSelectedFamilyApp(app.slug)}
                                 disabled={settingsBusy}
                               >
-                                <Text style={styles.primaryButtonText}>Install for this Box</Text>
+                                <Text style={styles.primaryButtonText}>Install on this device</Text>
                               </Pressable>
                             </View>
                           </View>
@@ -4017,12 +4561,12 @@ function App() {
                     ) : null}
                     {installedFamilyApps.length > 0 ? (
                       <>
-                        <Text style={styles.selectionLabel}>Installed on this Box</Text>
+                        <Text style={styles.selectionLabel}>Installed on this device</Text>
                         {installedFamilyApps.map((app) => (
                           <View key={`installed-${app.slug}`} style={styles.deviceRowCard}>
                             <View style={styles.deviceRowHeadline}>
                               <Text style={styles.networkName}>{app.title}</Text>
-                              <Text style={styles.statusTagOnline}>installed</Text>
+                              <Text style={styles.statusTagOnline}>On this device</Text>
                             </View>
                             {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                             <Text style={styles.cardCopy}>
@@ -4030,8 +4574,8 @@ function App() {
                             </Text>
                             <Text style={styles.cardCopy}>
                               {app.supportsProactiveMessages ? 'Can take initiative' : 'Only speaks when asked'}
-                              {app.supportsPrivateRelay ? ' · Helps with private relay' : ''}
-                              {app.requiresOwnerConfirmation ? ' · Needs owner confirmation' : ''}
+                              {app.supportsPrivateRelay ? ' · Can help with private relays' : ''}
+                              {app.requiresOwnerConfirmation ? ' · Relays stay owner-approved' : ''}
                             </Text>
                             <View style={styles.inlineActions}>
                               <Pressable
@@ -4039,26 +4583,28 @@ function App() {
                                 onPress={() => void uninstallInstalledFamilyApp(app.slug)}
                                 disabled={settingsBusy}
                               >
-                                <Text style={styles.secondaryButtonText}>Remove from Box</Text>
+                                <Text style={styles.secondaryButtonText}>Remove from this device</Text>
                               </Pressable>
                             </View>
                           </View>
                         ))}
                       </>
                     ) : null}
-                    <Text style={styles.selectionLabel}>Available for this Box</Text>
+                    <Text style={styles.selectionLabel}>Available for this device</Text>
                     {availableFamilyApps.map((app) => (
                       <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
                           <View style={styles.deviceRowHeadline}>
                             <Text style={styles.networkName}>{app.title}</Text>
-                            <Text style={styles.tagMuted}>{app.riskLevel}</Text>
+                            <Text style={styles.tagMuted}>{describeFamilyAppRiskLevel(app.riskLevel)}</Text>
                           </View>
                           {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                           <Text style={styles.cardCopy}>
                             Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
                           </Text>
                           {app.capabilities.length > 0 ? (
-                            <Text style={styles.cardCopy}>What it helps with: {app.capabilities.join(' · ')}</Text>
+                            <Text style={styles.cardCopy}>
+                              What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
+                            </Text>
                           ) : null}
                           <View style={styles.inlineActions}>
                             <Pressable
@@ -4076,12 +4622,12 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Owner advanced controls</Text>
+                    <Text style={styles.cardTitle}>Device tools</Text>
                     <Text style={styles.cardCopy}>
-                      Use these only when Sparkbox needs a deeper technical check or recovery.
+                      Use these when Sparkbox needs a closer check or recovery.
                     </Text>
                     <View style={styles.scopeRow}>
-                      {homeDevices.map((device) => {
+                      {homeDevices.map((device, deviceIndex) => {
                         const active = ownerDeviceId === device.device_id;
                         return (
                           <Pressable
@@ -4091,7 +4637,7 @@ function App() {
                             disabled={ownerConsoleBusy}
                           >
                             <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                              {device.device_id}
+                              {describeDeviceLabel(device.device_id, deviceIndex, homeDevices.length)}
                             </Text>
                           </Pressable>
                         );
@@ -4103,24 +4649,45 @@ function App() {
                         onPress={() => void refreshOwnerConsole()}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Refresh advanced status</Text>
+                        <Text style={styles.secondaryButtonText}>Refresh device</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.secondaryButtonSmall}
+                        onPress={() => void reconnectOwnerDevice()}
+                        disabled={!ownerDeviceId || ownerConsoleBusy}
+                      >
+                        <Text style={styles.secondaryButtonText}>Try to reconnect Sparkbox</Text>
                       </Pressable>
                     </View>
-                    {ownerConsoleError ? <Text style={styles.errorText}>{ownerConsoleError}</Text> : null}
-                    {ownerConsoleNotice ? <Text style={styles.noticeText}>{ownerConsoleNotice}</Text> : null}
-                    {ownerConsoleBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                    {renderOwnerConsoleFeedback('tools')}
                     {ownerStatus ? (
                       <View style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>{ownerDeviceId || 'Sparkbox'} overview</Text>
-                        <Text style={styles.cardCopy}>
-                          Local model service: {ownerStatus.ollama?.service || 'unknown'} · API {ownerStatus.ollama?.api || 'unknown'}
+                        <Text style={styles.networkName}>
+                          {describeDeviceLabel(
+                            ownerDeviceId,
+                            Math.max(
+                              0,
+                              homeDevices.findIndex((device) => device.device_id === ownerDeviceId),
+                            ),
+                            homeDevices.length || 1,
+                          )}{' '}
+                          summary
                         </Text>
                         <Text style={styles.cardCopy}>
-                          Sparkbox runtime: {ownerStatus.zeroclaw?.components?.daemon?.status || 'unknown'} · bridge {ownerStatus.zeroclaw?.components?.gateway?.status || 'unknown'}
+                          {describeOwnerConsoleModelStatus(ownerStatus.ollama?.service, ownerStatus.ollama?.api)}
                         </Text>
                         <Text style={styles.cardCopy}>
-                          Current requests: {ownerStatus.inference?.queued_requests ?? 0}/{ownerStatus.inference?.queue_limit ?? 0}
-                          {ownerStatus.inference?.active ? ' · busy' : ' · idle'}
+                          {describeOwnerConsoleRuntimeStatus(
+                            ownerStatus.zeroclaw?.components?.daemon?.status,
+                            ownerStatus.zeroclaw?.components?.gateway?.status,
+                          )}
+                        </Text>
+                        <Text style={styles.cardCopy}>
+                          {describeOwnerConsoleInference(
+                            ownerStatus.inference?.queued_requests,
+                            ownerStatus.inference?.queue_limit,
+                            ownerStatus.inference?.active,
+                          )}
                         </Text>
                         {ownerStatus.system ? (
                           <Text style={styles.cardCopy}>
@@ -4134,23 +4701,17 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>AI defaults</Text>
+                    <Text style={styles.cardTitle}>AI service for Sparkbox</Text>
                     <Text style={styles.cardCopy}>
-                      Keep one shared AI service and model for Sparkbox, then refresh the connection here if credentials change.
+                      Keep one shared AI service and model ready for Sparkbox, then update it here if the sign-in changes.
                     </Text>
+                    <Text style={styles.selectionLabel}>Default AI service</Text>
                     <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
                       placeholder="Default AI service"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
-                      value={ownerProviderConfig.defaultProvider}
-                      onChangeText={(value) =>
-                        setOwnerProviderConfig((current) => ({
-                          ...current,
-                          defaultProvider: value,
-                        }))
-                      }
+                      value={describeAiProvider(ownerProviderConfig.defaultProvider)}
+                      editable={false}
                     />
                     {ownerProviders.length ? (
                       <View style={styles.scopeRow}>
@@ -4168,17 +4729,18 @@ function App() {
                               }
                             >
                               <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                                {provider}
+                                {describeAiProvider(provider)}
                               </Text>
                             </Pressable>
                           );
                         })}
                       </View>
                     ) : null}
+                    <Text style={styles.selectionLabel}>Default model</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
-                      placeholder="Default model"
+                      placeholder="Preferred model"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={ownerProviderConfig.defaultModel}
@@ -4189,11 +4751,12 @@ function App() {
                         }))
                       }
                     />
+                    <Text style={styles.selectionLabel}>Response timeout</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
                       keyboardType="number-pad"
-                      placeholder="Response timeout (seconds)"
+                      placeholder="Timeout in seconds"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={String(ownerProviderConfig.providerTimeoutSecs)}
@@ -4209,15 +4772,16 @@ function App() {
                       onPress={() => void saveOwnerProviderSettings()}
                       disabled={!ownerDeviceId || ownerConsoleBusy}
                     >
-                      <Text style={styles.primaryButtonText}>Save AI defaults</Text>
+                      <Text style={styles.primaryButtonText}>Save AI setup</Text>
                     </Pressable>
+                    {renderOwnerConsoleFeedback('provider')}
                     {ownerModels.length ? (
                       <View style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>Local models on this Box</Text>
+                        <Text style={styles.networkName}>Local models on this device</Text>
                         {ownerModels.map((model) => (
                           <Text key={model.name} style={styles.cardCopy}>
                             {model.name}
-                            {typeof model.size === 'number' ? ` · ${model.size} bytes` : ''}
+                            {typeof model.size === 'number' ? ` · ${formatByteSize(model.size)}` : ''}
                           </Text>
                         ))}
                       </View>
@@ -4227,42 +4791,46 @@ function App() {
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Refresh AI connection</Text>
+                    <Text style={styles.cardTitle}>Add another AI service</Text>
                     <Text style={styles.cardCopy}>
-                      Use this only when Sparkbox needs fresh provider credentials or a new endpoint.
+                      Use this when Sparkbox needs to connect to another AI service or refresh its sign-in.
                     </Text>
+                    <Text style={styles.selectionLabel}>AI service</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
-                      placeholder="Provider"
+                      placeholder="Service name"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={ownerOnboardProvider}
                       onChangeText={setOwnerOnboardProvider}
                     />
+                    <Text style={styles.selectionLabel}>Model name</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
-                      placeholder="Model"
+                      placeholder="Model ID"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={ownerOnboardModel}
                       onChangeText={setOwnerOnboardModel}
                     />
+                    <Text style={styles.selectionLabel}>Access key</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
                       secureTextEntry
-                      placeholder="API key"
+                      placeholder="Access key"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={ownerOnboardApiKey}
                       onChangeText={setOwnerOnboardApiKey}
                     />
+                    <Text style={styles.selectionLabel}>Service URL (optional)</Text>
                     <TextInput
                       autoCapitalize="none"
                       autoCorrect={false}
-                      placeholder="API URL (optional)"
+                      placeholder="Service URL (optional)"
                       placeholderTextColor="#7e8a83"
                       style={styles.input}
                       value={ownerOnboardApiUrl}
@@ -4273,30 +4841,36 @@ function App() {
                       onPress={() => void runOwnerOnboard()}
                       disabled={!ownerDeviceId || ownerConsoleBusy}
                     >
-                      <Text style={styles.primaryButtonText}>Refresh connection</Text>
+                      <Text style={styles.primaryButtonText}>Connect service</Text>
                     </Pressable>
-                    {ownerServiceOutput ? <Text style={styles.cardCopy}>{ownerServiceOutput}</Text> : null}
+                    {renderOwnerConsoleFeedback('onboard')}
+                    {summarizeOwnerServiceOutput(ownerServiceOutput) ? (
+                      <Text style={styles.cardCopy}>{summarizeOwnerServiceOutput(ownerServiceOutput)}</Text>
+                    ) : null}
                   </View>
                 ) : null}
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Runtime controls</Text>
+                    <Text style={styles.cardTitle}>Restart and recovery</Text>
                     <Text style={styles.cardCopy}>
-                      If Sparkbox gets stuck, you can check activity here and restart its core services.
+                      If Sparkbox gets stuck, you can check activity here and restart its main services.
                     </Text>
                     {ownerInference ? (
                       <View style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>Current activity</Text>
+                        <Text style={styles.networkName}>What Sparkbox is doing now</Text>
                         <Text style={styles.cardCopy}>
-                          {ownerInference.queued_requests} queued of {ownerInference.queue_limit}
+                          {describeOwnerRuntimeQueueSummary(
+                            ownerInference.queued_requests,
+                            ownerInference.queue_limit,
+                          )}
                         </Text>
                         <Text style={styles.cardCopy}>
-                          Active request: {ownerInference.active_request?.username || 'Idle'}
+                          {describeOwnerRuntimeActiveRequest(ownerInference.active_request?.username)}
                         </Text>
                         {ownerInference.queue.map((item) => (
                           <Text key={item.request_id || `${item.username}-${item.position}`} style={styles.cardCopy}>
-                            #{item.position ?? '?'} · {item.username || 'Unknown'}
+                            {describeOwnerRuntimeQueueEntry(item.username, item.position)}
                           </Text>
                         ))}
                       </View>
@@ -4307,14 +4881,18 @@ function App() {
                         onPress={() => void runOwnerServiceAction('ollama', 'restart')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Restart model service</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('ollama', 'restart')}
+                        </Text>
                       </Pressable>
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void runOwnerServiceAction('zeroclaw', 'restart')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Restart Sparkbox runtime</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('zeroclaw', 'restart')}
+                        </Text>
                       </Pressable>
                     </View>
                     <View style={styles.inlineActions}>
@@ -4323,46 +4901,60 @@ function App() {
                         onPress={() => void runOwnerServiceAction('ollama', 'stop')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Stop model service</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('ollama', 'stop')}
+                        </Text>
                       </Pressable>
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void runOwnerServiceAction('ollama', 'start')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Start model service</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('ollama', 'start')}
+                        </Text>
                       </Pressable>
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void runOwnerServiceAction('zeroclaw', 'stop')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Stop Sparkbox runtime</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('zeroclaw', 'stop')}
+                        </Text>
                       </Pressable>
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void runOwnerServiceAction('zeroclaw', 'start')}
                         disabled={!ownerDeviceId || ownerConsoleBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Start Sparkbox runtime</Text>
+                        <Text style={styles.secondaryButtonText}>
+                          {describeOwnerServiceActionLabel('zeroclaw', 'start')}
+                        </Text>
                       </Pressable>
                     </View>
-                    {ownerServiceOutput ? <Text style={styles.cardCopy}>{ownerServiceOutput}</Text> : null}
+                    {renderOwnerConsoleFeedback('service')}
+                    {summarizeOwnerServiceOutput(ownerServiceOutput) ? (
+                      <Text style={styles.cardCopy}>{summarizeOwnerServiceOutput(ownerServiceOutput)}</Text>
+                    ) : null}
                   </View>
                 ) : null}
 
                 {canManage ? (
                   <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Diagnostics and reset</Text>
+                    <Text style={styles.cardTitle}>Device health and reset</Text>
                     <Text style={styles.cardCopy}>
-                      Owners can inspect Sparkbox health and send a full reset back to setup mode from here.
+                      Owners can inspect Sparkbox health and send it back to setup from here.
                     </Text>
                     {diagnosticsError ? <Text style={styles.errorText}>{diagnosticsError}</Text> : null}
-                    {homeDevices.map((device) => (
+                    {homeDevices.map((device, deviceIndex) => (
                       <View key={`diag-${device.device_id}`} style={styles.deviceRowCard}>
-                        <Text style={styles.networkName}>{device.device_id}</Text>
+                        <Text style={styles.networkName}>
+                          {describeDeviceLabel(device.device_id, deviceIndex, homeDevices.length)}
+                        </Text>
                         <Text style={styles.cardCopy}>
-                          {device.last_health_check_summary || device.status}
+                          {describeDiagnosticsNetworkSummary(device.last_health_check_summary || '') ||
+                            describeDeviceStatus(device.status)}
                         </Text>
                         <View style={styles.inlineActions}>
                           <Pressable
@@ -4370,14 +4962,14 @@ function App() {
                             onPress={() => void loadDiagnostics(device.device_id)}
                             disabled={diagnosticsBusy}
                           >
-                            <Text style={styles.secondaryButtonText}>Run diagnostics</Text>
+                            <Text style={styles.secondaryButtonText}>Check Sparkbox now</Text>
                           </Pressable>
                           <Pressable
                             style={styles.secondaryButtonSmall}
                             onPress={() =>
                               Alert.alert(
-                                'Reset Sparkbox?',
-                                'This sends the device back to setup mode and removes it from the household until it is set up again.',
+                                'Reset this Sparkbox?',
+                                'This sends the device back to setup and removes it from the household until it is ready again.',
                                 [
                                   { text: 'Cancel', style: 'cancel' },
                                   { text: 'Reset', style: 'destructive', onPress: () => void factoryResetDevice(device) },
@@ -4386,7 +4978,7 @@ function App() {
                             }
                             disabled={diagnosticsBusy}
                           >
-                            <Text style={styles.secondaryButtonText}>Factory reset</Text>
+                            <Text style={styles.secondaryButtonText}>Reset Sparkbox</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -4395,25 +4987,41 @@ function App() {
                     {diagnosticsPayload ? (
                       <View style={styles.deviceRowCard}>
                         <Text style={styles.networkName}>
-                          {diagnosticsDeviceId} diagnostics
+                          {describeDeviceLabel(
+                            diagnosticsDeviceId,
+                            Math.max(
+                              0,
+                              homeDevices.findIndex((device) => device.device_id === diagnosticsDeviceId),
+                            ),
+                            homeDevices.length || 1,
+                          )}{' '}
+                          health check
                         </Text>
                         <Text style={styles.cardCopy}>
-                          Source: {diagnosticsPayload.cache?.source || 'live'}
-                          {diagnosticsPayload.cache?.summary ? ` · ${diagnosticsPayload.cache.summary}` : ''}
+                          Check source: {describeDiagnosticsSource(diagnosticsPayload.cache?.source || 'live')}
+                          {diagnosticsPayload.cache?.summary
+                            ? ` · ${describeDiagnosticsNetworkSummary(diagnosticsPayload.cache.summary)}`
+                            : ''}
                         </Text>
-                        {diagnosticsPayload.network?.wifi_interface ? (
+                        {describeDiagnosticsWifiConnection(
+                          diagnosticsPayload.network?.wifi_interface,
+                          diagnosticsPayload.network?.wifi_radio,
+                        ) ? (
                           <Text style={styles.cardCopy}>
-                            Wi-Fi: {diagnosticsPayload.network.wifi_interface} · {diagnosticsPayload.network.wifi_radio || 'unknown'}
+                            {describeDiagnosticsWifiConnection(
+                              diagnosticsPayload.network?.wifi_interface,
+                              diagnosticsPayload.network?.wifi_radio,
+                            )}
                           </Text>
                         ) : null}
                         {diagnosticsPayload.network?.preflight?.reasons?.length ? (
                           <Text style={styles.cardCopy}>
-                            Preflight: {diagnosticsPayload.network.preflight.reasons.join(', ')}
+                            Still to check: {describeDiagnosticsPreflightReasons(diagnosticsPayload.network.preflight.reasons)}
                           </Text>
                         ) : null}
                         {diagnosticsPayload.self_heal?.plan?.issues?.length ? (
                           <Text style={styles.cardCopy}>
-                            Issues: {diagnosticsPayload.self_heal.plan.issues.map((issue) => issue.reason).join(', ')}
+                            Needs attention now: {describeDiagnosticsIssueReasons(diagnosticsPayload.self_heal.plan.issues)}
                           </Text>
                         ) : null}
                         {diagnosticsPayload.system?.memory ? (
@@ -4428,30 +5036,40 @@ function App() {
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Household members</Text>
-                  <Text style={styles.cardCopy}>
-                    Owners can invite, promote, demote, and remove household members. Sparkbox always keeps at least one owner.
-                  </Text>
+                  <Text style={styles.cardCopy}>{householdMembersCopy}</Text>
                   {homeMembers.map((member) => {
                     const isSelf = member.id === session.user.id;
+                    const canDemoteOrPromote = canChangeMemberRole(
+                      homeMembers,
+                      member,
+                      member.role === 'owner' ? 'member' : 'owner',
+                    );
+                    const canRemoveMemberEntry = canRemoveHouseholdMember(homeMembers, member);
                     return (
                       <View key={member.id} style={styles.deviceRowCard}>
                         <Text style={styles.networkName}>{member.display_name}</Text>
-                        <Text style={styles.cardCopy}>{member.role}</Text>
+                        <Text style={styles.cardCopy}>{describeHouseholdRole(member.role)}</Text>
                         {canManage && !isSelf ? (
                           <View style={styles.inlineActions}>
                             <Pressable
-                              style={styles.secondaryButtonSmall}
+                              style={[
+                                styles.secondaryButtonSmall,
+                                !canDemoteOrPromote ? styles.networkRowDisabled : null,
+                              ]}
                               onPress={() => void changeMemberRole(member, member.role === 'owner' ? 'member' : 'owner')}
-                              disabled={settingsBusy}
+                              disabled={settingsBusy || !canDemoteOrPromote}
                             >
                               <Text style={styles.secondaryButtonText}>
-                                {member.role === 'owner' ? 'Make member' : 'Make owner'}
+                                {member.role === 'owner' ? 'Remove owner access' : 'Give owner access'}
                               </Text>
                             </Pressable>
                             <Pressable
-                              style={styles.secondaryButtonSmall}
+                              style={[
+                                styles.secondaryButtonSmall,
+                                !canRemoveMemberEntry ? styles.networkRowDisabled : null,
+                              ]}
                               onPress={() => void removeMember(member)}
-                              disabled={settingsBusy}
+                              disabled={settingsBusy || !canRemoveMemberEntry}
                             >
                               <Text style={styles.secondaryButtonText}>Remove</Text>
                             </Pressable>
@@ -4468,7 +5086,7 @@ function App() {
                   <View style={styles.card}>
                     <Text style={styles.cardTitle}>Invites</Text>
                     <Text style={styles.cardCopy}>
-                      Create member or owner invites from here. People joining by invite go straight into this household.
+                      Create a standard join invite or invite another owner here. People who use an invite go straight into this household.
                     </Text>
                     <View style={styles.inlineActions}>
                       <Pressable
@@ -4476,14 +5094,14 @@ function App() {
                         onPress={() => void generateInvite('member')}
                         disabled={settingsBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Invite member</Text>
+                        <Text style={styles.secondaryButtonText}>Invite someone</Text>
                       </Pressable>
                       <Pressable
                         style={styles.secondaryButtonSmall}
                         onPress={() => void generateInvite('owner')}
                         disabled={settingsBusy}
                       >
-                        <Text style={styles.secondaryButtonText}>Invite owner</Text>
+                        <Text style={styles.secondaryButtonText}>Invite co-owner</Text>
                       </Pressable>
                     </View>
                     {homePendingInvites.length === 0 ? (
@@ -4491,9 +5109,9 @@ function App() {
                     ) : (
                       homePendingInvites.map((invite) => (
                         <View key={invite.id} style={styles.deviceRowCard}>
-                          <Text style={styles.networkName}>{invite.role} invite</Text>
-                          <Text style={styles.cardCopy}>Code: {invite.invite_code || 'hidden'}</Text>
-                          <Text style={styles.cardCopy}>Expires: {invite.expires_at}</Text>
+                          <Text style={styles.networkName}>{describeInviteRole(invite.role)} invite</Text>
+                          <Text style={styles.cardCopy}>Join code: {invite.invite_code || 'Waiting for a fresh code'}</Text>
+                          <Text style={styles.cardCopy}>{describeInviteExpiry(invite.expires_at)}</Text>
                           <View style={styles.inlineActions}>
                             <Pressable
                               style={styles.secondaryButtonSmall}
@@ -4508,6 +5126,25 @@ function App() {
                     )}
                   </View>
                 ) : null}
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Recent Activity</Text>
+                  {homeRecentActivity.length === 0 ? (
+                    <Text style={styles.cardCopy}>No household activity yet.</Text>
+                  ) : (
+                    homeRecentActivity.slice(0, 5).map((event) => (
+                      <View key={event.id} style={styles.deviceRowCard}>
+                        <Text style={styles.networkName}>{event.actor_name}</Text>
+                        <Text style={styles.cardCopy}>
+                          {describeActivityEvent(event.details || '', event.event_type)}
+                        </Text>
+                        {describeUiDateTime(event.created_at) ? (
+                          <Text style={styles.cardCopy}>{describeUiDateTime(event.created_at)}</Text>
+                        ) : null}
+                      </View>
+                    ))
+                  )}
+                </View>
               </>
             ) : null}
           </ScrollView>
@@ -4521,7 +5158,7 @@ function App() {
             <View style={styles.scannerOverlay}>
               <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
                 <Text style={styles.selectionLabel}>New shared space</Text>
-                <Text style={styles.selectionTitle}>Bring Sparkbox into a new relationship space</Text>
+                <Text style={styles.selectionTitle}>Create a new shared space</Text>
                 <Text style={styles.selectionCopy}>
                   Pick what this space is for, give it a clear name, and choose who belongs in it. You are always included.
                 </Text>
@@ -4532,7 +5169,7 @@ function App() {
                   value={spaceName}
                   onChangeText={setSpaceName}
                 />
-                <Text style={styles.selectionLabel}>Template</Text>
+                <Text style={styles.selectionLabel}>Space type</Text>
                 <View style={styles.scopeRow}>
                   {SPACE_TEMPLATE_OPTIONS.map((template) => {
                     const active = spaceTemplate === template;
@@ -4605,19 +5242,17 @@ function App() {
           >
             <View style={styles.scannerOverlay}>
               <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-                <Text style={styles.selectionLabel}>{editingChatSession ? 'Edit topic' : 'New topic'}</Text>
+                <Text style={styles.selectionLabel}>
+                  {editingChatSession ? `Edit ${describeChatEditorVerb(activeSpaceDetail, chatScope)}` : describeChatSessionPrimaryActionLabel(activeSpaceDetail, chatScope)}
+                </Text>
                 <Text style={styles.selectionTitle}>
-                  {editingChatSession
-                    ? 'Keep this topic clear for everyone'
-                    : chatScope === 'private'
-                      ? 'Start a private topic with Sparkbox'
-                      : 'Start a topic for this shared space'}
+                  {describeChatEditorTitle(activeSpaceDetail, chatScope, Boolean(editingChatSession))}
                 </Text>
                 <Text style={styles.selectionCopy}>
                   Give this conversation a clear name so everyone knows what Sparkbox is helping with here.
                 </Text>
                 <TextInput
-                  placeholder="Topic name"
+                  placeholder={describeChatNamePlaceholder(activeSpaceDetail, chatScope)}
                   placeholderTextColor="#7e8a83"
                   style={styles.input}
                   value={chatSessionName}
@@ -4637,7 +5272,13 @@ function App() {
                     onPress={() => void submitChatSessionEditor()}
                     disabled={chatBusy}
                   >
-                    {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingChatSession ? 'Save topic' : 'Create topic'}</Text>}
+                    {chatBusy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>
+                        {describeChatEditorPrimaryActionLabel(activeSpaceDetail, chatScope, Boolean(editingChatSession))}
+                      </Text>
+                    )}
                   </Pressable>
                 </View>
               </View>
@@ -4657,7 +5298,7 @@ function App() {
                   {editingMemory ? 'Update what Sparkbox should remember' : 'Save a new memory for this space'}
                 </Text>
                 <Text style={styles.selectionCopy}>
-                  Memories are the long-term facts Sparkbox should treat as current for this space.
+                  Memories are the key details Sparkbox should remember for this space.
                 </Text>
                 <TextInput
                   placeholder="Memory title"
@@ -4725,13 +5366,21 @@ function App() {
                     taskHistoryRuns.map((run) => (
                       <View key={run.id} style={styles.deviceRowCard}>
                         <View style={styles.deviceRowHeadline}>
-                          <Text style={styles.networkName}>{run.status}</Text>
-                          <Text style={run.status === 'success' ? styles.statusTagOnline : styles.statusTagOffline}>
-                            {run.startedAt}
+                          <Text style={styles.networkName}>{describeTaskRunStatus(run.status)}</Text>
+                          <Text
+                            style={
+                              describeTaskRunStatus(run.status) === 'Completed'
+                                ? styles.statusTagOnline
+                                : styles.statusTagOffline
+                            }
+                          >
+                            {describeTaskRunStartedAt(run.startedAt)}
                           </Text>
                         </View>
-                        {run.finishedAt ? <Text style={styles.cardCopy}>Finished: {run.finishedAt}</Text> : null}
-                        {run.output ? <Text style={styles.cardCopy}>{run.output}</Text> : null}
+                        {run.finishedAt ? <Text style={styles.cardCopy}>{describeTaskRunFinishedAt(run.finishedAt)}</Text> : null}
+                        {describeTaskRunOutput(run.output || '') ? (
+                          <Text style={styles.cardCopy}>{describeTaskRunOutput(run.output || '')}</Text>
+                        ) : null}
                       </View>
                     ))
                   )}
@@ -4755,7 +5404,7 @@ function App() {
             <View style={styles.networkSheetBackdrop}>
               <View style={styles.networkSheetCard}>
                 <Text style={styles.selectionLabel}>Relay message</Text>
-                <Text style={styles.selectionTitle}>请 Sparkbox 帮我转述</Text>
+                <Text style={styles.selectionTitle}>Have Sparkbox relay it privately</Text>
                 <Text style={styles.selectionCopy}>
                   Choose one other member in this shared space, then write the note Sparkbox should pass along privately.
                 </Text>
@@ -4818,9 +5467,11 @@ function App() {
       <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>Sparkbox setup</Text>
-          <Text style={styles.title}>Attach first. Bring it online second.</Text>
+          <Text style={styles.title}>Find it first. Bring it online second.</Text>
           <Text style={styles.subtitle}>
-            Scan the device label, reserve Sparkbox for {householdName}, then let the app move through Sparkbox setup mode.
+            {claimStepVisible
+              ? `Scan the device label, reserve Sparkbox for ${householdName}, then guide it onto home Wi-Fi.`
+              : 'Sparkbox is already in your household. Get it ready for Wi-Fi again.'}
           </Text>
         </View>
 
@@ -4870,7 +5521,7 @@ function App() {
               {([
                 { id: 'login', label: 'Sign in' },
                 { id: 'register', label: 'Create' },
-                { id: 'join', label: 'Join' },
+                { id: 'join', label: 'Join household' },
               ] as Array<{ id: AuthMode; label: string }>).map((modeOption) => {
                 const active = authMode === modeOption.id;
                 return (
@@ -4934,9 +5585,9 @@ function App() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Signed in as {session.user.display_name}</Text>
+            <Text style={styles.cardTitle}>You're signed in</Text>
             <Text style={styles.cardCopy}>
-              Household: {session.household.name}
+              {session.user.display_name} · {session.household.name}
             </Text>
             <View style={styles.inlineActions}>
               <Pressable style={styles.primaryButtonSmall} onPress={() => void logout()}>
@@ -4960,9 +5611,9 @@ function App() {
             <Text style={styles.cardTitle}>1. Scan the Sparkbox label</Text>
             {step1Collapsed ? (
               <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{claimPayload?.deviceId || 'Sparkbox attached'}</Text>
+                <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(claimPayload?.deviceId)}</Text>
                 <Text style={styles.stepSummaryCopy}>
-                  Reserved for {householdName}. The app can now move into Sparkbox setup mode.
+                  Reserved for {householdName}. The app can now guide Sparkbox onto home Wi-Fi.
                 </Text>
               </View>
             ) : (
@@ -4975,7 +5626,7 @@ function App() {
                   autoCorrect={false}
                   multiline
                   numberOfLines={4}
-                  placeholder="Paste the Sparkbox setup code or claim link."
+                  placeholder="Paste the Sparkbox setup code or setup link."
                   placeholderTextColor="#7e8a83"
                   style={[styles.input, styles.textArea]}
                   value={claimInput}
@@ -4984,7 +5635,7 @@ function App() {
                 {claimPayload ? (
                   <View style={styles.claimPreview}>
                     <Text style={styles.claimPreviewLabel}>Sparkbox found</Text>
-                    <Text style={styles.claimPreviewValue}>{claimPayload.deviceId}</Text>
+                    <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(claimPayload.deviceId)}</Text>
                     <Text style={styles.cardCopy}>Your setup code is ready. Wi-Fi comes next.</Text>
                   </View>
                 ) : null}
@@ -4993,8 +5644,13 @@ function App() {
                   <Pressable style={styles.primaryButtonSmall} onPress={() => void openScanner()}>
                     <Text style={styles.primaryButtonText}>Scan QR</Text>
                   </Pressable>
+                  {claimError === CAMERA_PERMISSION_RECOVERY_MESSAGE ? (
+                    <Pressable style={styles.secondaryButtonSmall} onPress={() => void Linking.openSettings()}>
+                      <Text style={styles.secondaryButtonText}>Open app settings</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable style={styles.secondaryButtonSmall} onPress={() => void startClaim()} disabled={claimBusy}>
-                    {claimBusy ? <ActivityIndicator color="#0f5132" /> : <Text style={styles.secondaryButtonText}>Attach Sparkbox</Text>}
+                    {claimBusy ? <ActivityIndicator color="#0f5132" /> : <Text style={styles.secondaryButtonText}>Get Sparkbox ready</Text>}
                   </Pressable>
                 </View>
               </>
@@ -5007,20 +5663,20 @@ function App() {
             <Text style={styles.cardTitle}>1. Get Sparkbox ready</Text>
             {step1Collapsed ? (
               <View style={styles.stepSummary}>
-                <Text style={styles.stepSummaryTitle}>{setupDeviceId || 'Sparkbox selected'}</Text>
+                <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
                 <Text style={styles.stepSummaryCopy}>
-                  This device is already in your household. You only need to bring it back into setup mode.
+                  This device is already in your household. You only need to get it ready for Wi-Fi updates.
                 </Text>
               </View>
             ) : (
               <>
                 <Text style={styles.cardCopy}>
-                  No QR scan or re-claim is needed. If Sparkbox is in a new place, power it on and wait for{' '}
+                  No QR scan is needed. If Sparkbox is in a new place, power it on and wait for{' '}
                   {HOTSPOT_SSID}. If it is still on the old network, use this screen when the hotspot appears.
                 </Text>
                 <View style={styles.claimPreview}>
                   <Text style={styles.claimPreviewLabel}>Device</Text>
-                  <Text style={styles.claimPreviewValue}>{setupDeviceId || 'Sparkbox'}</Text>
+                  <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
                 </View>
                 {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
               </>
@@ -5035,13 +5691,13 @@ function App() {
               <View style={styles.stepSummary}>
                 <Text style={styles.stepSummaryTitle}>{HOTSPOT_SSID}</Text>
                 <Text style={styles.stepSummaryCopy}>
-                  Your phone reached Sparkbox setup mode. Home Wi-Fi setup is next.
+                  Your phone reached Sparkbox. Home Wi-Fi setup is next.
                 </Text>
               </View>
             ) : (
               <>
                 <Text style={styles.cardCopy}>
-                  Sparkbox setup now happens over its temporary hotspot. The app will try to switch your phone automatically.
+                  Sparkbox now shares a temporary setup network. The app will try to switch your phone automatically.
                 </Text>
                 {hotspotStage === 'joining_setup' || provisionBusy ? (
                   <View style={styles.row}>
@@ -5086,7 +5742,7 @@ function App() {
               <View style={styles.stepSummary}>
                 <Text style={styles.stepSummaryTitle}>{homeWifiTarget?.ssid || selectedSsid || previousInternetSsid || 'Home Wi-Fi selected'}</Text>
                 <Text style={styles.stepSummaryCopy}>
-                  Sparkbox is already using this choice to leave setup mode and finish activation.
+                  Sparkbox is already using this choice to leave setup and finish activation.
                 </Text>
               </View>
             ) : (
@@ -5138,8 +5794,8 @@ function App() {
                           </View>
                           <View style={styles.networkTags}>
                             {network.known ? <Text style={styles.tag}>Saved</Text> : null}
-                            {network.support_level === 'warning' ? <Text style={styles.tagWarning}>Portal possible</Text> : null}
-                            {unsupported ? <Text style={styles.tagMuted}>Unsupported</Text> : null}
+                            {network.support_level === 'warning' ? <Text style={styles.tagWarning}>Sign-in may be required</Text> : null}
+                            {unsupported ? <Text style={styles.tagMuted}>Not supported</Text> : null}
                             {!unsupported ? (
                               <View style={[styles.rowAction, selected ? null : styles.rowActionDisabled]}>
                                 <Text style={[styles.linkText, !selected ? styles.linkTextDisabled : null]}>{selected ? 'Selected' : 'Choose'}</Text>
@@ -5160,7 +5816,9 @@ function App() {
           <View style={styles.card} onLayout={(event) => captureStepOffset(4, event)}>
             <Text style={styles.cardTitle}>4. Activation</Text>
             <Text style={styles.cardCopy}>{provisionMessage}</Text>
-            {setupPageState?.status ? <Text style={styles.statusText}>Sparkbox status: {setupPageState.status}</Text> : null}
+            {setupPageState?.status ? (
+              <Text style={styles.statusText}>Setup progress: {describeActivationStatus(setupPageState.status)}</Text>
+            ) : null}
             {provisionBusy && !portalUrl ? <ActivityIndicator color="#0b6e4f" /> : null}
             {portalUrl ? (
               <View style={styles.portalBox}>
@@ -5182,7 +5840,7 @@ function App() {
               <View style={styles.successBox}>
                 <Text style={styles.successTitle}>Sparkbox is ready</Text>
                 <Text style={styles.successCopy}>
-                  {completedDeviceId} is online in {householdName}. You can now go back to the household app and chat normally.
+                  {describeSetupDeviceLabel(completedDeviceId)} is online in {householdName}. You can now go back to the household app and chat normally.
                 </Text>
                 {canReturnToShell ? (
                   <View style={styles.inlineActions}>
@@ -5213,7 +5871,7 @@ function App() {
             <Text style={styles.selectionCopy}>
               {fileEditorMode === 'rename'
                 ? 'Use a short, clear name. Sparkbox keeps the item in the same folder.'
-                : 'Create a new folder in the current file space.'}
+                : 'Create a new folder here so files for this space stay organized.'}
             </Text>
             <TextInput
               autoCapitalize="none"
@@ -5261,7 +5919,7 @@ function App() {
             <Text style={styles.selectionCopy}>
               {selectedNetwork?.known
                 ? 'Sparkbox has used this Wi-Fi before. Leave the password blank unless it changed.'
-                : 'Enter the Wi-Fi password, then Sparkbox will leave setup mode and join this network.'}
+                : 'Enter the Wi-Fi password, then Sparkbox will leave setup and join this network.'}
             </Text>
             <TextInput
               autoCapitalize="none"
@@ -5327,9 +5985,7 @@ function App() {
                     ? 'Shared Sparkbox routine'
                     : 'Private Sparkbox routine'}
             </Text>
-            <Text style={styles.selectionCopy}>
-              Choose what Sparkbox should do and when it should happen. Owners can switch to an advanced runtime when needed.
-            </Text>
+            <Text style={styles.selectionCopy}>{taskEditorCopy}</Text>
             <TextInput
               autoCapitalize="sentences"
               autoCorrect={false}
@@ -5342,7 +5998,7 @@ function App() {
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder="When should this run? (advanced schedule)"
+              placeholder="When should this happen?"
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={taskCronExpr}
@@ -5370,14 +6026,14 @@ function App() {
                       onPress={() => setTaskCommandType(kind)}
                     >
                       <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                        {kind === 'zeroclaw' ? 'Sparkbox routine' : 'Advanced shell'}
+                        {kind === 'zeroclaw' ? 'Sparkbox routine' : 'Custom command'}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
             ) : (
-              <Text style={styles.cardCopy}>Command type: zeroclaw</Text>
+              <Text style={styles.cardCopy}>Run mode: Sparkbox routine</Text>
             )}
             <Pressable
               style={[styles.scopePill, taskEnabled ? styles.scopePillActive : null]}
@@ -5754,6 +6410,209 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  chatInboxHeader: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#f7f9f7',
+    padding: 16,
+    gap: 14,
+  },
+  chatInboxHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chatInboxHeaderBody: {
+    flex: 1,
+    gap: 6,
+  },
+  chatInboxHeaderTitle: {
+    color: '#17352a',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  chatInboxHeaderCopy: {
+    color: '#556860',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatInboxSpaceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chatInboxSpaceChip: {
+    minWidth: 150,
+    flexGrow: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  chatInboxSpaceChipActive: {
+    backgroundColor: '#17352a',
+    borderColor: '#17352a',
+  },
+  chatInboxSpaceChipLabel: {
+    color: '#17352a',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  chatInboxSpaceChipLabelActive: {
+    color: '#ffffff',
+  },
+  chatInboxSpaceChipMeta: {
+    color: '#61746a',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  chatInboxSpaceChipMetaActive: {
+    color: 'rgba(255,255,255,0.82)',
+  },
+  chatSessionRow: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#fff',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  chatSessionRowActive: {
+    backgroundColor: '#eef5ef',
+    borderColor: '#c4ded1',
+  },
+  chatSessionAvatarRail: {
+    width: 44,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  chatSessionAvatarBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatSessionAvatarBubbleGroup: {
+    backgroundColor: '#17352a',
+  },
+  chatSessionAvatarBubbleShared: {
+    backgroundColor: '#eef5ef',
+  },
+  chatSessionAvatarBubblePrivate: {
+    backgroundColor: '#fff1cf',
+  },
+  chatSessionAvatarLabel: {
+    color: '#17352a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  chatSessionAvatarLabelOnDark: {
+    color: '#ffffff',
+  },
+  chatSessionBody: {
+    flex: 1,
+    gap: 6,
+    minWidth: 0,
+  },
+  chatSessionTitle: {
+    color: '#17352a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  chatSessionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chatSessionMeta: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  chatSessionTimestamp: {
+    color: '#61746a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chatSessionPreview: {
+    color: '#556860',
+    fontSize: 14,
+    lineHeight: 20,
+    flex: 1,
+  },
+  chatDetailHeader: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  chatDetailHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chatDetailHeaderBody: {
+    gap: 6,
+  },
+  chatDetailTitle: {
+    color: '#17352a',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  chatDetailSubtitle: {
+    color: '#556860',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  chatDetailParticipants: {
+    color: '#4f6b5e',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  chatMessageGroup: {
+    gap: 6,
+    maxWidth: '88%',
+    marginBottom: 8,
+  },
+  chatMessageGroupUser: {
+    alignSelf: 'flex-end',
+  },
+  chatMessageGroupAssistant: {
+    alignSelf: 'flex-start',
+  },
+  chatStatusNotice: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#f7f9f7',
+    padding: 14,
+    gap: 8,
+    marginBottom: 10,
+  },
+  chatStatusNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chatStatusNoticeCopy: {
+    color: '#17352a',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatStatusTimestamp: {
+    color: '#61746a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   statusTagOnline: {
     color: '#0b6e4f',
     backgroundColor: '#e8f5ee',
@@ -5779,6 +6638,12 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 8,
   },
+  chatBubbleMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   chatBubbleUser: {
     backgroundColor: '#17352a',
   },
@@ -5801,6 +6666,14 @@ const styles = StyleSheet.create({
   },
   chatBubbleCopyPending: {
     color: '#4f6b5e',
+  },
+  chatBubbleTimestamp: {
+    color: '#61746a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chatBubbleTimestampUser: {
+    color: 'rgba(255,255,255,0.8)',
   },
   groupParticipantPill: {
     paddingHorizontal: 14,
