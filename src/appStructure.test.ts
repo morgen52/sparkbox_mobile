@@ -299,6 +299,9 @@ describe('App structure', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
 
     expect(appSource).toContain('adjust who can manage Sparkbox');
+    expect(appSource).toContain('Manage members');
+    expect(appSource).toContain('Invite to this space');
+    expect(appSource).toContain('You stay in this space automatically.');
     expect(appSource).toContain('Give owner access');
     expect(appSource).toContain('Remove owner access');
     expect(appSource).toContain('Invite someone');
@@ -315,6 +318,14 @@ describe('App structure', () => {
     expect(appSource).not.toContain("'Owner invite ready'");
     expect(appSource).not.toContain('Invite code:');
     expect(appSource).not.toContain('Share code:');
+  });
+
+  it('shows join-code previews for household and target shared space', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+
+    expect(appSource).toContain('This code joins');
+    expect(appSource).toContain('and adds you to');
+    expect(appSource).toContain('Checking this invite code...');
   });
 
   it('keeps account copy away from metadata-style role labels', () => {

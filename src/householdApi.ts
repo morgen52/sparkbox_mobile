@@ -26,6 +26,8 @@ export type HouseholdInviteSummary = {
   invite_code?: string | null;
   role: 'owner' | 'member';
   expires_at: string;
+  space_id?: string | null;
+  space_name?: string | null;
 };
 
 export type HouseholdActivitySummary = {
@@ -527,6 +529,16 @@ export type HouseholdInvitationResponse = {
   role: 'owner' | 'member';
   expiresInSeconds: number;
   expiresAt: string;
+  spaceId?: string | null;
+  spaceName?: string | null;
+};
+
+export type HouseholdInvitationPreview = {
+  householdId: string;
+  householdName: string;
+  role: 'owner' | 'member';
+  spaceId?: string | null;
+  spaceName?: string | null;
 };
 
 export type HouseholdMemberRoleResponse = {
@@ -1430,6 +1442,7 @@ export async function reconnectDevice(
 export async function createHouseholdInvitation(
   token: string,
   role: 'owner' | 'member',
+  options: { spaceId?: string | null } = {},
 ): Promise<HouseholdInvitationResponse> {
   const response = await cloudJson<{
     invite_id: string;
@@ -1437,10 +1450,15 @@ export async function createHouseholdInvitation(
     role?: 'owner' | 'member';
     expires_in_seconds: number;
     expires_at: string;
+    space_id?: string | null;
+    space_name?: string | null;
   }>('/api/auth/invitations', {
     method: 'POST',
     token,
-    body: { role },
+    body: {
+      role,
+      ...(options.spaceId ? { space_id: options.spaceId } : {}),
+    },
   });
 
   return {
@@ -1449,7 +1467,47 @@ export async function createHouseholdInvitation(
     role: response.role ?? role,
     expiresInSeconds: response.expires_in_seconds,
     expiresAt: response.expires_at,
+    spaceId: typeof response.space_id === 'string' ? response.space_id : null,
+    spaceName: typeof response.space_name === 'string' ? normalizeSeededUiCopy(response.space_name) : null,
   };
+}
+
+export async function getHouseholdInvitationPreview(
+  inviteCode: string,
+): Promise<HouseholdInvitationPreview> {
+  const response = await cloudJson<{
+    household_id: string;
+    household_name: string;
+    role: 'owner' | 'member';
+    space_id?: string | null;
+    space_name?: string | null;
+  }>(`/api/auth/invitations/preview/${encodeURIComponent(inviteCode.trim())}`, {});
+
+  return {
+    householdId: response.household_id,
+    householdName: response.household_name,
+    role: response.role === 'owner' ? 'owner' : 'member',
+    spaceId: typeof response.space_id === 'string' ? response.space_id : null,
+    spaceName: typeof response.space_name === 'string' ? normalizeSeededUiCopy(response.space_name) : null,
+  };
+}
+
+export async function updateHouseholdSpaceMembers(
+  token: string,
+  spaceId: string,
+  memberIds: string[],
+): Promise<HouseholdSpaceDetail> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/members`,
+    {
+      method: 'PATCH',
+      token,
+      body: {
+        member_ids: memberIds,
+      },
+    },
+  );
+  return normalizeSpaceDetail(response);
 }
 
 export async function updateHouseholdMemberRole(
@@ -1532,7 +1590,7 @@ async function cloudJson<T>(
   path: string,
   options: {
     method?: string;
-    token: string;
+    token?: string;
     body?: unknown;
   },
 ): Promise<T> {
@@ -1540,7 +1598,7 @@ async function cloudJson<T>(
     method: options.method ?? 'GET',
     headers: {
       Accept: 'application/json',
-      Authorization: `Bearer ${options.token}`,
+      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
       ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,

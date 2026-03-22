@@ -95,6 +95,7 @@ import {
   getDeviceProviderConfig,
   getDeviceProviders,
   getHouseholdFiles,
+  getHouseholdInvitationPreview,
   getSpaceLibrary,
   getHouseholdSpaceDetail,
   getInstalledFamilyApps,
@@ -127,6 +128,7 @@ import {
   streamHouseholdChatSessionMessage,
   triggerHouseholdTask,
   uninstallFamilyApp,
+  updateHouseholdSpaceMembers,
   updateSpaceMemory,
   updateDeviceProviderConfig,
   updateHouseholdChatSession,
@@ -528,6 +530,13 @@ function App() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [invitePreviewBusy, setInvitePreviewBusy] = useState(false);
+  const [invitePreviewError, setInvitePreviewError] = useState('');
+  const [invitePreview, setInvitePreview] = useState<{
+    householdName: string;
+    role: 'owner' | 'member';
+    spaceName?: string | null;
+  } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
 
@@ -581,6 +590,10 @@ function App() {
   const [spaceName, setSpaceName] = useState('');
   const [spaceTemplate, setSpaceTemplate] = useState<Exclude<SpaceTemplate, 'private' | 'household'>>('partner');
   const [spaceMemberIds, setSpaceMemberIds] = useState<string[]>([]);
+  const [spaceMembersEditorOpen, setSpaceMembersEditorOpen] = useState(false);
+  const [spaceMembersEditorBusy, setSpaceMembersEditorBusy] = useState(false);
+  const [spaceMembersEditorError, setSpaceMembersEditorError] = useState('');
+  const [spaceMembersEditorIds, setSpaceMembersEditorIds] = useState<string[]>([]);
   const [chatScope, setChatScope] = useState<ChatSessionScope>('family');
   const [chatSessions, setChatSessions] = useState<HouseholdChatSessionSummary[]>([]);
   const [activeChatSessionId, setActiveChatSessionId] = useState('');
@@ -835,6 +848,63 @@ function App() {
     return () => clearTimeout(timer);
   }, [activeStep]);
 
+  useEffect(() => {
+    if (authMode !== 'join') {
+      setInvitePreview(null);
+      setInvitePreviewError('');
+      setInvitePreviewBusy(false);
+      return;
+    }
+
+    const trimmedCode = inviteCode.trim();
+    if (!trimmedCode) {
+      setInvitePreview(null);
+      setInvitePreviewError('');
+      setInvitePreviewBusy(false);
+      return;
+    }
+    if (trimmedCode.length < 4) {
+      setInvitePreview(null);
+      setInvitePreviewError('');
+      setInvitePreviewBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInvitePreviewBusy(true);
+    setInvitePreviewError('');
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const preview = await getHouseholdInvitationPreview(trimmedCode);
+          if (cancelled) {
+            return;
+          }
+          setInvitePreview({
+            householdName: preview.householdName,
+            role: preview.role,
+            spaceName: preview.spaceName,
+          });
+        } catch (error) {
+          if (cancelled) {
+            return;
+          }
+          setInvitePreview(null);
+          setInvitePreviewError(error instanceof Error ? error.message : 'Could not check this invite code.');
+        } finally {
+          if (!cancelled) {
+            setInvitePreviewBusy(false);
+          }
+        }
+      })();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [authMode, inviteCode]);
+
   const householdName = session?.household.name ?? 'your household';
   const canManage = canManageHousehold(session?.user.role ?? '');
   const canReprovisionDevice = canReprovisionDeviceFromSettings(session?.user.role ?? '');
@@ -963,6 +1033,8 @@ function App() {
   const authSubmitLabel =
     authMode === 'login' ? 'Sign in' : authMode === 'register' ? 'Create account' : 'Join household';
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
+  const activeSharedSpaceMemberOptions =
+    activeSpace?.kind === 'shared' ? homeMembers.filter((member) => member.id !== session?.user.id) : [];
   const canReturnToShell = Boolean(session) && homeLoaded && homeDevices.length > 0;
   const householdShellLoading =
     Boolean(session) &&
@@ -1281,6 +1353,27 @@ function App() {
     );
   }
 
+  function openSpaceMembersEditor(): void {
+    if (!canManage || activeSpace?.kind !== 'shared' || !activeSpaceDetail) {
+      return;
+    }
+    setSpaceMembersEditorError('');
+    setSpaceMembersEditorIds(
+      activeSpaceDetail.members
+        .filter((member) => member.id !== session?.user.id)
+        .map((member) => member.id),
+    );
+    setSpaceMembersEditorOpen(true);
+  }
+
+  function toggleSpaceMembersEditorMember(memberId: string): void {
+    setSpaceMembersEditorIds((current) =>
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId],
+    );
+  }
+
   async function submitSpaceCreator(): Promise<void> {
     if (!session?.token || !canManage) {
       return;
@@ -1312,6 +1405,42 @@ function App() {
       setSpaceCreatorError(error instanceof Error ? error.message : 'Could not create this shared space.');
     } finally {
       setSpaceCreatorBusy(false);
+    }
+  }
+
+  async function submitSpaceMembersEditor(): Promise<void> {
+    if (!session?.token || !canManage || activeSpace?.kind !== 'shared' || !activeSpaceDetail) {
+      return;
+    }
+    setSpaceMembersEditorBusy(true);
+    setSpaceMembersEditorError('');
+    try {
+      const updated = await updateHouseholdSpaceMembers(session.token, activeSpaceDetail.id, [
+        session.user.id,
+        ...spaceMembersEditorIds,
+      ]);
+      setActiveSpaceDetail(updated);
+      setSpaces((current) =>
+        current.map((space) =>
+          space.id === updated.id
+            ? {
+                ...space,
+                memberCount: updated.memberCount,
+                updatedAt: updated.updatedAt,
+              }
+            : space,
+        ),
+      );
+      setSpaceMembersEditorOpen(false);
+      setSettingsNotice(`Updated members for ${updated.name}.`);
+      await Promise.all([
+        refreshHouseholdSummary({ silent: true }),
+        refreshSpaces({ silent: true }),
+      ]);
+    } catch (error) {
+      setSpaceMembersEditorError(error instanceof Error ? error.message : 'Could not update this space.');
+    } finally {
+      setSpaceMembersEditorBusy(false);
     }
   }
 
@@ -1766,19 +1895,30 @@ function App() {
     resetFlow();
   }
 
-  async function generateInvite(role: 'owner' | 'member'): Promise<void> {
+  async function generateInvite(
+    role: 'owner' | 'member',
+    options: { targetSpaceId?: string; targetSpaceName?: string } = {},
+  ): Promise<void> {
     if (!session?.token || !canManage) {
       return;
     }
     setSettingsBusy(true);
     setSettingsError('');
     try {
-      const invite = await createHouseholdInvitation(session.token, role);
+      const invite = await createHouseholdInvitation(session.token, role, {
+        spaceId: options.targetSpaceId,
+      });
       const inviteRoleLabel = describeInviteRole(role);
-      setSettingsNotice(`${inviteRoleLabel} invite ready: ${invite.inviteCode}`);
+      const inviteTargetName = invite.spaceName || options.targetSpaceName || '';
+      const inviteNotice = inviteTargetName
+        ? `${inviteRoleLabel} invite for ${inviteTargetName}: ${invite.inviteCode}`
+        : `${inviteRoleLabel} invite ready: ${invite.inviteCode}`;
+      setSettingsNotice(inviteNotice);
       Alert.alert(
-        `${inviteRoleLabel} invite ready`,
-        `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code.`,
+        inviteTargetName ? `${inviteRoleLabel} invite for ${inviteTargetName}` : `${inviteRoleLabel} invite ready`,
+        inviteTargetName
+          ? `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code. They will join this household and be added to ${inviteTargetName}.`
+          : `${invite.inviteCode}\n\nAsk them to open Sparkbox, choose Join household, and enter this code.`,
       );
       await refreshHouseholdSummary({ silent: true });
     } catch (error) {
@@ -4496,6 +4636,34 @@ function App() {
                       <Text style={styles.cardCopy}>{describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)}</Text>
                     </View>
                   ) : null}
+                  {canManage && activeSpace?.kind === 'shared' ? (
+                    <>
+                      <Text style={styles.cardCopy}>
+                        Adjust who belongs in this space here. You stay in this space automatically.
+                      </Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={openSpaceMembersEditor}
+                          disabled={spaceMembersEditorBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Manage members</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() =>
+                            void generateInvite('member', {
+                              targetSpaceId: activeSpace.id,
+                              targetSpaceName: activeSpace.name,
+                            })
+                          }
+                          disabled={settingsBusy}
+                        >
+                          <Text style={styles.secondaryButtonText}>Invite to this space</Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
 
                 <View style={styles.card}>
@@ -5104,7 +5272,7 @@ function App() {
                   <View style={styles.card}>
                     <Text style={styles.cardTitle}>Invites</Text>
                     <Text style={styles.cardCopy}>
-                      Create a standard join invite or invite another owner here. People who use an invite go straight into this household.
+                      Create a standard join invite or invite another owner here. Space-specific invites add people to this household and the shared space you picked.
                     </Text>
                     <View style={styles.inlineActions}>
                       <Pressable
@@ -5129,6 +5297,9 @@ function App() {
                         <View key={invite.id} style={styles.deviceRowCard}>
                           <Text style={styles.networkName}>{describeInviteRole(invite.role)} invite</Text>
                           <Text style={styles.cardCopy}>Join code: {invite.invite_code || 'Waiting for a fresh code'}</Text>
+                          {invite.space_name ? (
+                            <Text style={styles.cardCopy}>Adds them to {invite.space_name}</Text>
+                          ) : null}
                           <Text style={styles.cardCopy}>{describeInviteExpiry(invite.expires_at)}</Text>
                           <View style={styles.inlineActions}>
                             <Pressable
@@ -5296,6 +5467,87 @@ function App() {
                       <Text style={styles.primaryButtonText}>
                         {describeChatEditorPrimaryActionLabel(activeSpaceDetail, chatScope, Boolean(editingChatSession))}
                       </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            animationType="slide"
+            transparent
+            visible={spaceMembersEditorOpen}
+            onRequestClose={() => setSpaceMembersEditorOpen(false)}
+          >
+            <View style={styles.scannerOverlay}>
+              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
+                <Text style={styles.selectionLabel}>Manage members</Text>
+                <Text style={styles.selectionTitle}>
+                  {activeSpace ? `Who belongs in ${activeSpace.name}?` : 'Update this shared space'}
+                </Text>
+                <Text style={styles.selectionCopy}>
+                  Pick the household members who should stay in this shared space. You stay in this space automatically.
+                </Text>
+                <View style={styles.deviceRowCard}>
+                  <Text style={styles.networkName}>{session?.user.display_name || 'You'}</Text>
+                  <Text style={styles.cardCopy}>Owner · Always included</Text>
+                </View>
+                {activeSharedSpaceMemberOptions.length === 0 ? (
+                  <Text style={styles.cardCopy}>No one else has joined this household yet.</Text>
+                ) : (
+                  <View style={styles.scopeRow}>
+                    {activeSharedSpaceMemberOptions.map((member) => {
+                      const active = spaceMembersEditorIds.includes(member.id);
+                      return (
+                        <Pressable
+                          key={member.id}
+                          style={[styles.scopePill, active ? styles.scopePillActive : null]}
+                          onPress={() => toggleSpaceMembersEditorMember(member.id)}
+                        >
+                          <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
+                            {member.display_name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+                <Text style={styles.cardCopy}>
+                  Need someone new first? Create a household invite, then bring them back into this shared space.
+                </Text>
+                {spaceMembersEditorError ? <Text style={styles.errorText}>{spaceMembersEditorError}</Text> : null}
+                <View style={styles.inlineActions}>
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => setSpaceMembersEditorOpen(false)}
+                    disabled={spaceMembersEditorBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </Pressable>
+                  {activeSpace?.kind === 'shared' ? (
+                    <Pressable
+                      style={styles.secondaryButtonSmall}
+                      onPress={() =>
+                        void generateInvite('member', {
+                          targetSpaceId: activeSpace.id,
+                          targetSpaceName: activeSpace.name,
+                        })
+                      }
+                      disabled={spaceMembersEditorBusy || settingsBusy}
+                    >
+                      <Text style={styles.secondaryButtonText}>Invite to this space</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    style={styles.primaryButtonSmall}
+                    onPress={() => void submitSpaceMembersEditor()}
+                    disabled={spaceMembersEditorBusy}
+                  >
+                    {spaceMembersEditorBusy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Save members</Text>
                     )}
                   </Pressable>
                 </View>
@@ -5578,15 +5830,27 @@ function App() {
               />
             ) : null}
             {authMode === 'join' ? (
-              <TextInput
-                autoCapitalize="characters"
-                autoCorrect={false}
-                placeholder="Invite code"
-                placeholderTextColor="#7e8a83"
-                style={styles.input}
-                value={inviteCode}
-                onChangeText={setInviteCode}
-              />
+              <>
+                <TextInput
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  placeholder="Invite code"
+                  placeholderTextColor="#7e8a83"
+                  style={styles.input}
+                  value={inviteCode}
+                  onChangeText={setInviteCode}
+                />
+                {invitePreviewBusy ? (
+                  <Text style={styles.cardCopy}>Checking this invite code...</Text>
+                ) : invitePreview ? (
+                  <Text style={styles.cardCopy}>
+                    This code joins {invitePreview.householdName}
+                    {invitePreview.spaceName ? ` and adds you to ${invitePreview.spaceName}.` : '.'}
+                  </Text>
+                ) : invitePreviewError ? (
+                  <Text style={styles.errorText}>{invitePreviewError}</Text>
+                ) : null}
+              </>
             ) : null}
             <TextInput
               secureTextEntry

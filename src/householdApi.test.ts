@@ -26,6 +26,7 @@ import {
   getSpaceLibrary,
   getHouseholdChatSession,
   getHouseholdChatSessions,
+  getHouseholdInvitationPreview,
   getHouseholdSpaceDetail,
   getHouseholdSpaces,
   getHouseholdSummary,
@@ -43,6 +44,7 @@ import {
   startDeviceReprovision,
   sendHouseholdChat,
   uninstallFamilyApp,
+  updateHouseholdSpaceMembers,
   updateSpaceMemory,
   updateHouseholdChatSession,
   updateDeviceProviderConfig,
@@ -66,7 +68,17 @@ describe('getHouseholdSummary', () => {
         id: 'house-1',
         name: 'Home',
         members: [{ id: 'member-1', display_name: 'Morgan', role: 'owner' }],
-        pending_invites: [{ id: 'invite-1', invited_by_name: 'Morgan', invite_code: 'ABCD', role: 'owner', expires_at: '2026-03-20T10:00:00Z' }],
+        pending_invites: [
+          {
+            id: 'invite-1',
+            invited_by_name: 'Morgan',
+            invite_code: 'ABCD',
+            role: 'owner',
+            expires_at: '2026-03-20T10:00:00Z',
+            space_id: 'space-parents',
+            space_name: 'Parents',
+          },
+        ],
         devices: [{ device_id: 'sbx-1', status: 'bound_online', online: true, claimed: true }],
         recent_activity: [{ id: 'activity-1', event_type: 'device_added', actor_name: 'Morgan', created_at: '2026-03-19T10:00:00Z' }],
       }),
@@ -87,8 +99,40 @@ describe('getHouseholdSummary', () => {
     expect(result.members).toHaveLength(1);
     expect(result.pendingInvites).toHaveLength(1);
     expect(result.pendingInvites[0]?.role).toBe('owner');
+    expect(result.pendingInvites[0]?.space_name).toBe('Parents');
     expect(result.devices).toHaveLength(1);
     expect(result.recentActivity).toHaveLength(1);
+  });
+});
+
+describe('getHouseholdInvitationPreview', () => {
+  it('loads the household and target space for a join code', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        household_id: 'house-1',
+        household_name: 'Home',
+        role: 'member',
+        space_id: 'space-parents',
+        space_name: 'Parents',
+      }),
+    } as Response);
+
+    const result = await getHouseholdInvitationPreview('ABCD1234');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://morgen52.site/familyserver/api/auth/invitations/preview/ABCD1234',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+    expect(result).toEqual({
+      householdId: 'house-1',
+      householdName: 'Home',
+      role: 'member',
+      spaceId: 'space-parents',
+      spaceName: 'Parents',
+    });
   });
 });
 
@@ -679,6 +723,27 @@ describe('household member management API', () => {
           role: 'owner',
           expires_in_seconds: 604800,
           expires_at: '2026-03-20T10:00:00Z',
+          space_id: 'space-parents',
+          space_name: 'Parents',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'space-parents',
+          name: 'Parents',
+          kind: 'shared',
+          template: 'parents',
+          member_count: 2,
+          thread_count: 4,
+          updated_at: '2026-03-20T10:02:00Z',
+          members: [
+            { id: 'user-1', display_name: 'Morgan', role: 'owner' },
+            { id: 'user-2', display_name: 'Parent', role: 'member' },
+          ],
+          threads: [],
+          enabled_family_apps: [],
+          private_side_channel: null,
         }),
       } as Response)
       .mockResolvedValueOnce({
@@ -706,12 +771,16 @@ describe('household member management API', () => {
 
     global.fetch = fetchMock;
 
-    const invite = await createHouseholdInvitation('token-1', 'owner');
+    const invite = await createHouseholdInvitation('token-1', 'owner', { spaceId: 'space-parents' });
+    const updatedSpace = await updateHouseholdSpaceMembers('token-1', 'space-parents', ['user-1', 'user-2']);
     const updated = await updateHouseholdMemberRole('token-1', 'member-1', 'owner');
     const revoked = await revokeHouseholdInvitation('token-1', 'invite-1');
     const removed = await removeHouseholdMember('token-1', 'member-1');
 
     expect(invite.role).toBe('owner');
+    expect(invite.spaceId).toBe('space-parents');
+    expect(invite.spaceName).toBe('Parents');
+    expect(updatedSpace.members.map((member) => member.displayName)).toEqual(['Morgan', 'Parent']);
     expect(updated).toEqual({ ok: true, memberId: 'member-1', role: 'owner' });
     expect(revoked).toEqual({ ok: true, inviteId: 'invite-1' });
     expect(removed).toEqual({ ok: true, memberId: 'member-1' });
@@ -720,11 +789,19 @@ describe('household member management API', () => {
       'https://morgen52.site/familyserver/api/auth/invitations',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ role: 'owner' }),
+        body: JSON.stringify({ role: 'owner', space_id: 'space-parents' }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      'https://morgen52.site/familyserver/api/spaces/space-parents/members',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ member_ids: ['user-1', 'user-2'] }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       'https://morgen52.site/familyserver/api/household/members/member-1/role',
       expect.objectContaining({
         method: 'PATCH',
@@ -732,14 +809,14 @@ describe('household member management API', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       'https://morgen52.site/familyserver/api/auth/invitations/invite-1',
       expect.objectContaining({
         method: 'DELETE',
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       'https://morgen52.site/familyserver/api/household/members/member-1',
       expect.objectContaining({
         method: 'DELETE',
