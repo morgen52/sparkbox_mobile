@@ -54,12 +54,13 @@ describe('App structure', () => {
 
   it('keeps relay messaging copy in a single delivery language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const relaySource = readFileSync(resolve(__dirname, './components/RelayComposerModal.tsx'), 'utf8');
 
-    expect(appSource).toContain('Have Sparkbox relay it privately');
+    expect(relaySource).toContain('Have Sparkbox relay it privately');
     expect(appSource).toContain('The first reply can take 1 to 5 minutes');
-    expect(appSource).not.toContain('请 Sparkbox 帮我转述');
-    expect(appSource).not.toContain('首次响应可能需要');
-    expect(appSource).not.toContain('Sparkbox 正在认真准备');
+    expect(relaySource).not.toContain('请 Sparkbox 帮我转述');
+    expect(relaySource).not.toContain('首次响应可能需要');
+    expect(relaySource).not.toContain('Sparkbox 正在认真准备');
   });
 
   it('keeps primary chat entry labels explicit about chats and the shared group thread', () => {

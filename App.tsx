@@ -30,6 +30,7 @@ import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
+import { RelayComposerModal } from './src/components/RelayComposerModal';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { SetupUtilityModals } from './src/components/SetupUtilityModals';
@@ -4335,68 +4336,19 @@ function App() {
             </View>
           </Modal>
 
-          <Modal
-            animationType="slide"
-            presentationStyle="overFullScreen"
-            transparent
+          <RelayComposerModal
+            styles={styles}
             visible={relayComposerOpen}
+            relayTargets={relayTargets}
+            relayTargetUserId={relayTargetUserId}
+            relayMessage={relayMessage}
+            relayError={relayError}
+            relayBusy={relayBusy}
             onRequestClose={() => setRelayComposerOpen(false)}
-          >
-            <View style={styles.networkSheetBackdrop}>
-              <View style={styles.networkSheetCard}>
-                <Text style={styles.selectionLabel}>Relay message</Text>
-                <Text style={styles.selectionTitle}>Have Sparkbox relay it privately</Text>
-                <Text style={styles.selectionCopy}>
-                  Choose one other member in this shared space, then write the note Sparkbox should pass along privately.
-                </Text>
-                <Text style={styles.selectionLabel}>Send to</Text>
-                <View style={styles.scopeRow}>
-                  {relayTargets.map((member) => {
-                    const active = relayTargetUserId === member.id;
-                    return (
-                      <Pressable
-                        key={member.id}
-                        style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                        onPress={() => setRelayTargetUserId(member.id)}
-                      >
-                        <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                          {member.displayName}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <TextInput
-                  autoCapitalize="sentences"
-                  autoCorrect={false}
-                  multiline
-                  numberOfLines={4}
-                  placeholder="Write the message Sparkbox should relay"
-                  placeholderTextColor="#7e8a83"
-                  style={[styles.input, styles.textArea]}
-                  value={relayMessage}
-                  onChangeText={setRelayMessage}
-                />
-                {relayError ? <Text style={styles.errorText}>{relayError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={styles.secondaryButtonSmall}
-                    onPress={() => setRelayComposerOpen(false)}
-                    disabled={relayBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.primaryButtonSmall, relayTargets.length === 0 ? styles.networkRowDisabled : null]}
-                    onPress={() => void submitRelayMessage()}
-                    disabled={relayBusy || relayTargets.length === 0}
-                  >
-                    {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Relay</Text>}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            onSelectRelayTarget={setRelayTargetUserId}
+            onChangeRelayMessage={setRelayMessage}
+            onSubmit={() => void submitRelayMessage()}
+          />
         </View>
       </SafeAreaView>
     );
