@@ -116,9 +116,11 @@ describe('App structure', () => {
 
   it('swaps the chats tab body between inbox and active chat detail', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatsPaneSource = readFileSync(resolve(__dirname, './components/ChatsPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('activeChatSessionId ? (');
-    expect(appSource).toContain('!activeChatSessionId ? (');
+    expect(appSource).toContain('ChatsPane');
+    expect(chatsPaneSource).toContain('activeChatSessionId ? <ChatDetailPane');
+    expect(chatsPaneSource).toContain('!activeChatSessionId ? (');
   });
 
   it('keeps task editor copy free of internal runtime wording', () => {
@@ -618,5 +620,16 @@ describe('App structure', () => {
     expect(inspirationSource).toContain('Ready to turn on here');
     expect(inspirationSource).toContain('Worth adding next');
     expect(inspirationSource).toContain('Open all family apps');
+  });
+
+  it('keeps the chats page composition in its own pane', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatsPaneSource = readFileSync(resolve(__dirname, './components/ChatsPane.tsx'), 'utf8');
+
+    expect(appSource).toContain('ChatsPane');
+    expect(chatsPaneSource).toContain('ChatInboxPane');
+    expect(chatsPaneSource).toContain('ChatSpaceToolsPane');
+    expect(chatsPaneSource).toContain('ChatInspirationPane');
+    expect(chatsPaneSource).toContain('ChatDetailPane');
   });
 });

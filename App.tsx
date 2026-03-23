@@ -26,6 +26,7 @@ import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModa
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatInboxPane } from './src/components/ChatInboxPane';
 import { ChatInspirationPane } from './src/components/ChatInspirationPane';
+import { ChatsPane } from './src/components/ChatsPane';
 import { ChatSpaceToolsPane } from './src/components/ChatSpaceToolsPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
@@ -3481,45 +3482,41 @@ function App() {
 
           <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>
             {shellTab === 'chats' ? (
-              <>
-                {!activeChatSessionId ? (
-                  <>
-                <ChatInboxPane
-                  styles={styles}
-                  headerCopy={describeShellSubtitle({
+              <ChatsPane
+                styles={styles}
+                activeChatSessionId={activeChatSessionId}
+                inboxProps={{
+                  headerCopy: describeShellSubtitle({
                     shellTab: 'chats',
                     activeSpaceName: activeSpace?.name || '',
                     activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
                     spacesReady: !waitingForSpaces,
-                  })}
-                  spacesError={spacesError}
-                  spacesBusy={spacesBusy}
-                  hasSpaces={spaces.length > 0}
-                  canManage={canManage}
-                  waitingForSpaces={waitingForSpaces}
-                  onlineDeviceAvailable={onlineDeviceAvailable}
-                  activeSpaceBodyCopy={
+                  }),
+                  spacesError,
+                  spacesBusy,
+                  hasSpaces: spaces.length > 0,
+                  canManage,
+                  waitingForSpaces,
+                  onlineDeviceAvailable,
+                  activeSpaceBodyCopy:
                     waitingForSpaces
                       ? 'Loading your spaces...'
                       : onlineDeviceAvailable
                         ? activeSpace
                           ? `Viewing ${activeSpace.name} (${activeSpaceKindLabel})`
                           : 'Select a space to open its chats.'
-                        : 'Sparkbox is offline right now. You can still browse chat history and settings.'
-                  }
-                  chatSendPhaseCopy={chatSendPhase !== 'idle' ? describeChatSendPhase(chatSendPhase) : ''}
-                  chatError={chatError}
-                  scopeOptions={
-                    (['family', 'private'] as ChatSessionScope[]).map((scope) => ({
-                      id: scope,
-                      label: describeChatAccess(scope),
-                      active: chatScope === scope,
-                    }))
-                  }
-                  chatBusy={chatBusy}
-                  canCreateChat={canCreateActiveChat}
-                  createChatLabel={describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope)}
-                  sessions={chatSessions.map((sessionItem) => {
+                        : 'Sparkbox is offline right now. You can still browse chat history and settings.',
+                  chatSendPhaseCopy: chatSendPhase !== 'idle' ? describeChatSendPhase(chatSendPhase) : '',
+                  chatError,
+                  scopeOptions: (['family', 'private'] as ChatSessionScope[]).map((scope) => ({
+                    id: scope,
+                    label: describeChatAccess(scope),
+                    active: chatScope === scope,
+                  })),
+                  chatBusy,
+                  canCreateChat: canCreateActiveChat,
+                  createChatLabel: describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope),
+                  sessions: chatSessions.map((sessionItem) => {
                     const active = sessionItem.id === activeChatSessionId;
                     const sharedGroupSession = looksLikeSharedGroupChatSession(
                       sessionItem.name,
@@ -3566,29 +3563,27 @@ function App() {
                       avatarLabel: sharedGroupSession ? 'G' : sessionItem.scope === 'private' ? 'S' : '#',
                       avatarTone: sharedGroupSession ? 'group' : sessionItem.scope === 'private' ? 'private' : 'shared',
                     };
-                  })}
-                  emptyStateCopy={describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope)}
-                  spaceChips={spaces.map((space) => ({
+                  }),
+                  emptyStateCopy: describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope),
+                  spaceChips: spaces.map((space) => ({
                     id: space.id,
                     name: space.name,
                     countsCopy: describeSpaceCounts(space.kind, space.threadCount, space.memberCount),
                     active: space.id === activeSpaceId,
-                  }))}
-                  onOpenSpaceCreator={openSpaceCreator}
-                  onSelectSpace={setActiveSpaceId}
-                  onSelectScope={(scopeId) => handleChatScopeChange(scopeId as ChatSessionScope)}
-                  onRefresh={() => void refreshChatSessions()}
-                  onCreateChat={() => openChatSessionEditor()}
-                  onOpenSession={setActiveChatSessionId}
-                />
-
-                <ChatSpaceToolsPane
-                  styles={styles}
-                  waitingForSpaces={waitingForSpaces}
-                  title={waitingForSpaces ? 'Chats in this space' : describeSpaceThreadSectionTitle(activeSpaceCopyContext)}
-                  copy={waitingForSpaces ? 'Loading your spaces...' : describeSpaceThreadSectionCopy(activeSpaceCopyContext)}
-                  relayNotice={relayNotice}
-                  threadRows={
+                  })),
+                  onOpenSpaceCreator: openSpaceCreator,
+                  onSelectSpace: setActiveSpaceId,
+                  onSelectScope: (scopeId: string) => handleChatScopeChange(scopeId as ChatSessionScope),
+                  onRefresh: () => void refreshChatSessions(),
+                  onCreateChat: () => openChatSessionEditor(),
+                  onOpenSession: setActiveChatSessionId,
+                }}
+                toolsProps={{
+                  waitingForSpaces,
+                  title: waitingForSpaces ? 'Chats in this space' : describeSpaceThreadSectionTitle(activeSpaceCopyContext),
+                  copy: waitingForSpaces ? 'Loading your spaces...' : describeSpaceThreadSectionCopy(activeSpaceCopyContext),
+                  relayNotice,
+                  threadRows:
                     activeSpaceDetail?.threads.map((thread) => ({
                       id: thread.id,
                       title: thread.title,
@@ -3604,110 +3599,95 @@ function App() {
                         Boolean(thread.chatSessionId),
                         thread.chatSessionId === activeChatSessionId,
                       ),
-                    })) || []
-                  }
-                  emptyThreadCopy={describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext)}
-                  onOpenThread={(threadId) => void openSpaceThread(threadId)}
-                  showRelayHelper={activeSpaceDetail?.kind === 'shared'}
-                  canOpenRelay={relayTargets.length > 0}
-                  onOpenRelay={openRelayComposer}
-                  privateSideChannelLabel={
+                    })) || [],
+                  emptyThreadCopy: describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext),
+                  onOpenThread: (threadId: string) => void openSpaceThread(threadId),
+                  showRelayHelper: activeSpaceDetail?.kind === 'shared',
+                  canOpenRelay: relayTargets.length > 0,
+                  onOpenRelay: openRelayComposer,
+                  privateSideChannelLabel:
                     activeSpaceDetail?.privateSideChannel?.available
                       ? activeSpaceDetail.privateSideChannel.label
-                      : ''
-                  }
-                  onOpenPrivateSideChannel={() => {
+                      : '',
+                  onOpenPrivateSideChannel: () => {
                     void openCurrentSpaceSideChannel();
-                  }}
-                  enabledFamilyApps={enabledFamilyAppCards}
-                  canManageActiveSpaceFamilyApps={canManageActiveSpaceFamilyApps}
-                  settingsBusy={settingsBusy}
-                  readyInstalledFamilyApps={installedFamilyAppsAvailableForActiveSpace}
-                  describeFamilyAppRiskLevel={describeFamilyAppRiskLevel}
-                  formatFamilyAppConfigSummary={formatFamilyAppConfigSummary}
-                  onOpenFamilyAppStarter={(slug, prompt) => void openFamilyAppStarter(slug, prompt)}
-                  onDisableFamilyApp={(slug) => void disableFamilyAppForActiveSpace(slug)}
-                  onEnableFamilyApp={(slug) => void enableInstalledFamilyAppForActiveSpace(slug)}
-                />
-
-                {activeSpace ? (
-                  <ChatInspirationPane
-                    styles={styles}
-                    activeSpaceName={activeSpace.name}
-                    activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'space'}
-                    canManage={canManage}
-                    settingsBusy={settingsBusy}
-                    enabledApps={chatSpotlightEnabledApps}
-                    readyInstalledApps={chatSpotlightRecommendedInstalledApps}
-                    readyCatalogApps={chatSpotlightRecommendedCatalogApps}
-                    onOpenFamilyAppStarter={(slug, prompt) => void openFamilyAppStarter(slug, prompt)}
-                    onEnableFamilyApp={(slug) => void enableInstalledFamilyAppForActiveSpace(slug)}
-                    onInstallFamilyApp={(slug) => void installSelectedFamilyApp(slug)}
-                    onOpenAllFamilyApps={() => setShellTab('settings')}
-                  />
-                ) : null}
-                  </>
-                ) : null}
-
-                {activeChatSessionId ? (
-                  <>
-                <ChatDetailPane
-                  styles={styles}
-                  waitingForSpaces={waitingForSpaces}
-                  activeChatTitle={
+                  },
+                  enabledFamilyApps: enabledFamilyAppCards,
+                  canManageActiveSpaceFamilyApps,
+                  settingsBusy,
+                  readyInstalledFamilyApps: installedFamilyAppsAvailableForActiveSpace,
+                  describeFamilyAppRiskLevel,
+                  formatFamilyAppConfigSummary,
+                  onOpenFamilyAppStarter: (slug: string, prompt: string) => void openFamilyAppStarter(slug, prompt),
+                  onDisableFamilyApp: (slug: string) => void disableFamilyAppForActiveSpace(slug),
+                  onEnableFamilyApp: (slug: string) => void enableInstalledFamilyAppForActiveSpace(slug),
+                }}
+                inspirationProps={
+                  activeSpace
+                    ? {
+                        activeSpaceName: activeSpace.name,
+                        activeSpaceTemplateLabel: activeSpaceTemplateLabel || 'space',
+                        canManage,
+                        settingsBusy,
+                        enabledApps: chatSpotlightEnabledApps,
+                        readyInstalledApps: chatSpotlightRecommendedInstalledApps,
+                        readyCatalogApps: chatSpotlightRecommendedCatalogApps,
+                        onOpenFamilyAppStarter: (slug: string, prompt: string) => void openFamilyAppStarter(slug, prompt),
+                        onEnableFamilyApp: (slug: string) => void enableInstalledFamilyAppForActiveSpace(slug),
+                        onInstallFamilyApp: (slug: string) => void installSelectedFamilyApp(slug),
+                        onOpenAllFamilyApps: () => setShellTab('settings'),
+                      }
+                    : null
+                }
+                detailProps={{
+                  waitingForSpaces,
+                  activeChatTitle:
                     waitingForSpaces
                       ? 'Loading chat...'
-                      : activeChatSession?.name || describeActiveChatFallbackTitle(activeSpaceCopyContext)
-                  }
-                  activeChatSubtitle={
+                      : activeChatSession?.name || describeActiveChatFallbackTitle(activeSpaceCopyContext),
+                  activeChatSubtitle:
                     waitingForSpaces
                       ? 'Loading your spaces...'
                       : activeChatSession
                         ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible)
-                        : describeActiveChatEmptyStateCopy(activeSpaceCopyContext)
-                  }
-                  participantSummary={
+                        : describeActiveChatEmptyStateCopy(activeSpaceCopyContext),
+                  participantSummary:
                     sharedChatIsVisible && activeSharedChatParticipantSummary && !waitingForSpaces
                       ? activeSharedChatParticipantSummary
-                      : ''
-                  }
-                  participantLabels={activeSharedChatParticipantLabels}
-                  onlineDeviceAvailable={onlineDeviceAvailable}
-                  showParticipantPills={sharedChatIsVisible && Boolean(activeSpaceDetail) && !waitingForSpaces}
-                  showManageActions={Boolean(activeChatSession) && canManageActiveChat && !waitingForSpaces}
-                  hasActiveChatSession={Boolean(activeChatSession)}
-                  chatBusy={chatBusy}
-                  chatTimelineGroups={chatTimelineGroups}
-                  hasMessages={activeChatTimelineMessages.length > 0}
-                  composerTitle={waitingForSpaces ? 'Loading chat...' : sharedChatIsVisible ? 'Message the group' : 'Send a message'}
-                  composerPlaceholder={
+                      : '',
+                  participantLabels: activeSharedChatParticipantLabels,
+                  onlineDeviceAvailable,
+                  showParticipantPills: sharedChatIsVisible && Boolean(activeSpaceDetail) && !waitingForSpaces,
+                  showManageActions: Boolean(activeChatSession) && canManageActiveChat && !waitingForSpaces,
+                  hasActiveChatSession: Boolean(activeChatSession),
+                  chatBusy,
+                  chatTimelineGroups,
+                  hasMessages: activeChatTimelineMessages.length > 0,
+                  composerTitle: waitingForSpaces ? 'Loading chat...' : sharedChatIsVisible ? 'Message the group' : 'Send a message',
+                  composerPlaceholder:
                     waitingForSpaces
                       ? 'Loading your spaces...'
                       : describeChatComposerPlaceholder(
                           activeSpaceCopyContext,
                           Boolean(activeChatSession),
                           sharedChatIsVisible,
-                        )
-                  }
-                  chatDraft={chatDraft}
-                  canSend={
+                        ),
+                  chatDraft,
+                  canSend:
                     !waitingForSpaces &&
                     onlineDeviceAvailable &&
                     !chatBusy &&
                     Boolean(activeChatSessionId) &&
-                    Boolean(chatDraft.trim())
-                  }
-                  onBack={closeActiveChatDetail}
-                  onEdit={() => activeChatSession && openChatSessionEditor(activeChatSession)}
-                  onClear={() => void clearCurrentChatSession()}
-                  onDelete={() => void deleteCurrentChatSession()}
-                  onRetry={(content) => void submitChatMessage(content)}
-                  onChangeDraft={setChatDraft}
-                  onSend={() => void submitChatMessage()}
-                />
-                  </>
-                ) : null}
-              </>
+                    Boolean(chatDraft.trim()),
+                  onBack: closeActiveChatDetail,
+                  onEdit: () => activeChatSession && openChatSessionEditor(activeChatSession),
+                  onClear: () => void clearCurrentChatSession(),
+                  onDelete: () => void deleteCurrentChatSession(),
+                  onRetry: (content: string) => void submitChatMessage(content),
+                  onChangeDraft: setChatDraft,
+                  onSend: () => void submitChatMessage(),
+                }}
+              />
             ) : null}
 
             {libraryTabActive ? (
