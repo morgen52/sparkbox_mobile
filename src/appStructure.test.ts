@@ -66,9 +66,10 @@ describe('App structure', () => {
   it('keeps primary chat entry labels explicit about chats and the shared group thread', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const chatInboxSource = readFileSync(resolve(__dirname, './components/ChatInboxPane.tsx'), 'utf8');
+    const settingsSummarySource = readFileSync(resolve(__dirname, './components/SettingsSummaryPane.tsx'), 'utf8');
 
     expect(chatInboxSource).toContain('Chats in this space');
-    expect(appSource).toContain('Open group chat');
+    expect(settingsSummarySource).toContain('Open group chat');
     expect(appSource).not.toContain('without opening every thread');
     expect(appSource).not.toContain('same thread here');
     expect(appSource).not.toContain('Topic chat');
@@ -364,9 +365,10 @@ describe('App structure', () => {
 
   it('keeps account copy away from metadata-style role labels', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const settingsSummarySource = readFileSync(resolve(__dirname, './components/SettingsSummaryPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Your account');
-    expect(appSource).toContain('{session.user.display_name} · {describeHouseholdRole(session.user.role)} access');
+    expect(settingsSummarySource).toContain('Your account');
+    expect(settingsSummarySource).toContain('{accountDisplayName} · {accountRoleLabel} access');
     expect(appSource).not.toContain('Signed in as {session.user.display_name}. Role: {describeHouseholdRole(session.user.role)}.');
   });
 
@@ -572,5 +574,18 @@ describe('App structure', () => {
     expect(quickActionsSource).toContain('The creation shortcuts live here so they are always easy to reach.');
     expect(quickActionsSource).toContain('New folder');
     expect(quickActionsSource).toContain('New task');
+  });
+
+  it('keeps settings summary cards in a dedicated pane', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const summaryPaneSource = readFileSync(resolve(__dirname, './components/SettingsSummaryPane.tsx'), 'utf8');
+
+    expect(appSource).toContain('SettingsSummaryPane');
+    expect(summaryPaneSource).toContain('Household overview');
+    expect(summaryPaneSource).toContain('Open group chat');
+    expect(summaryPaneSource).toContain('Set up another device');
+    expect(summaryPaneSource).toContain('Your account');
+    expect(summaryPaneSource).toContain('Sign out');
+    expect(summaryPaneSource).toContain('ViewedSpaceCard');
   });
 });

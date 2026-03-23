@@ -31,6 +31,7 @@ import { LibraryPane } from './src/components/LibraryPane';
 import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { RelayComposerModal } from './src/components/RelayComposerModal';
+import { SettingsSummaryPane } from './src/components/SettingsSummaryPane';
 import { ShellHeader } from './src/components/ShellHeader';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { ChatSessionEditorModal } from './src/components/ChatSessionEditorModal';
@@ -3946,35 +3947,16 @@ function App() {
 
             {shellTab === 'settings' ? (
               <>
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Household overview</Text>
-                  <Text style={styles.cardCopy}>
-                    {homeBusy
-                      ? 'Refreshing your household status...'
-                      : onlineDeviceAvailable
-                        ? 'Sparkbox is ready for household chat.'
-                        : 'Household history stays available even when Sparkbox is offline.'}
-                  </Text>
-                  {homeError ? <Text style={styles.errorText}>{homeError}</Text> : null}
-                  {homeBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-                  <View style={styles.inlineActions}>
-                    <Pressable style={styles.primaryButtonSmall} onPress={() => setShellTab('chats')}>
-                      <Text style={styles.primaryButtonText}>Open group chat</Text>
-                    </Pressable>
-                    {canManage ? (
-                      <Pressable style={styles.secondaryButtonSmall} onPress={beginNewDeviceOnboarding}>
-                        <Text style={styles.secondaryButtonText}>Set up another device</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
-
-                <ViewedSpaceCard
+                <SettingsSummaryPane
                   styles={styles}
+                  homeBusy={homeBusy}
+                  homeError={homeError}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  canManage={canManage}
                   activeSpaceName={activeSpace?.name || ''}
                   activeSpaceKindLabel={activeSpaceKindLabel}
                   activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'Shared home'}
-                  summaryCopy={
+                  activeSpaceSummaryCopy={
                     activeSpace
                       ? describeCurrentSpaceSummaryCopy(
                           activeSpace.name,
@@ -3984,7 +3966,7 @@ function App() {
                         )
                       : ''
                   }
-                  countsCopy={
+                  activeSpaceCountsCopy={
                     activeSpace
                       ? describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)
                       : ''
@@ -3992,6 +3974,12 @@ function App() {
                   canManageSharedSpace={canManage && activeSpace?.kind === 'shared'}
                   settingsBusy={settingsBusy}
                   spaceMembersEditorBusy={spaceMembersEditorBusy}
+                  accountDisplayName={session.user.display_name}
+                  accountRoleLabel={describeHouseholdRole(session.user.role)}
+                  settingsNotice={settingsNotice}
+                  settingsError={settingsError}
+                  onOpenChats={() => setShellTab('chats')}
+                  onBeginNewDeviceOnboarding={beginNewDeviceOnboarding}
                   onManageMembers={openSpaceMembersEditor}
                   onInviteToSpace={() =>
                     void generateInvite('member', {
@@ -3999,21 +3987,8 @@ function App() {
                       targetSpaceName: activeSpace?.name,
                     })
                   }
+                  onLogout={() => void logout()}
                 />
-
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Your account</Text>
-                  <Text style={styles.cardCopy}>
-                    {session.user.display_name} · {describeHouseholdRole(session.user.role)} access
-                  </Text>
-                  {settingsNotice ? <Text style={styles.noticeText}>{settingsNotice}</Text> : null}
-                  {settingsError ? <Text style={styles.errorText}>{settingsError}</Text> : null}
-                  <View style={styles.inlineActions}>
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => void logout()}>
-                      <Text style={styles.secondaryButtonText}>Sign out</Text>
-                    </Pressable>
-                  </View>
-                </View>
 
                 <SettingsDevicesPane
                   styles={styles}
