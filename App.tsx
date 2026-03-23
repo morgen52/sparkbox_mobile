@@ -28,8 +28,10 @@ import { ChatInboxPane } from './src/components/ChatInboxPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
+import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { RelayComposerModal } from './src/components/RelayComposerModal';
+import { ShellHeader } from './src/components/ShellHeader';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { ChatSessionEditorModal } from './src/components/ChatSessionEditorModal';
 import { MemoryEditorModal } from './src/components/MemoryEditorModal';
@@ -3445,65 +3447,33 @@ function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <View style={styles.shellScreen}>
-          <View style={styles.hero}>
-            <Text style={styles.eyebrow}>Sparkbox</Text>
-            <Text style={styles.title}>{householdName}</Text>
-            <Text style={styles.subtitle}>
-              {describeShellSubtitle({
-                shellTab,
-                activeSpaceName: activeSpace?.name || '',
-                activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
-                spacesReady: !waitingForSpaces,
-              })}
-            </Text>
-          </View>
-
-          <View style={styles.shellTabBar}>
-            {PHASE_ONE_TABS.map((tab) => {
-              const active = tab.key === shellTab;
-              return (
-                <Pressable
-                  key={tab.key}
-                  style={[styles.shellTab, active ? styles.shellTabActive : null]}
-                  onPress={() => setShellTab(tab.key)}
-                >
-                  <Text style={[styles.shellTabLabel, active ? styles.shellTabLabelActive : null]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
+          <ShellHeader
+            styles={styles}
+            householdName={householdName}
+            subtitle={describeShellSubtitle({
+              shellTab,
+              activeSpaceName: activeSpace?.name || '',
+              activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+              spacesReady: !waitingForSpaces,
             })}
-          </View>
+            tabs={PHASE_ONE_TABS.map((tab) => ({
+              id: tab.key,
+              label: tab.label,
+              active: tab.key === shellTab,
+            }))}
+            onSelectTab={setShellTab}
+          />
 
           {libraryTabActive ? (
-            <View style={styles.card}>
-              <Text style={styles.selectionLabel}>Quick actions</Text>
-              <Text style={styles.cardCopy}>
-                The creation shortcuts live here so they are always easy to reach.
-              </Text>
-              <View style={styles.inlineActions}>
-                {canMutateActiveSpaceFiles ? (
-                  <Pressable
-                    android_ripple={{ color: 'rgba(23,53,42,0.14)' }}
-                    accessibilityRole="button"
-                    style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                    onPress={() => openFileEditor('mkdir')}
-                    disabled={!onlineDeviceAvailable || filesBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>New folder</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  android_ripple={{ color: 'rgba(255,255,255,0.18)' }}
-                  accessibilityRole="button"
-                  style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !canCreateTasks) ? styles.networkRowDisabled : null]}
-                  onPress={() => openTaskEditor()}
-                  disabled={!onlineDeviceAvailable || !canCreateTasks}
-                >
-                  <Text style={styles.primaryButtonText}>New task</Text>
-                </Pressable>
-              </View>
-            </View>
+            <LibraryQuickActionsCard
+              styles={styles}
+              canMutateActiveSpaceFiles={canMutateActiveSpaceFiles}
+              onlineDeviceAvailable={onlineDeviceAvailable}
+              filesBusy={filesBusy}
+              canCreateTasks={canCreateTasks}
+              onOpenFileEditor={() => openFileEditor('mkdir')}
+              onOpenTaskEditor={openTaskEditor}
+            />
           ) : null}
 
           <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>

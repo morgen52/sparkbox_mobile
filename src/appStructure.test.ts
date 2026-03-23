@@ -558,4 +558,19 @@ describe('App structure', () => {
     expect(memoryEditorSource).toContain('Memories are the key details Sparkbox should remember for this space.');
     expect(memoryEditorSource).toContain('Pin memory');
   });
+
+  it('keeps shell chrome and library quick actions in dedicated components', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const shellHeaderSource = readFileSync(resolve(__dirname, './components/ShellHeader.tsx'), 'utf8');
+    const quickActionsSource = readFileSync(resolve(__dirname, './components/LibraryQuickActionsCard.tsx'), 'utf8');
+
+    expect(appSource).toContain('ShellHeader');
+    expect(appSource).toContain('LibraryQuickActionsCard');
+    expect(shellHeaderSource).toContain('Sparkbox');
+    expect(shellHeaderSource).toContain('styles.shellTabBar');
+    expect(quickActionsSource).toContain('Quick actions');
+    expect(quickActionsSource).toContain('The creation shortcuts live here so they are always easy to reach.');
+    expect(quickActionsSource).toContain('New folder');
+    expect(quickActionsSource).toContain('New task');
+  });
 });
