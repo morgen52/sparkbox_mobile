@@ -23,6 +23,12 @@ The retired BLE-only onboarding flow is no longer the primary product path. Setu
 - `expo-file-system`
 - `expo-sharing`
 
+## Developer guide
+
+For newcomer architecture walkthrough and handoff guidance, start here:
+
+- [`docs/development-guide.md`](/Users/morgen/Desktop/projects/jetson/sparkbox_mobile/docs/development-guide.md)
+
 ## Local development
 
 ```bash

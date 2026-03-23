@@ -536,6 +536,8 @@ async function apiJson<T>(
 function App() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
+  // Auth + onboarding state stays in App because the shell can hand back into
+  // setup at any time for first-run claim, reprovision, or post-setup recovery.
   const [session, setSession] = useState<Session | null>(null);
   const [booting, setBooting] = useState(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -581,6 +583,10 @@ function App() {
   const [previousInternetSsid, setPreviousInternetSsid] = useState<string | null>(null);
   const [setupPageState, setSetupPageState] = useState<ProvisionStatus | null>(null);
   const [setupNetworksLoaded, setSetupNetworksLoaded] = useState(false);
+
+  // Shell state fans out into presentational panes, but the coordination
+  // between tabs, spaces, chats, files, tasks, and owner tooling still lives
+  // here so cross-surface resets happen in one place.
   const [shellTab, setShellTab] = useState<ShellTab>('chats');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [homeBusy, setHomeBusy] = useState(false);
@@ -691,6 +697,8 @@ function App() {
   const [familyAppsBusy, setFamilyAppsBusy] = useState(false);
   const [familyAppsCatalog, setFamilyAppsCatalog] = useState<FamilyAppInstallation[]>([]);
   const [installedFamilyApps, setInstalledFamilyApps] = useState<FamilyAppInstallation[]>([]);
+
+  // Refs coordinate onboarding side effects without forcing re-renders.
   const verificationStartedRef = useRef(false);
   const lastOpenedPortalUrlRef = useRef<string | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -727,6 +735,9 @@ function App() {
     Boolean(completedDeviceId);
   const setupFlowRequested = Boolean(reprovisionDeviceId);
   const activeSpaceStorageKey = buildActiveSpaceStorageKey(session);
+
+  // Derived permission/copy state is centralized here so the pane components
+  // can stay mostly presentational and avoid re-implementing role logic.
   const renderOwnerConsoleFeedback = (context: OwnerConsoleContext) =>
     ownerConsoleContext === context ? (
       <>
@@ -1460,6 +1471,9 @@ function App() {
   }
 
   useEffect(() => {
+    // shellSurface is the top-level router between onboarding and the daily-use
+    // shell. Keep it derived from source-of-truth state instead of letting
+    // individual screens mutate it ad hoc.
     setShellSurface(
       resolvePhaseOneSurface({
         sessionPresent: Boolean(session),
@@ -1521,6 +1535,8 @@ function App() {
       return;
     }
 
+    // Once auth is ready and setup no longer blocks, hydrate the shell-level
+    // summary first. Downstream panes fetch their own detail from this base.
     let cancelled = false;
     void (async () => {
       try {
@@ -1551,6 +1567,9 @@ function App() {
       setActiveSpaceDetail(null);
       return;
     }
+
+    // Space selection drives the legacy family/private scope split that file,
+    // task, and chat APIs still use internally.
     const mapped = mapSpaceKindToLegacyScope(activeSpace.kind);
     setChatScope(mapped.chatScope);
     setFileSpace(mapped.fileSpace);
@@ -2163,6 +2182,8 @@ function App() {
   }
 
   function resetSetupFlowState(): void {
+    // Reset every transient onboarding input so first-run and reprovision flows
+    // never leak state into each other.
     const resetState = buildSetupFlowResetState();
     setSetupFlowKind(resetState.setupFlowKind);
     setReprovisionDeviceId(resetState.reprovisionDeviceId);
@@ -2191,6 +2212,9 @@ function App() {
   }
 
   function resetShellState(): void {
+    // Full shell reset for logout and hard flow transitions. The pane
+    // components are intentionally stateless enough that this can remain the
+    // single place that clears cross-surface UI state.
     const resetState = buildSpaceScopedResetState();
     setSettingsBusy(false);
     setSettingsError('');
