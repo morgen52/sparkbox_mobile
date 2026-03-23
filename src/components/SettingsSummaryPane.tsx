@@ -51,6 +51,9 @@ export function SettingsSummaryPane({
   onInviteToSpace,
   onLogout,
 }: SettingsSummaryPaneProps) {
+  // Keep the top of Settings lightweight: household status, the currently
+  // viewed space, and the signed-in account. Deeper owner/member controls live
+  // in the dedicated settings panes below.
   return (
     <>
       <View style={styles.card}>

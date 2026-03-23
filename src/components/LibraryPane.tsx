@@ -154,6 +154,9 @@ export function LibraryPane({
   onEditTask,
   onDeleteTask,
 }: LibraryPaneProps) {
+  // Library is intentionally one pane because memories, summaries, files,
+  // photos, and tasks all pivot on the same active-space context and share the
+  // same owner/member gating rules.
   const folderLabel = (currentFilePath || activeSpace?.name || activeSpaceNameFallback).replace(/^\/+/, '');
 
   return (

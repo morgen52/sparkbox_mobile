@@ -21,6 +21,9 @@ export function ChatsPane({
   inspirationProps,
   detailProps,
 }: ChatsPaneProps) {
+  // This is the page-level switch for Chats. The detailed fetching and
+  // permission rules live above in App; this component only decides whether the
+  // user is looking at the inbox stack or one opened conversation.
   return (
     <>
       {!activeChatSessionId ? (

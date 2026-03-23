@@ -1558,6 +1558,8 @@ function App() {
     if (!activeSpaceStorageKey || loadedActiveSpaceStorageKey !== activeSpaceStorageKey || !activeSpaceId) {
       return;
     }
+    // Persist the user's last viewed space per household + user so owner/member
+    // sessions do not fight over the same restored tab state.
     setPreferredActiveSpaceId((current) => (current === activeSpaceId ? current : activeSpaceId));
     void AsyncStorage.setItem(activeSpaceStorageKey, activeSpaceId).catch(() => undefined);
   }, [activeSpaceId, activeSpaceStorageKey, loadedActiveSpaceStorageKey]);
@@ -1581,6 +1583,8 @@ function App() {
       setActiveSpaceDetail(null);
       return;
     }
+    // Space detail is the bridge between the summary list and all
+    // space-specific panes. Chat/library/settings all read from this snapshot.
     let cancelled = false;
     void (async () => {
       try {
@@ -1608,6 +1612,9 @@ function App() {
 
   useEffect(() => {
     const resetState = buildSpaceScopedResetState();
+    // Crossing spaces should feel like entering a different room. Reset the
+    // per-space chat/library/task UI state here so one space never leaks into
+    // another.
     setChatSessions(resetState.chatSessions);
     setActiveChatSessionId(resetState.activeChatSessionId);
     setActiveChatSession(resetState.activeChatSession);
@@ -1636,6 +1643,8 @@ function App() {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token) {
       return;
     }
+    // Chat session summaries are tab-scoped and space-scoped. Refresh them when
+    // either the space or the family/private scope changes.
     let cancelled = false;
     setChatBusy(true);
     setChatError('');
@@ -1676,6 +1685,8 @@ function App() {
       setActiveChatSession(null);
       return;
     }
+    // Detail fetch stays separate from the session list so the inbox can stay
+    // light while the opened conversation keeps streaming or retry metadata.
     let cancelled = false;
     setChatBusy(true);
     setChatError('');
@@ -1726,6 +1737,8 @@ function App() {
       setLibraryBusy(false);
       return;
     }
+    // Library data is owned per active space, not per tab instance. Reload when
+    // the viewed space changes or the user re-enters the Library tab.
     let cancelled = false;
     setLibraryBusy(true);
     setLibraryError('');
@@ -1756,6 +1769,8 @@ function App() {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
       return;
     }
+    // Tasks still use the legacy family/private scope split underneath, so this
+    // fetch follows taskScope rather than just activeSpaceId.
     let cancelled = false;
     setTasksBusy(true);
     setTasksError('');

@@ -168,6 +168,9 @@ export function SetupFlowPane({
   onChooseNetwork,
   onStartCloudVerification,
 }: SetupFlowPaneProps) {
+  // SetupFlowPane owns only the onboarding presentation. The underlying
+  // hotspot/pairing state machine still lives in App so reprovision and
+  // first-run claim can share one source of truth.
   return (
     <>
       <View style={styles.hero}>
