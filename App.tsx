@@ -25,6 +25,7 @@ import {
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatInboxPane } from './src/components/ChatInboxPane';
+import { ChatInspirationPane } from './src/components/ChatInspirationPane';
 import { ChatSpaceToolsPane } from './src/components/ChatSpaceToolsPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
@@ -3630,92 +3631,20 @@ function App() {
                 />
 
                 {activeSpace ? (
-                  <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Inspiration for {activeSpace.name}</Text>
-                    <Text style={styles.cardCopy}>
-                      Family apps help Sparkbox feel more useful in everyday life. Install them once on this device, then turn them on only in the spaces where they fit.
-                    </Text>
-                    {chatSpotlightEnabledApps.length > 0 ? (
-                      <>
-                        <Text style={styles.selectionLabel}>Already helping here</Text>
-                        {chatSpotlightEnabledApps.map((app) => (
-                          <View key={`chat-enabled-${app.slug}`} style={styles.deviceRowCard}>
-                            <View style={styles.deviceRowHeadline}>
-                              <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                              <Text style={styles.statusTagOnline}>Ready here</Text>
-                            </View>
-                            <Text style={styles.cardCopy}>
-                              {app.meta?.entryCopy || app.meta?.description || 'Sparkbox is already using this family app in this space.'}
-                            </Text>
-                            {app.meta?.starterPrompts?.length ? (
-                              <View style={styles.scopeRow}>
-                                {app.meta.starterPrompts.map((prompt) => (
-                                  <Pressable
-                                    key={`chat-spotlight-${app.slug}-${prompt}`}
-                                    style={styles.scopePill}
-                                    onPress={() => void openFamilyAppStarter(app.slug, prompt)}
-                                  >
-                                    <Text style={styles.scopePillLabel}>{prompt}</Text>
-                                  </Pressable>
-                                ))}
-                              </View>
-                            ) : null}
-                          </View>
-                        ))}
-                      </>
-                    ) : null}
-                    {canManage && chatSpotlightRecommendedInstalledApps.length > 0 ? (
-                      <>
-                        <Text style={styles.selectionLabel}>Ready to turn on here</Text>
-                        {chatSpotlightRecommendedInstalledApps.map((app) => (
-                          <View key={`chat-ready-${app.slug}`} style={styles.deviceRowCard}>
-                            <View style={styles.deviceRowHeadline}>
-                              <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
-                              <Text style={styles.tagMuted}>On this device</Text>
-                            </View>
-                            <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.primaryButtonSmall}
-                                onPress={() => void enableInstalledFamilyAppForActiveSpace(app.slug)}
-                                disabled={settingsBusy}
-                              >
-                                <Text style={styles.primaryButtonText}>Turn on in this space</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))}
-                      </>
-                    ) : null}
-                    {canManage && chatSpotlightRecommendedCatalogApps.length > 0 ? (
-                      <>
-                        <Text style={styles.selectionLabel}>Worth adding next</Text>
-                        {chatSpotlightRecommendedCatalogApps.map((app) => (
-                          <View key={`chat-catalog-${app.slug}`} style={styles.deviceRowCard}>
-                            <View style={styles.deviceRowHeadline}>
-                              <Text style={styles.networkName}>{app.title}</Text>
-                              <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
-                            </View>
-                            {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.primaryButtonSmall}
-                                onPress={() => void installSelectedFamilyApp(app.slug)}
-                                disabled={settingsBusy}
-                              >
-                                <Text style={styles.primaryButtonText}>Install on this device</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))}
-                      </>
-                    ) : null}
-                    <View style={styles.inlineActions}>
-                      <Pressable style={styles.secondaryButtonSmall} onPress={() => setShellTab('settings')}>
-                        <Text style={styles.secondaryButtonText}>Open all family apps</Text>
-                      </Pressable>
-                    </View>
-                  </View>
+                  <ChatInspirationPane
+                    styles={styles}
+                    activeSpaceName={activeSpace.name}
+                    activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'space'}
+                    canManage={canManage}
+                    settingsBusy={settingsBusy}
+                    enabledApps={chatSpotlightEnabledApps}
+                    readyInstalledApps={chatSpotlightRecommendedInstalledApps}
+                    readyCatalogApps={chatSpotlightRecommendedCatalogApps}
+                    onOpenFamilyAppStarter={(slug, prompt) => void openFamilyAppStarter(slug, prompt)}
+                    onEnableFamilyApp={(slug) => void enableInstalledFamilyAppForActiveSpace(slug)}
+                    onInstallFamilyApp={(slug) => void installSelectedFamilyApp(slug)}
+                    onOpenAllFamilyApps={() => setShellTab('settings')}
+                  />
                 ) : null}
                   </>
                 ) : null}

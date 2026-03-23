@@ -249,15 +249,16 @@ describe('App structure', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const ownerSettingsSource = readFileSync(resolve(__dirname, './components/OwnerSettingsPane.tsx'), 'utf8');
     const settingsDevicesSource = readFileSync(resolve(__dirname, './components/SettingsDevicesPane.tsx'), 'utf8');
+    const inspirationSource = readFileSync(resolve(__dirname, './components/ChatInspirationPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('Install them once on this device');
+    expect(inspirationSource).toContain('Install them once on this device');
     expect(appSource).toContain('SettingsDevicesPane');
     expect(settingsDevicesSource).toContain('Install a family app once on this device');
     expect(settingsDevicesSource).toContain('Installed on this device');
     expect(settingsDevicesSource).toContain('Available for this device');
-    expect(appSource).toContain('enable that behavior on this device');
+    expect(settingsDevicesSource).toContain('decide which spaces should actually use it');
     expect(settingsDevicesSource).toContain('Install on this device');
-    expect(appSource).toContain('removed from this device');
+    expect(settingsDevicesSource).toContain('Remove from this device');
     expect(settingsDevicesSource).toContain('which Sparkbox devices are attached to this household');
     expect(appSource).toContain('OwnerSettingsPane');
     expect(ownerSettingsSource).toContain('Restart and recovery');
@@ -306,10 +307,11 @@ describe('App structure', () => {
   it('keeps family-app status badges and sections in delivery-friendly language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
+    const inspirationSource = readFileSync(resolve(__dirname, './components/ChatInspirationPane.tsx'), 'utf8');
 
     expect(chatSpaceToolsSource).toContain('On in this space');
     expect(chatSpaceToolsSource).toContain('Ready here');
-    expect(appSource).toContain('On this device');
+    expect(inspirationSource).toContain('On this device');
     expect(appSource).not.toContain('Enabled in this space');
     expect(appSource).not.toContain('>enabled<');
     expect(appSource).not.toContain('>installed<');
@@ -428,10 +430,11 @@ describe('App structure', () => {
   it('keeps family-app state copy away from active-space jargon', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
+    const inspirationSource = readFileSync(resolve(__dirname, './components/ChatInspirationPane.tsx'), 'utf8');
     const shellSource = readFileSync(resolve(__dirname, './spaceShell.ts'), 'utf8');
 
     expect(chatSpaceToolsSource).toContain('This family app is ready in this space.');
-    expect(appSource).toContain('Sparkbox is already using this family app in this space.');
+    expect(inspirationSource).toContain('Sparkbox is already using this family app in this space.');
     expect(appSource).not.toContain('This family app is enabled in the active space.');
     expect(appSource).not.toContain('Sparkbox is already using this family app in the active space.');
     expect(shellSource).toContain('Ready in this space');
@@ -603,5 +606,17 @@ describe('App structure', () => {
     expect(chatSpaceToolsSource).toContain('Ready to enable here');
     expect(chatSpaceToolsSource).toContain('Enable in this space');
     expect(chatSpaceToolsSource).toContain('Disable here');
+  });
+
+  it('keeps chat inspiration recommendations in a dedicated pane', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const inspirationSource = readFileSync(resolve(__dirname, './components/ChatInspirationPane.tsx'), 'utf8');
+
+    expect(appSource).toContain('ChatInspirationPane');
+    expect(inspirationSource).toContain('Inspiration for {activeSpaceName}');
+    expect(inspirationSource).toContain('Already helping here');
+    expect(inspirationSource).toContain('Ready to turn on here');
+    expect(inspirationSource).toContain('Worth adding next');
+    expect(inspirationSource).toContain('Open all family apps');
   });
 });
