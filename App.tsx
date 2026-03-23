@@ -34,6 +34,7 @@ import { RelayComposerModal } from './src/components/RelayComposerModal';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { SetupUtilityModals } from './src/components/SetupUtilityModals';
+import { TaskHistoryModal } from './src/components/TaskHistoryModal';
 import { TaskEditorModal } from './src/components/TaskEditorModal';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
@@ -4288,53 +4289,13 @@ function App() {
             </View>
           </Modal>
 
-          <Modal
-            animationType="slide"
-            transparent
+          <TaskHistoryModal
+            styles={styles}
             visible={taskHistoryOpen}
+            taskHistoryTask={taskHistoryTask}
+            taskHistoryRuns={taskHistoryRuns}
             onRequestClose={() => setTaskHistoryOpen(false)}
-          >
-            <View style={styles.scannerOverlay}>
-              <View style={[styles.card, { width: '100%', maxWidth: 560, maxHeight: '80%' }]}>
-                <Text style={styles.selectionLabel}>Run history</Text>
-                <Text style={styles.selectionTitle}>{taskHistoryTask?.name || 'Task history'}</Text>
-                <Text style={styles.selectionCopy}>
-                  Review recent runs, their status, and any captured output without leaving the task tab.
-                </Text>
-                <ScrollView style={{ maxHeight: 360 }}>
-                  {taskHistoryRuns.length === 0 ? (
-                    <Text style={styles.cardCopy}>No runs yet.</Text>
-                  ) : (
-                    taskHistoryRuns.map((run) => (
-                      <View key={run.id} style={styles.deviceRowCard}>
-                        <View style={styles.deviceRowHeadline}>
-                          <Text style={styles.networkName}>{describeTaskRunStatus(run.status)}</Text>
-                          <Text
-                            style={
-                              describeTaskRunStatus(run.status) === 'Completed'
-                                ? styles.statusTagOnline
-                                : styles.statusTagOffline
-                            }
-                          >
-                            {describeTaskRunStartedAt(run.startedAt)}
-                          </Text>
-                        </View>
-                        {run.finishedAt ? <Text style={styles.cardCopy}>{describeTaskRunFinishedAt(run.finishedAt)}</Text> : null}
-                        {describeTaskRunOutput(run.output || '') ? (
-                          <Text style={styles.cardCopy}>{describeTaskRunOutput(run.output || '')}</Text>
-                        ) : null}
-                      </View>
-                    ))
-                  )}
-                </ScrollView>
-                <View style={styles.inlineActions}>
-                  <Pressable style={styles.secondaryButtonSmall} onPress={() => setTaskHistoryOpen(false)}>
-                    <Text style={styles.secondaryButtonText}>Close</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+          />
 
           <RelayComposerModal
             styles={styles}

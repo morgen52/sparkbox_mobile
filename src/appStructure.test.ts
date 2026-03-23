@@ -138,6 +138,18 @@ describe('App structure', () => {
     expect(appSource).not.toContain('Output:');
   });
 
+  it('keeps task history review copy in its own modal component', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const taskHistorySource = readFileSync(resolve(__dirname, './components/TaskHistoryModal.tsx'), 'utf8');
+
+    expect(appSource).toContain('TaskHistoryModal');
+    expect(taskHistorySource).toContain('Review recent runs, their status, and any captured output without leaving the task tab.');
+    expect(taskHistorySource).toContain('No runs yet.');
+    expect(taskHistorySource).toContain('describeTaskRunStatus(run.status)');
+    expect(taskHistorySource).toContain('describeTaskRunStartedAt(run.startedAt)');
+    expect(taskHistorySource).toContain('describeTaskRunFinishedAt(run.finishedAt)');
+  });
+
   it('keeps summaries guidance role-aware for members', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const spaceShellSource = readFileSync(resolve(__dirname, './spaceShell.ts'), 'utf8');
