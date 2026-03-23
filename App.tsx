@@ -33,6 +33,7 @@ import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { SetupUtilityModals } from './src/components/SetupUtilityModals';
+import { TaskEditorModal } from './src/components/TaskEditorModal';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
 import {
@@ -4510,103 +4511,29 @@ function App() {
         }}
       />
 
-      <Modal
-        animationType="slide"
-        presentationStyle="overFullScreen"
-        transparent
+      <TaskEditorModal
+        styles={styles}
         visible={taskEditorOpen}
+        editingTask={editingTask}
+        activeSpaceName={activeSpace?.name || ''}
+        taskScope={taskScope}
+        taskEditorCopy={taskEditorCopy}
+        canManage={canManage}
+        taskName={taskName}
+        taskCronExpr={taskCronExpr}
+        taskCommand={taskCommand}
+        taskCommandType={taskCommandType}
+        taskEnabled={taskEnabled}
+        tasksError={tasksError}
+        tasksBusy={tasksBusy}
         onRequestClose={() => setTaskEditorOpen(false)}
-      >
-        <View style={styles.networkSheetBackdrop}>
-          <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{editingTask ? 'Edit task' : 'New task'}</Text>
-            <Text style={styles.selectionTitle}>
-              {editingTask
-                ? editingTask.name
-                : activeSpace
-                  ? `${activeSpace.name} routine`
-                  : taskScope === 'family'
-                    ? 'Shared Sparkbox routine'
-                    : 'Private Sparkbox routine'}
-            </Text>
-            <Text style={styles.selectionCopy}>{taskEditorCopy}</Text>
-            <TextInput
-              autoCapitalize="sentences"
-              autoCorrect={false}
-              placeholder="Task name"
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={taskName}
-              onChangeText={setTaskName}
-            />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="When should this happen?"
-              placeholderTextColor="#7e8a83"
-              style={styles.input}
-              value={taskCronExpr}
-              onChangeText={setTaskCronExpr}
-            />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={canManage ? 'What should Sparkbox do?' : 'What should Sparkbox do for you?'}
-              placeholderTextColor="#7e8a83"
-              style={[styles.input, styles.textArea]}
-              multiline
-              numberOfLines={4}
-              value={taskCommand}
-              onChangeText={setTaskCommand}
-            />
-            {canManage ? (
-              <View style={styles.scopeRow}>
-                {(['zeroclaw', 'shell'] as const).map((kind) => {
-                  const active = taskCommandType === kind;
-                  return (
-                    <Pressable
-                      key={kind}
-                      style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                      onPress={() => setTaskCommandType(kind)}
-                    >
-                      <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                        {kind === 'zeroclaw' ? 'Sparkbox routine' : 'Custom command'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.cardCopy}>Run mode: Sparkbox routine</Text>
-            )}
-            <Pressable
-              style={[styles.scopePill, taskEnabled ? styles.scopePillActive : null]}
-              onPress={() => setTaskEnabled((current) => !current)}
-            >
-              <Text style={[styles.scopePillLabel, taskEnabled ? styles.scopePillLabelActive : null]}>
-                {taskEnabled ? 'Enabled immediately' : 'Start paused'}
-              </Text>
-            </Pressable>
-            {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
-            <View style={styles.inlineActions}>
-              <Pressable
-                style={styles.secondaryButtonSmall}
-                onPress={() => setTaskEditorOpen(false)}
-                disabled={tasksBusy}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={styles.primaryButtonSmall}
-                onPress={() => void submitTaskEditor()}
-                disabled={tasksBusy}
-              >
-                {tasksBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingTask ? 'Save' : 'Create task'}</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onChangeTaskName={setTaskName}
+        onChangeTaskCronExpr={setTaskCronExpr}
+        onChangeTaskCommand={setTaskCommand}
+        onChangeTaskCommandType={setTaskCommandType}
+        onToggleTaskEnabled={() => setTaskEnabled((current) => !current)}
+        onSubmit={() => void submitTaskEditor()}
+      />
 
       {scannerOpen ? (
         <View style={styles.scannerOverlay}>

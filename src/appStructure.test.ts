@@ -121,18 +121,19 @@ describe('App structure', () => {
 
   it('keeps task editor copy free of internal runtime wording', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const taskEditorSource = readFileSync(resolve(__dirname, './components/TaskEditorModal.tsx'), 'utf8');
     const libraryPaneSource = readFileSync(resolve(__dirname, './components/LibraryPane.tsx'), 'utf8');
 
     expect(appSource).toContain('Owners can switch to advanced controls when needed.');
     expect(appSource).toContain('Private routines stay simple here, and owners can fine-tune shared ones when needed.');
-    expect(appSource).toContain('When should this happen?');
-    expect(appSource).toContain('Run mode: Sparkbox routine');
-    expect(appSource).toContain('Custom command');
+    expect(taskEditorSource).toContain('When should this happen?');
+    expect(taskEditorSource).toContain('Run mode: Sparkbox routine');
+    expect(taskEditorSource).toContain('Custom command');
     expect(libraryPaneSource).toContain('Latest note:');
     expect(appSource).not.toContain('Owners can switch to an advanced runtime when needed.');
-    expect(appSource).not.toContain('When should this run? (advanced schedule)');
-    expect(appSource).not.toContain('Command type: zeroclaw');
-    expect(appSource).not.toContain('Advanced shell');
+    expect(taskEditorSource).not.toContain('When should this run? (advanced schedule)');
+    expect(taskEditorSource).not.toContain('Command type: zeroclaw');
+    expect(taskEditorSource).not.toContain('Advanced shell');
     expect(appSource).not.toContain('Output:');
   });
 
