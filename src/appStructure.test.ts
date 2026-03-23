@@ -543,4 +543,19 @@ describe('App structure', () => {
     expect(scannerSource).toContain("barcodeTypes: ['qr']");
     expect(scannerSource).toContain('onBarcodeScanned');
   });
+
+  it('keeps chat and memory editors in their own modal components', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatEditorSource = readFileSync(resolve(__dirname, './components/ChatSessionEditorModal.tsx'), 'utf8');
+    const memoryEditorSource = readFileSync(resolve(__dirname, './components/MemoryEditorModal.tsx'), 'utf8');
+
+    expect(appSource).toContain('ChatSessionEditorModal');
+    expect(appSource).toContain('MemoryEditorModal');
+    expect(chatEditorSource).toContain('Give this conversation a clear name so everyone knows what Sparkbox is helping with here.');
+    expect(chatEditorSource).toContain('describeChatEditorTitle');
+    expect(chatEditorSource).toContain('describeChatNamePlaceholder');
+    expect(memoryEditorSource).toContain('Save a new memory for this space');
+    expect(memoryEditorSource).toContain('Memories are the key details Sparkbox should remember for this space.');
+    expect(memoryEditorSource).toContain('Pin memory');
+  });
 });

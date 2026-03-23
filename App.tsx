@@ -13,7 +13,6 @@ import {
   BackHandler,
   LayoutChangeEvent,
   Linking,
-  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -32,6 +31,8 @@ import { LibraryPane } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { RelayComposerModal } from './src/components/RelayComposerModal';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
+import { ChatSessionEditorModal } from './src/components/ChatSessionEditorModal';
+import { MemoryEditorModal } from './src/components/MemoryEditorModal';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { SetupUtilityModals } from './src/components/SetupUtilityModals';
 import { ScannerOverlay } from './src/components/ScannerOverlay';
@@ -4156,56 +4157,19 @@ function App() {
             onSubmit={() => void submitSpaceCreator()}
           />
 
-          <Modal
-            animationType="slide"
-            transparent
+          <ChatSessionEditorModal
+            styles={styles}
             visible={chatSessionEditorOpen}
+            editingChatSession={Boolean(editingChatSession)}
+            activeSpaceDetail={activeSpaceDetail}
+            chatScope={chatScope}
+            chatSessionName={chatSessionName}
+            chatError={chatError}
+            chatBusy={chatBusy}
             onRequestClose={() => setChatSessionEditorOpen(false)}
-          >
-            <View style={styles.scannerOverlay}>
-              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-                <Text style={styles.selectionLabel}>
-                  {editingChatSession ? `Edit ${describeChatEditorVerb(activeSpaceDetail, chatScope)}` : describeChatSessionPrimaryActionLabel(activeSpaceDetail, chatScope)}
-                </Text>
-                <Text style={styles.selectionTitle}>
-                  {describeChatEditorTitle(activeSpaceDetail, chatScope, Boolean(editingChatSession))}
-                </Text>
-                <Text style={styles.selectionCopy}>
-                  Give this conversation a clear name so everyone knows what Sparkbox is helping with here.
-                </Text>
-                <TextInput
-                  placeholder={describeChatNamePlaceholder(activeSpaceDetail, chatScope)}
-                  placeholderTextColor="#7e8a83"
-                  style={styles.input}
-                  value={chatSessionName}
-                  onChangeText={setChatSessionName}
-                />
-                {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={styles.secondaryButtonSmall}
-                    onPress={() => setChatSessionEditorOpen(false)}
-                    disabled={chatBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.primaryButtonSmall}
-                    onPress={() => void submitChatSessionEditor()}
-                    disabled={chatBusy}
-                  >
-                    {chatBusy ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>
-                        {describeChatEditorPrimaryActionLabel(activeSpaceDetail, chatScope, Boolean(editingChatSession))}
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            onChangeName={setChatSessionName}
+            onSubmit={() => void submitChatSessionEditor()}
+          />
 
           <SpaceMembersEditorModal
             visible={spaceMembersEditorOpen}
@@ -4229,66 +4193,21 @@ function App() {
             onSubmit={() => void submitSpaceMembersEditor()}
           />
 
-          <Modal
-            animationType="slide"
-            transparent
+          <MemoryEditorModal
+            styles={styles}
             visible={memoryEditorOpen}
+            editingMemory={Boolean(editingMemory)}
+            memoryTitle={memoryTitle}
+            memoryContent={memoryContent}
+            memoryPinned={memoryPinned}
+            libraryError={libraryError}
+            libraryBusy={libraryBusy}
             onRequestClose={closeMemoryEditor}
-          >
-            <View style={styles.scannerOverlay}>
-              <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-                <Text style={styles.selectionLabel}>{editingMemory ? 'Edit memory' : 'New memory'}</Text>
-                <Text style={styles.selectionTitle}>
-                  {editingMemory ? 'Update what Sparkbox should remember' : 'Save a new memory for this space'}
-                </Text>
-                <Text style={styles.selectionCopy}>
-                  Memories are the key details Sparkbox should remember for this space.
-                </Text>
-                <TextInput
-                  placeholder="Memory title"
-                  placeholderTextColor="#7e8a83"
-                  style={styles.input}
-                  value={memoryTitle}
-                  onChangeText={setMemoryTitle}
-                />
-                <TextInput
-                  placeholder="What should Sparkbox remember?"
-                  placeholderTextColor="#7e8a83"
-                  style={[styles.input, styles.textArea]}
-                  value={memoryContent}
-                  onChangeText={setMemoryContent}
-                  multiline
-                />
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={[styles.secondaryButtonSmall, memoryPinned ? styles.scopePillActive : null]}
-                    onPress={() => setMemoryPinned((current) => !current)}
-                  >
-                    <Text style={[styles.secondaryButtonText, memoryPinned ? styles.scopePillLabelActive : null]}>
-                      {memoryPinned ? 'Pinned' : 'Pin memory'}
-                    </Text>
-                  </Pressable>
-                </View>
-                {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    style={styles.secondaryButtonSmall}
-                    onPress={closeMemoryEditor}
-                    disabled={libraryBusy}
-                  >
-                    <Text style={styles.secondaryButtonText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.primaryButtonSmall}
-                    onPress={() => void submitMemoryEditor()}
-                    disabled={libraryBusy}
-                  >
-                    {libraryBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingMemory ? 'Save memory' : 'Create memory'}</Text>}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            onChangeTitle={setMemoryTitle}
+            onChangeContent={setMemoryContent}
+            onTogglePinned={() => setMemoryPinned((current) => !current)}
+            onSubmit={() => void submitMemoryEditor()}
+          />
 
           <TaskHistoryModal
             styles={styles}
