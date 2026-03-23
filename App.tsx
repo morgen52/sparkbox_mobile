@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
 import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -34,6 +34,7 @@ import { RelayComposerModal } from './src/components/RelayComposerModal';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SetupFlowPane } from './src/components/SetupFlowPane';
 import { SetupUtilityModals } from './src/components/SetupUtilityModals';
+import { ScannerOverlay } from './src/components/ScannerOverlay';
 import { TaskHistoryModal } from './src/components/TaskHistoryModal';
 import { TaskEditorModal } from './src/components/TaskEditorModal';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
@@ -4448,28 +4449,15 @@ function App() {
         onSubmit={() => void submitTaskEditor()}
       />
 
-      {scannerOpen ? (
-        <View style={styles.scannerOverlay}>
-          <CameraView
-            style={styles.scanner}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={(event) => {
-              applyClaimInput(event.data);
-              setScannerOpen(false);
-            }}
-          />
-          <View style={styles.scannerChrome}>
-            <Text style={styles.scannerTitle}>Scan the Sparkbox QR label</Text>
-            <Text style={styles.scannerCopy}>
-              Point your phone at the printed code on the device or the shipping card.
-            </Text>
-            <Pressable style={styles.primaryButtonSmall} onPress={() => setScannerOpen(false)}>
-              <Text style={styles.primaryButtonText}>Close scanner</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
+      <ScannerOverlay
+        styles={styles}
+        visible={scannerOpen}
+        onScan={(value) => {
+          applyClaimInput(value);
+          setScannerOpen(false);
+        }}
+        onClose={() => setScannerOpen(false)}
+      />
     </SafeAreaView>
   );
 }

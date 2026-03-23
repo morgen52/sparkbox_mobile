@@ -531,4 +531,16 @@ describe('App structure', () => {
     expect(setupFlowSource).toContain('Open app settings');
     expect(setupFlowSource).not.toContain('Camera permission is required to scan the Sparkbox QR code.');
   });
+
+  it('keeps scanner copy in its own overlay component', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const scannerSource = readFileSync(resolve(__dirname, './components/ScannerOverlay.tsx'), 'utf8');
+
+    expect(appSource).toContain('ScannerOverlay');
+    expect(scannerSource).toContain('Scan the Sparkbox QR label');
+    expect(scannerSource).toContain('Point your phone at the printed code on the device or the shipping card.');
+    expect(scannerSource).toContain('Close scanner');
+    expect(scannerSource).toContain("barcodeTypes: ['qr']");
+    expect(scannerSource).toContain('onBarcodeScanned');
+  });
 });
