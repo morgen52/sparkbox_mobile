@@ -25,6 +25,7 @@ import {
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatInboxPane } from './src/components/ChatInboxPane';
+import { ChatSpaceToolsPane } from './src/components/ChatSpaceToolsPane';
 import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
@@ -3580,154 +3581,53 @@ function App() {
                   onOpenSession={setActiveChatSessionId}
                 />
 
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>
-                    {waitingForSpaces ? 'Chats in this space' : describeSpaceThreadSectionTitle(activeSpaceCopyContext)}
-                  </Text>
-                  <Text style={styles.cardCopy}>
-                    {waitingForSpaces ? 'Loading your spaces...' : describeSpaceThreadSectionCopy(activeSpaceCopyContext)}
-                  </Text>
-                  {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
-                  {waitingForSpaces ? (
-                    <ActivityIndicator color="#0b6e4f" />
-                  ) : activeSpaceDetail?.threads.length ? (
-                    activeSpaceDetail.threads.map((thread) => (
-                      <Pressable
-                        key={thread.id}
-                        style={styles.deviceRowCard}
-                        onPress={() => void openSpaceThread(thread.id)}
-                      >
-                        <View style={styles.deviceRowHeadline}>
-                          <Text style={styles.networkName}>{thread.title}</Text>
-                          <Text style={styles.tagMuted}>
-                            {describeSpaceThreadRowBadge(
-                              activeSpaceCopyContext,
-                              thread.title,
-                              Boolean(thread.chatSessionId),
-                              thread.chatSessionId === activeChatSessionId,
-                            )}
-                          </Text>
-                        </View>
-                        <Text style={styles.cardCopy}>
-                          {describeSpaceThreadRowCopy(
-                            activeSpaceCopyContext,
-                            thread.title,
-                            Boolean(thread.chatSessionId),
-                            thread.chatSessionId === activeChatSessionId,
-                          )}
-                        </Text>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <Text style={styles.cardCopy}>{describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext)}</Text>
-                  )}
-                  {activeSpaceDetail?.kind === 'shared' ? (
-                    <>
-                      <Text style={styles.cardCopy}>
-                        If something is hard to phrase, Sparkbox can help you relay it privately to one other person in this space.
-                      </Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={[
-                            styles.primaryButtonSmall,
-                            relayTargets.length === 0 ? styles.networkRowDisabled : null,
-                          ]}
-                          onPress={openRelayComposer}
-                          disabled={relayTargets.length === 0}
-                        >
-                          <Text style={styles.primaryButtonText}>Have Sparkbox relay it privately</Text>
-                        </Pressable>
-                      </View>
-                    </>
-                  ) : null}
-                  {activeSpaceDetail?.privateSideChannel?.available ? (
-                    <View style={styles.deviceRowCard}>
-                      <View style={styles.deviceRowHeadline}>
-                        <Text style={styles.networkName}>{activeSpaceDetail.privateSideChannel.label}</Text>
-                        <Text style={styles.tagMuted}>private</Text>
-                      </View>
-                      <Text style={styles.cardCopy}>
-                        Use this private chat when you want Sparkbox to help you think first, before you bring anything back to the shared space.
-                      </Text>
-                      <View style={styles.inlineActions}>
-                        <Pressable
-                          style={styles.primaryButtonSmall}
-                          onPress={() => {
-                            void openCurrentSpaceSideChannel();
-                          }}
-                        >
-                          <Text style={styles.primaryButtonText}>Talk privately with Sparkbox</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : null}
-                  {enabledFamilyAppCards.length ? (
-                    <>
-                      <Text style={styles.selectionLabel}>On in this space</Text>
-                      {enabledFamilyAppCards.map((app) => (
-                        <View key={app.slug} style={styles.deviceRowCard}>
-                          <View style={styles.deviceRowHeadline}>
-                            <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                            <Text style={styles.statusTagOnline}>Ready here</Text>
-                          </View>
-                          <Text style={styles.cardCopy}>
-                            {app.meta?.entryCopy || app.meta?.description || 'This family app is ready in this space.'}
-                          </Text>
-                          {app.meta?.starterPrompts?.length ? (
-                            <View style={styles.scopeRow}>
-                              {app.meta.starterPrompts.map((prompt) => (
-                                <Pressable
-                                  key={`${app.slug}-${prompt}`}
-                                  style={styles.scopePill}
-                                  onPress={() => void openFamilyAppStarter(app.slug, prompt)}
-                                >
-                                  <Text style={styles.scopePillLabel}>{prompt}</Text>
-                                </Pressable>
-                              ))}
-                            </View>
-                          ) : null}
-                          <Text style={styles.cardCopy}>
-                            {formatFamilyAppConfigSummary(app.config)}
-                          </Text>
-                          {canManageActiveSpaceFamilyApps ? (
-                            <View style={styles.inlineActions}>
-                              <Pressable
-                                style={styles.secondaryButtonSmall}
-                                onPress={() => void disableFamilyAppForActiveSpace(app.slug)}
-                                disabled={settingsBusy}
-                              >
-                                <Text style={styles.secondaryButtonText}>Disable here</Text>
-                              </Pressable>
-                            </View>
-                          ) : null}
-                        </View>
-                      ))}
-                    </>
-                  ) : null}
-                  {canManage && installedFamilyAppsAvailableForActiveSpace.length ? (
-                    <>
-                      <Text style={styles.selectionLabel}>Ready to enable here</Text>
-                      {installedFamilyAppsAvailableForActiveSpace.map((app) => (
-                        <View key={`ready-${app.slug}`} style={styles.deviceRowCard}>
-                          <View style={styles.deviceRowHeadline}>
-                            <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
-                            <Text style={styles.tagMuted}>{describeFamilyAppRiskLevel(app.riskLevel)}</Text>
-                          </View>
-                          <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
-                          <View style={styles.inlineActions}>
-                            <Pressable
-                              style={styles.primaryButtonSmall}
-                              onPress={() => void enableInstalledFamilyAppForActiveSpace(app.slug)}
-                              disabled={settingsBusy}
-                            >
-                              <Text style={styles.primaryButtonText}>Enable in this space</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  ) : null}
-                </View>
+                <ChatSpaceToolsPane
+                  styles={styles}
+                  waitingForSpaces={waitingForSpaces}
+                  title={waitingForSpaces ? 'Chats in this space' : describeSpaceThreadSectionTitle(activeSpaceCopyContext)}
+                  copy={waitingForSpaces ? 'Loading your spaces...' : describeSpaceThreadSectionCopy(activeSpaceCopyContext)}
+                  relayNotice={relayNotice}
+                  threadRows={
+                    activeSpaceDetail?.threads.map((thread) => ({
+                      id: thread.id,
+                      title: thread.title,
+                      badge: describeSpaceThreadRowBadge(
+                        activeSpaceCopyContext,
+                        thread.title,
+                        Boolean(thread.chatSessionId),
+                        thread.chatSessionId === activeChatSessionId,
+                      ),
+                      copy: describeSpaceThreadRowCopy(
+                        activeSpaceCopyContext,
+                        thread.title,
+                        Boolean(thread.chatSessionId),
+                        thread.chatSessionId === activeChatSessionId,
+                      ),
+                    })) || []
+                  }
+                  emptyThreadCopy={describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext)}
+                  onOpenThread={(threadId) => void openSpaceThread(threadId)}
+                  showRelayHelper={activeSpaceDetail?.kind === 'shared'}
+                  canOpenRelay={relayTargets.length > 0}
+                  onOpenRelay={openRelayComposer}
+                  privateSideChannelLabel={
+                    activeSpaceDetail?.privateSideChannel?.available
+                      ? activeSpaceDetail.privateSideChannel.label
+                      : ''
+                  }
+                  onOpenPrivateSideChannel={() => {
+                    void openCurrentSpaceSideChannel();
+                  }}
+                  enabledFamilyApps={enabledFamilyAppCards}
+                  canManageActiveSpaceFamilyApps={canManageActiveSpaceFamilyApps}
+                  settingsBusy={settingsBusy}
+                  readyInstalledFamilyApps={installedFamilyAppsAvailableForActiveSpace}
+                  describeFamilyAppRiskLevel={describeFamilyAppRiskLevel}
+                  formatFamilyAppConfigSummary={formatFamilyAppConfigSummary}
+                  onOpenFamilyAppStarter={(slug, prompt) => void openFamilyAppStarter(slug, prompt)}
+                  onDisableFamilyApp={(slug) => void disableFamilyAppForActiveSpace(slug)}
+                  onEnableFamilyApp={(slug) => void enableInstalledFamilyAppForActiveSpace(slug)}
+                />
 
                 {activeSpace ? (
                   <View style={styles.card}>

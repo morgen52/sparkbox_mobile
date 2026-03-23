@@ -295,18 +295,20 @@ describe('App structure', () => {
 
   it('keeps family app cards away from raw config dumps and raw risk labels', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('formatFamilyAppConfigSummary(app.config)');
-    expect(appSource).toContain('describeFamilyAppRiskLevel(app.riskLevel)');
+    expect(chatSpaceToolsSource).toContain('formatFamilyAppConfigSummary(app.config)');
+    expect(chatSpaceToolsSource).toContain('describeFamilyAppRiskLevel(app.riskLevel)');
     expect(appSource).not.toContain('Object.entries(app.config)');
     expect(appSource).not.toContain('{app.riskLevel}');
   });
 
   it('keeps family-app status badges and sections in delivery-friendly language', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
 
-    expect(appSource).toContain('On in this space');
-    expect(appSource).toContain('Ready here');
+    expect(chatSpaceToolsSource).toContain('On in this space');
+    expect(chatSpaceToolsSource).toContain('Ready here');
     expect(appSource).toContain('On this device');
     expect(appSource).not.toContain('Enabled in this space');
     expect(appSource).not.toContain('>enabled<');
@@ -425,9 +427,10 @@ describe('App structure', () => {
 
   it('keeps family-app state copy away from active-space jargon', () => {
     const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
     const shellSource = readFileSync(resolve(__dirname, './spaceShell.ts'), 'utf8');
 
-    expect(appSource).toContain('This family app is ready in this space.');
+    expect(chatSpaceToolsSource).toContain('This family app is ready in this space.');
     expect(appSource).toContain('Sparkbox is already using this family app in this space.');
     expect(appSource).not.toContain('This family app is enabled in the active space.');
     expect(appSource).not.toContain('Sparkbox is already using this family app in the active space.');
@@ -587,5 +590,18 @@ describe('App structure', () => {
     expect(summaryPaneSource).toContain('Your account');
     expect(summaryPaneSource).toContain('Sign out');
     expect(summaryPaneSource).toContain('ViewedSpaceCard');
+  });
+
+  it('keeps chat-space tools in a dedicated pane', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    const chatSpaceToolsSource = readFileSync(resolve(__dirname, './components/ChatSpaceToolsPane.tsx'), 'utf8');
+
+    expect(appSource).toContain('ChatSpaceToolsPane');
+    expect(chatSpaceToolsSource).toContain('Have Sparkbox relay it privately');
+    expect(chatSpaceToolsSource).toContain('Talk privately with Sparkbox');
+    expect(chatSpaceToolsSource).toContain('On in this space');
+    expect(chatSpaceToolsSource).toContain('Ready to enable here');
+    expect(chatSpaceToolsSource).toContain('Enable in this space');
+    expect(chatSpaceToolsSource).toContain('Disable here');
   });
 });
