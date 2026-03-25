@@ -106,6 +106,7 @@ export function ChatInboxPane({
 
   const enabledFamilyApps = (toolsProps?.enabledFamilyApps || []) as EnabledFamilyApp[];
   const readyInstalledFamilyApps = (toolsProps?.readyInstalledFamilyApps || []) as ReadyInstalledFamilyApp[];
+  const activeSpaceTemplate = String(toolsProps?.activeSpaceTemplate || '').trim().toLowerCase();
 
   const activeSpace = spaceChips.find((space) => space.active) ?? null;
   const [expandedSpaceId, setExpandedSpaceId] = React.useState<string | null>(activeSpace?.id ?? null);
@@ -120,6 +121,14 @@ export function ChatInboxPane({
     }
     previousActiveSpaceIdRef.current = activeSpaceId;
   }, [activeSpace?.id]);
+
+  React.useEffect(() => {
+    const activeSpaceId = activeSpace?.id ?? null;
+    const privateScopeActive = scopeOptions.some((scope) => scope.id === 'private' && scope.active);
+    if (activeSpaceTemplate === 'private' && expandedSpaceId === activeSpaceId && !privateScopeActive) {
+      onSelectScope('private');
+    }
+  }, [activeSpace?.id, activeSpaceTemplate, expandedSpaceId, onSelectScope, scopeOptions]);
 
   function toggleSpace(spaceId: string): void {
     setExpandedSpaceId((current) => (current === spaceId ? null : spaceId));
@@ -166,6 +175,7 @@ export function ChatInboxPane({
         const expanded = expandedSpaceId === space.id;
         const ready = expanded && space.active;
         const appListExpanded = expandedAppLists[space.id] === true;
+        const isDefaultPrivateSpace = space.active && activeSpaceTemplate === 'private';
         return (
           <View key={space.id} style={[styles.chatTreeFolder, space.active ? styles.chatTreeFolderActive : null]}>
             <Pressable style={styles.chatTreeFolderHeader} onPress={() => toggleSpace(space.id)}>
@@ -184,26 +194,35 @@ export function ChatInboxPane({
                   <>
                     <View style={styles.chatScopeNavRow}>
                       <View style={styles.chatScopeNavTabs}>
-                        {scopeOptions.map((scope, index) => (
+                        {isDefaultPrivateSpace ? (
                           <Pressable
-                            key={scope.id}
-                            style={[
-                              styles.chatScopeNavTab,
-                              index === scopeOptions.length - 1 ? styles.chatScopeNavTabLast : null,
-                              scope.active ? styles.chatScopeNavTabActive : null,
-                            ]}
-                            onPress={() => onSelectScope(scope.id)}
+                            style={[styles.chatScopeNavTab, styles.chatScopeNavTabLast, styles.chatScopeNavTabActive]}
+                            onPress={() => onSelectScope('private')}
                           >
-                            <Text
-                              style={[
-                                styles.chatScopeNavTabLabel,
-                                scope.active ? styles.chatScopeNavTabLabelActive : null,
-                              ]}
-                            >
-                              {scope.label}
-                            </Text>
+                            <Text style={[styles.chatScopeNavTabLabel, styles.chatScopeNavTabLabelActive]}>仅自己</Text>
                           </Pressable>
-                        ))}
+                        ) : (
+                          scopeOptions.map((scope, index) => (
+                            <Pressable
+                              key={scope.id}
+                              style={[
+                                styles.chatScopeNavTab,
+                                index === scopeOptions.length - 1 ? styles.chatScopeNavTabLast : null,
+                                scope.active ? styles.chatScopeNavTabActive : null,
+                              ]}
+                              onPress={() => onSelectScope(scope.id)}
+                            >
+                              <Text
+                                style={[
+                                  styles.chatScopeNavTabLabel,
+                                  scope.active ? styles.chatScopeNavTabLabelActive : null,
+                                ]}
+                              >
+                                {scope.label}
+                              </Text>
+                            </Pressable>
+                          ))
+                        )}
                       </View>
                       <Pressable
                         style={[styles.chatScopeRefreshButton, chatBusy ? styles.networkRowDisabled : null]}
@@ -287,7 +306,7 @@ export function ChatInboxPane({
 
                         {appListExpanded ? (
                           <>
-                            {toolsProps?.showRelayHelper ? (
+                            {!isDefaultPrivateSpace && toolsProps?.showRelayHelper ? (
                               <View style={styles.chatAppCard}>
                                 <View style={styles.chatAppHeader}>
                                   <Text style={styles.chatAppTitle}>私下转达</Text>
@@ -316,7 +335,11 @@ export function ChatInboxPane({
                                   <Text style={styles.chatAppTitle}>{toolsProps.privateSideChannelLabel}</Text>
                                   <Text style={styles.tagMuted}>私密</Text>
                                 </View>
-                                <Text style={styles.chatAppCopy}>先和 Sparkbox 私聊整理思路，再决定是否同步到共享聊天。</Text>
+                                <Text style={styles.chatAppCopy}>
+                                  {isDefaultPrivateSpace
+                                    ? '这是你的默认私密空间，聊天内容仅你与 Sparkbox 可见。'
+                                    : '先和 Sparkbox 私聊整理思路，再决定是否同步到共享聊天。'}
+                                </Text>
                                 <View style={styles.inlineActions}>
                                   <Pressable
                                     style={styles.primaryButtonSmall}
@@ -324,7 +347,9 @@ export function ChatInboxPane({
                                       toolsProps?.onOpenPrivateSideChannel && toolsProps.onOpenPrivateSideChannel()
                                     }
                                   >
-                                    <Text style={styles.primaryButtonText}>与 Sparkbox 私聊</Text>
+                                    <Text style={styles.primaryButtonText}>
+                                      {isDefaultPrivateSpace ? '进入默认私聊' : '与 Sparkbox 私聊'}
+                                    </Text>
                                   </Pressable>
                                 </View>
                               </View>

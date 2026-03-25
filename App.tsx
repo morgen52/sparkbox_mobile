@@ -12,38 +12,28 @@ import {
   Alert,
   BackHandler,
   LayoutChangeEvent,
-  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
-import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { ChatsPane } from './src/components/ChatsPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
-import { RelayComposerModal } from './src/components/RelayComposerModal';
+import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
+import { SetupSurface } from './src/components/SetupSurface';
+import { ShellModals } from './src/components/ShellModals';
 import { SettingsSummaryPane } from './src/components/SettingsSummaryPane';
 import { ShellHeader } from './src/components/ShellHeader';
-import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
-import { ChatSessionEditorModal } from './src/components/ChatSessionEditorModal';
-import { MemoryEditorModal } from './src/components/MemoryEditorModal';
-import { SetupFlowPane } from './src/components/SetupFlowPane';
-import { SetupUtilityModals } from './src/components/SetupUtilityModals';
-import { ScannerOverlay } from './src/components/ScannerOverlay';
-import { TaskHistoryModal } from './src/components/TaskHistoryModal';
-import { TaskEditorModal } from './src/components/TaskEditorModal';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
-import { authenticateWithCloud, type AuthMode, type Session } from './src/authFlow';
+import { styles } from './src/styles/appStyles';
+import { type AuthMode, type Session } from './src/authFlow';
 import {
-  buildSetupFlowResetState,
   describeActivityEvent,
   describeChatListTimestamp,
   describeChatMessageTimestamp,
@@ -73,23 +63,12 @@ import {
   type PhaseOneSurface,
 } from './src/appShell';
 import {
-  buildSetupStepLabels,
-  deriveHotspotActiveStep,
-  shouldShowClaimStep,
-  shouldShowSetupConnectStep,
-  shouldAutoStartCloudVerification,
-  shouldOpenPortalInBrowser,
-  type HotspotStage,
-  type SetupFlowKind,
-} from './src/hotspotOnboarding';
-import {
   clearChatSessionMessages,
   controlDeviceService,
   buildHouseholdFileDownloadUrl,
   captureSpaceSummaryFromSession,
   createHouseholdSpace,
   createHouseholdDirectory,
-  createHouseholdChatSession,
   createHouseholdTask,
   createHouseholdInvitation,
   createSpaceMemory,
@@ -114,7 +93,6 @@ import {
   getInstalledFamilyApps,
   getHouseholdSpaces,
   getHouseholdChatSession,
-  getHouseholdChatSessions,
   getHouseholdSummary,
   getHouseholdTaskHistory,
   getHouseholdTasks,
@@ -131,20 +109,17 @@ import {
   type HouseholdTaskRunSummary,
   removeHouseholdMember,
   revokeHouseholdInvitation,
-  startDeviceReprovision,
   type SpaceLibrary,
   type SpaceMemory,
   type SpaceSummary,
   type ChatSessionScope,
   type HouseholdChatSessionDetail,
   type HouseholdChatSessionSummary,
-  streamHouseholdChatSessionMessage,
   triggerHouseholdTask,
   uninstallFamilyApp,
   updateHouseholdSpaceMembers,
   updateSpaceMemory,
   updateDeviceProviderConfig,
-  updateHouseholdChatSession,
   updateHouseholdMemberRole,
   updateHouseholdTask,
   uploadHouseholdFiles,
@@ -201,7 +176,6 @@ import {
   describeChatEditorVerb,
   describeChatNamePlaceholder,
   describeChatSessionBadge,
-  describeChatSessionCreatePermissionError,
   describeChatSessionEmptyStateCopy,
   describeChatSessionOpenError,
   describeChatSessionPrimaryActionLabel,
@@ -210,7 +184,6 @@ import {
   describeChatAccess,
   describeChatComposerPlaceholder,
   describeChatSendPhase,
-  shouldAppendAssistantReply,
   describeCaptureSummaryActionLabel,
   describeCurrentSpaceSummaryCopy,
   describeFamilyAppRiskLevel,
@@ -239,21 +212,30 @@ import {
   stripSpaceScopedFilePath,
   type ChatSendPhase,
 } from './src/spaceShell';
-import {
-  isLikelyLocalSetupHandoffError,
-  listLocalSetupNetworks,
-  submitLocalSetupNetwork,
-  type LocalSetupNetwork,
-} from './src/localSetupApi';
-import {
-  clearSessionWifiState,
-  connectToHomeWifi,
-  connectToSetupHotspot,
-  getCurrentSsid,
-  openInternetPanel,
-} from './src/wifiOnboarding';
-import { setCloudApiBase } from './src/cloudApiBase';
+import { openInternetPanel } from './src/wifiOnboarding';
+import { initializeCloudApiBase } from './src/cloudApiBase';
 import { buildInvitePreviewSummary, shouldLoadInvitePreview } from './src/invitePreview';
+import {
+  buildActiveSpaceStorageKey,
+  describeSpaceSessionCountCopy,
+  formatChatSyncDateTime,
+} from './src/utils/appRuntime';
+import { useChatSessionCache } from './src/hooks/useChatSessionCache';
+import { useSetupController } from './src/hooks/useSetupController';
+import { useChatController } from './src/hooks/useChatController';
+import {
+  buildChatTimelineGroups,
+  type ChatTimelineMessage,
+} from './src/utils/chatTimeline';
+import { apiJson } from './src/utils/cloudJson';
+import {
+  CAMERA_PERMISSION_RECOVERY_MESSAGE,
+  HOTSPOT_SSID,
+  type ChatListSyncSource,
+  type OwnerConsoleContext,
+} from './src/constants/appRuntimeConstants';
+import { loadStoredSession, persistStoredSession } from './src/utils/sessionStorage';
+import { authenticateSession, revokeSession } from './src/utils/authApi';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -261,31 +243,7 @@ if (!globalWithBuffer.Buffer) {
   globalWithBuffer.Buffer = Buffer;
 }
 
-const CLOUD_API_BASE =
-  (Constants.expoConfig?.extra?.cloudApiBase as string | undefined)?.replace(/\/$/, '') ??
-  'https://morgen52.site/familyserver';
-setCloudApiBase(CLOUD_API_BASE);
-
-const STORAGE_KEY = 'sparkbox.mobile.session';
-const ACTIVE_SPACE_STORAGE_KEY_PREFIX = 'sparkbox.mobile.activeSpace';
-const CAMERA_PERMISSION_RECOVERY_MESSAGE =
-  '请在系统设置中允许相机权限，或手动粘贴设备配置码。';
-
-function buildActiveSpaceStorageKey(session: Session | null): string {
-  if (!session) {
-    return '';
-  }
-  return `${ACTIVE_SPACE_STORAGE_KEY_PREFIX}.${session.user.household_id}.${session.user.id}`;
-}
-const HOTSPOT_SSID = 'Sparkbox-Setup';
-
-type ClaimPayload = {
-  deviceId: string;
-  claimCode: string;
-  raw: string;
-};
-
-type OwnerConsoleContext = 'tools' | 'provider' | 'onboard' | 'service';
+initializeCloudApiBase(Constants.expoConfig?.extra?.cloudApiBase as string | undefined);
 
 const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'household'>> = [
   'partner',
@@ -293,279 +251,6 @@ const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'househol
   'child',
   'household_ops',
 ];
-
-type ProvisionStatus = {
-  device_id?: string;
-  status?: string;
-  wifi?: {
-    ssid?: string;
-    connection_name?: string;
-    network_apply_mode?: string;
-    portal_url?: string | null;
-  };
-  pairing?: {
-    device_id?: string;
-    pending_pairing_token?: boolean;
-    device_proof_status?: string;
-    last_error?: string;
-  };
-  last_command?: {
-    ok?: boolean;
-    type?: string;
-    message?: string;
-  };
-};
-
-type HouseholdDevice = {
-  device_id: string;
-  status: string;
-  online: boolean;
-  claimed: boolean;
-};
-
-type ChatTimelineMessage = HouseholdChatSessionMessage & {
-  pending?: boolean;
-  failed?: boolean;
-  retryable?: boolean;
-  retryContent?: string | null;
-  errorMessage?: string | null;
-};
-
-type ChatTimelineGroup =
-  | {
-      kind: 'messages';
-      id: string;
-      role: 'user' | 'assistant';
-      senderLabel: string;
-      messages: ChatTimelineMessage[];
-    }
-  | {
-      kind: 'status';
-      id: string;
-      senderLabel: string;
-      statusCopy: string;
-      message: ChatTimelineMessage;
-    };
-
-const CHAT_PENDING_FALLBACK = 'Sparkbox 正在准备回复，请稍候。';
-const CHAT_SESSION_CACHE_TTL_MS = 3 * 60 * 1000;
-
-type ChatSessionCacheEntry = {
-  sessions: HouseholdChatSessionSummary[];
-  fetchedAt: number;
-};
-
-type ChatListSyncSource = 'idle' | 'cache' | 'network';
-
-function buildChatSessionCacheKey(scope: ChatSessionScope, spaceId: string): string {
-  return `${scope}::${spaceId || 'none'}`;
-}
-
-function formatChatSyncDateTime(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return '';
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(parsed);
-}
-
-function describeSpaceSessionCountCopy(sessionCount: number | undefined, memberCount: number): string {
-  const normalizedCount = typeof sessionCount === 'number' ? Math.max(0, sessionCount) : null;
-  const sessionsLabel = normalizedCount === null ? '会话数加载中' : `${normalizedCount}个会话`;
-  return `${sessionsLabel} · ${memberCount}人`;
-}
-
-function describeTimelineSenderLabel(message: ChatTimelineMessage, chatSendPhase: ChatSendPhase): string {
-  if (message.pending) {
-    return describeChatSendPhase(chatSendPhase) || 'Sparkbox';
-  }
-  if (message.role === 'user') {
-    return message.senderDisplayName || '你';
-  }
-  return 'Sparkbox';
-}
-
-function buildChatTimelineGroups(
-  messages: ChatTimelineMessage[],
-  chatSendPhase: ChatSendPhase,
-  chatPendingIndicator: string,
-): ChatTimelineGroup[] {
-  const groups: ChatTimelineGroup[] = [];
-  let currentGroup: Extract<ChatTimelineGroup, { kind: 'messages' }> | null = null;
-
-  const pushCurrentGroup = () => {
-    if (currentGroup) {
-      groups.push(currentGroup);
-      currentGroup = null;
-    }
-  };
-
-  messages.forEach((message, index) => {
-    const senderLabel = describeTimelineSenderLabel(message, chatSendPhase);
-    if (message.pending || message.failed) {
-      pushCurrentGroup();
-      groups.push({
-        kind: 'status',
-        id: `status-${index}-${message.role}`,
-        senderLabel,
-        statusCopy: message.pending
-          ? chatSendPhase === 'streaming'
-            ? `Sparkbox 正在持续回复${chatPendingIndicator}`
-            : `首次回复可能需要 1 到 5 分钟${chatPendingIndicator}`
-          : message.errorMessage || '发送失败，请重试。',
-        message,
-      });
-      return;
-    }
-
-    if (
-      currentGroup &&
-      currentGroup.role === message.role &&
-      currentGroup.senderLabel === senderLabel
-    ) {
-      currentGroup.messages.push(message);
-      return;
-    }
-
-    pushCurrentGroup();
-    currentGroup = {
-      kind: 'messages',
-      id: `group-${index}-${message.role}`,
-      role: message.role,
-      senderLabel,
-      messages: [message],
-    };
-  });
-
-  pushCurrentGroup();
-  return groups;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseClaimPayload(rawValue: string): ClaimPayload | null {
-  const raw = rawValue.trim();
-  if (!raw) {
-    return null;
-  }
-
-  const tryPairs = (pairs: Array<[string, string]>): ClaimPayload | null => {
-    const table = new Map<string, string>();
-    for (const [key, value] of pairs) {
-      table.set(key.trim().toLowerCase(), value.trim());
-    }
-    const deviceId =
-      table.get('device_id') ??
-      table.get('deviceid') ??
-      table.get('sparkbox_device_id') ??
-      table.get('id');
-    const claimCode =
-      table.get('claim_code') ??
-      table.get('short_claim_code') ??
-      table.get('claimcode') ??
-      table.get('code');
-    if (!deviceId || !claimCode) {
-      return null;
-    }
-    return {
-      deviceId,
-      claimCode,
-      raw,
-    };
-  };
-
-  if (raw.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(raw) as Record<string, string>;
-      return tryPairs(Object.entries(parsed));
-    } catch {
-      return null;
-    }
-  }
-
-  const queryIndex = raw.indexOf('?');
-  if (queryIndex >= 0) {
-    const query = raw.slice(queryIndex + 1);
-    const pairs = query
-      .split(/[&#]/)
-      .filter(Boolean)
-      .map((part) => {
-        const [key, value = ''] = part.split('=');
-        return [decodeURIComponent(key), decodeURIComponent(value)] as [string, string];
-      });
-    const parsed = tryPairs(pairs);
-    if (parsed) {
-      return parsed;
-    }
-  }
-
-  if (raw.includes('device_id=') || raw.includes('claim_code=')) {
-    const pairs = raw
-      .split(/[;,]/)
-      .filter(Boolean)
-      .map((part) => {
-        const [key, value = ''] = part.split('=');
-        return [key, value] as [string, string];
-      });
-    const parsed = tryPairs(pairs);
-    if (parsed) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-async function apiJson<T>(
-  path: string,
-  options: {
-    method?: string;
-    token?: string;
-    body?: unknown;
-  } = {},
-): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-  };
-  if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-  if (options.token) {
-    headers.Authorization = `Bearer ${options.token}`;
-  }
-  const response = await fetch(`${CLOUD_API_BASE}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    let message = text || response.statusText;
-    try {
-      const parsed = JSON.parse(text) as { detail?: string };
-      if (parsed.detail) {
-        message = parsed.detail;
-      }
-    } catch {
-      // ignore plain text payloads
-    }
-    throw new Error(message);
-  }
-  return (await response.json()) as T;
-}
 
 function App() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -589,35 +274,6 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
 
-  const [claimInput, setClaimInput] = useState('');
-  const [claimPayload, setClaimPayload] = useState<ClaimPayload | null>(null);
-  const [pairingToken, setPairingToken] = useState('');
-  const [setupFlowKind, setSetupFlowKind] = useState<SetupFlowKind>('first_run');
-  const [reprovisionDeviceId, setReprovisionDeviceId] = useState('');
-  const [claimBusy, setClaimBusy] = useState(false);
-  const [claimError, setClaimError] = useState('');
-
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [bleError, setBleError] = useState('');
-
-  const [networks, setNetworks] = useState<LocalSetupNetwork[]>([]);
-  const [selectedSsid, setSelectedSsid] = useState('');
-  const [selectedNetwork, setSelectedNetwork] = useState<LocalSetupNetwork | null>(null);
-  const [wifiPassword, setWifiPassword] = useState('');
-  const [manualEntry, setManualEntry] = useState(false);
-  const [networksBusy, setNetworksBusy] = useState(false);
-  const [networkSheetOpen, setNetworkSheetOpen] = useState(false);
-
-  const [provisionBusy, setProvisionBusy] = useState(false);
-  const [provisionMessage, setProvisionMessage] = useState('请先扫描二维码，让设备进入配网准备状态。');
-  const [portalUrl, setPortalUrl] = useState<string | null>(null);
-  const [completedDeviceId, setCompletedDeviceId] = useState('');
-  const [hotspotStage, setHotspotStage] = useState<HotspotStage>('idle');
-  const [homeWifiTarget, setHomeWifiTarget] = useState<{ ssid: string; password: string } | null>(null);
-  const [previousInternetSsid, setPreviousInternetSsid] = useState<string | null>(null);
-  const [setupPageState, setSetupPageState] = useState<ProvisionStatus | null>(null);
-  const [setupNetworksLoaded, setSetupNetworksLoaded] = useState(false);
-
   // Shell state fans out into presentational panes, but the coordination
   // between tabs, spaces, chats, files, tasks, and owner tooling still lives
   // here so cross-surface resets happen in one place.
@@ -627,6 +283,69 @@ function App() {
   const [homeBusy, setHomeBusy] = useState(false);
   const [homeLoaded, setHomeLoaded] = useState(false);
   const [homeError, setHomeError] = useState('');
+  const {
+    claimInput,
+    claimPayload,
+    pairingToken,
+    setupFlowKind,
+    reprovisionDeviceId,
+    claimBusy,
+    claimError,
+    scannerOpen,
+    bleError,
+    networks,
+    selectedSsid,
+    selectedNetwork,
+    wifiPassword,
+    manualEntry,
+    networksBusy,
+    networkSheetOpen,
+    provisionBusy,
+    provisionMessage,
+    portalUrl,
+    completedDeviceId,
+    hotspotStage,
+    homeWifiTarget,
+    previousInternetSsid,
+    setupPageState,
+    setupDeviceId,
+    setupStepLabels,
+    claimStepVisible,
+    activeStep,
+    step2Visible,
+    step3Visible,
+    step4Visible,
+    onboardingInProgress,
+    setupFlowRequested,
+    setScannerOpen,
+    setNetworkSheetOpen,
+    setSelectedSsid,
+    setWifiPassword,
+    setClaimError,
+    applyClaimInput,
+    startClaim,
+    beginHotspotOnboarding,
+    refreshNetworks,
+    openManualEntry,
+    chooseNetwork,
+    startCloudVerification,
+    submitWifi,
+    openScanner,
+    beginNewDeviceOnboarding,
+    beginDeviceReprovision,
+    resetSetupFlowState,
+  } = useSetupController({
+    session,
+    cameraPermission: cameraPermission ?? null,
+    requestCameraPermission: async () => {
+      const result = await requestCameraPermission();
+      return { granted: result.granted };
+    },
+    onResetInviteCode: () => setInviteCode(''),
+    setSkipOnboardingWhenNoDevice,
+    setHomeError,
+    setShellSurface,
+  });
   const [homeDevices, setHomeDevices] = useState<DeviceSummary[]>([]);
   const [homeMembers, setHomeMembers] = useState<HouseholdMemberSummary[]>([]);
   const [homePendingInvites, setHomePendingInvites] = useState<HouseholdInviteSummary[]>([]);
@@ -739,44 +458,17 @@ function App() {
   const [familyAppsCatalog, setFamilyAppsCatalog] = useState<FamilyAppInstallation[]>([]);
   const [installedFamilyApps, setInstalledFamilyApps] = useState<FamilyAppInstallation[]>([]);
 
-  // Refs coordinate onboarding side effects without forcing re-renders.
-  const verificationStartedRef = useRef(false);
-  const lastOpenedPortalUrlRef = useRef<string | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const stepOffsetsRef = useRef<Record<number, number>>({});
-  const chatSessionCacheRef = useRef<Record<string, ChatSessionCacheEntry>>({});
-  const setupDeviceId = claimPayload?.deviceId || reprovisionDeviceId;
-  const setupStepLabels = buildSetupStepLabels(setupFlowKind);
-  const claimStepVisible = shouldShowClaimStep(setupFlowKind);
-  const hasChosenHomeWifi = Boolean(selectedSsid.trim() || homeWifiTarget?.ssid);
-  const activeStep = deriveHotspotActiveStep({
-    pairingTokenPresent: Boolean(pairingToken),
-    hotspotStage,
-    hasChosenHomeWifi,
-    completedDeviceIdPresent: Boolean(completedDeviceId),
-  });
   const step1Collapsed = Boolean(session) && activeStep > 1;
-  const step2Visible = shouldShowSetupConnectStep({
-    setupFlowKind,
-    pairingTokenPresent: Boolean(pairingToken),
-  });
   const step2Collapsed = step2Visible && activeStep > 2;
-  const step3Visible =
-    hotspotStage === 'local_setup' ||
-    hotspotStage === 'returning_home' ||
-    hotspotStage === 'verifying' ||
-    hotspotStage === 'completed' ||
-    hotspotStage === 'failed' ||
-    hasChosenHomeWifi;
   const step3Collapsed = step3Visible && activeStep > 3;
-  const step4Visible = activeStep === 4 || Boolean(portalUrl) || Boolean(completedDeviceId);
-  const onboardingInProgress =
-    Boolean(claimPayload) ||
-    Boolean(pairingToken) ||
-    hotspotStage !== 'idle' ||
-    Boolean(completedDeviceId);
-  const setupFlowRequested = Boolean(reprovisionDeviceId);
   const activeSpaceStorageKey = buildActiveSpaceStorageKey(session);
+  const {
+    readFreshChatSessionCache,
+    fetchChatSessions,
+    clearChatSessionCache,
+  } = useChatSessionCache(session?.token);
 
   // Derived permission/copy state is centralized here so the pane components
   // can stay mostly presentational and avoid re-implementing role logic.
@@ -789,143 +481,18 @@ function App() {
       </>
     ) : null;
 
-  function readFreshChatSessionCache(
-    scope: ChatSessionScope,
-    spaceId: string,
-  ): ChatSessionCacheEntry | null {
-    const key = buildChatSessionCacheKey(scope, spaceId);
-    const cached = chatSessionCacheRef.current[key];
-    if (!cached) {
-      return null;
-    }
-    if (Date.now() - cached.fetchedAt > CHAT_SESSION_CACHE_TTL_MS) {
-      delete chatSessionCacheRef.current[key];
-      return null;
-    }
-    return cached;
-  }
-
-  function writeChatSessionCache(
-    scope: ChatSessionScope,
-    spaceId: string,
-    sessions: HouseholdChatSessionSummary[],
-  ): void {
-    const key = buildChatSessionCacheKey(scope, spaceId);
-    chatSessionCacheRef.current[key] = {
-      sessions,
-      fetchedAt: Date.now(),
-    };
-  }
-
-  function clearChatSessionCache(scope?: ChatSessionScope, spaceId?: string): void {
-    if (scope && typeof spaceId === 'string') {
-      delete chatSessionCacheRef.current[buildChatSessionCacheKey(scope, spaceId)];
-      return;
-    }
-    chatSessionCacheRef.current = {};
-  }
-
-  async function fetchChatSessions(
-    scope: ChatSessionScope,
-    spaceId: string,
-    options?: { force?: boolean },
-  ): Promise<HouseholdChatSessionSummary[]> {
-    if (!session?.token) {
-      return [];
-    }
-    if (!options?.force) {
-      const cached = readFreshChatSessionCache(scope, spaceId);
-      if (cached) {
-        return cached.sessions;
-      }
-    }
-    const sessions = await getHouseholdChatSessions(session.token, scope, { spaceId });
-    writeChatSessionCache(scope, spaceId, sessions);
-    return sessions;
-  }
-
   useEffect(() => {
     void (async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setSession(JSON.parse(stored) as Session);
+        const storedSession = await loadStoredSession();
+        if (storedSession) {
+          setSession(storedSession);
         }
       } finally {
         setBooting(false);
       }
     })();
   }, []);
-
-  useEffect(() => {
-    if (!setupDeviceId || hotspotStage !== 'joining_setup') {
-      return;
-    }
-    const interval = setInterval(() => {
-      void (async () => {
-        const ssid = await getCurrentSsid().catch(() => null);
-        if (ssid !== HOTSPOT_SSID) {
-          return;
-        }
-        setNetworks([]);
-        setSelectedNetwork(null);
-        setSelectedSsid(previousInternetSsid ?? '');
-        setWifiPassword('');
-        setManualEntry(false);
-        setSetupNetworksLoaded(false);
-        setHotspotStage('local_setup');
-        setBleError('');
-        setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
-      })();
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [hotspotStage, previousInternetSsid, setupDeviceId]);
-
-  useEffect(() => {
-    if (hotspotStage !== 'local_setup' || setupNetworksLoaded) {
-      return;
-    }
-    void refreshNetworks();
-  }, [hotspotStage, setupNetworksLoaded]);
-
-  useEffect(() => {
-    if (hotspotStage !== 'returning_home' && hotspotStage !== 'verifying') {
-      return;
-    }
-    const interval = setInterval(() => {
-      void (async () => {
-        const ssid = await getCurrentSsid().catch(() => null);
-        if (!ssid || ssid === HOTSPOT_SSID) {
-          return;
-        }
-        if (
-          shouldOpenPortalInBrowser({
-            currentSsid: ssid,
-            portalUrl,
-            lastOpenedPortalUrl: lastOpenedPortalUrlRef.current,
-          })
-        ) {
-          const nextPortalUrl = portalUrl;
-          if (!nextPortalUrl) {
-            return;
-          }
-          lastOpenedPortalUrlRef.current = nextPortalUrl;
-          await Linking.openURL(nextPortalUrl).catch(() => undefined);
-        }
-        if (
-          shouldAutoStartCloudVerification({
-            hotspotStage,
-            currentSsid: ssid,
-            verificationStarted: verificationStartedRef.current,
-          })
-        ) {
-          verificationStartedRef.current = true;
-          await startCloudVerification();
-        }
-      })();
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [hotspotStage, portalUrl]);
 
   useEffect(() => {
     if (!activeSpaceStorageKey) {
@@ -1082,6 +649,48 @@ function App() {
     ? 'Choose what Sparkbox should do and when it should happen. Owners can switch to advanced controls when needed.'
     : 'Choose what Sparkbox should do and when it should happen. Private routines stay simple here, and owners can fine-tune shared ones when needed.';
   const activeChatSpaceId = activeSpaceId || undefined;
+  const {
+    refreshChatSessions: runRefreshChatSessions,
+    handleChatScopeChange: runHandleChatScopeChange,
+    openCurrentSpaceSideChannel: runOpenCurrentSpaceSideChannel,
+    openSpaceThread: runOpenSpaceThread,
+    clearCurrentChatSession: runClearCurrentChatSession,
+    deleteCurrentChatSession: runDeleteCurrentChatSession,
+    openChatSessionEditor: runOpenChatSessionEditor,
+    submitChatSessionEditor: runSubmitChatSessionEditor,
+    submitChatMessage: runSubmitChatMessage,
+  } = useChatController({
+    session,
+    activeSpaceId,
+    activeSpaceDetail,
+    activeChatSpaceId,
+    chatScope,
+    fetchChatSessions,
+    readFreshChatSessionCache,
+    clearChatSessionCache,
+    refreshHouseholdSummary,
+    setChatScope,
+    setChatSessions,
+    setActiveChatSessionId,
+    setActiveChatSession,
+    setChatDraft,
+    setChatError,
+    setChatBusy,
+    setChatListRefreshBusy,
+    setChatListSyncSource,
+    setChatListLastSyncedAt,
+    setSpaceSessionCounts,
+    setChatSendPhase,
+    setChatPendingMessage,
+    setChatPendingNoteIndex,
+    setActiveSpaceDetail,
+    setChatSessionEditorOpen,
+    setEditingChatSession,
+    setChatSessionName,
+    setChatSessionSystemPrompt,
+    setChatSessionTemperature,
+    setChatSessionMaxTokens,
+  });
   const activeFileSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
   const activeFileLegacyPrefix = activeSpace?.kind === 'shared' ? `spaces/${activeSpace.id}` : '';
   const activeTaskSpaceId = resolveTaskSpaceId(activeSpace);
@@ -2039,11 +1648,7 @@ function App() {
   }
 
   async function persistSession(nextSession: Session | null): Promise<void> {
-    if (nextSession) {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-    } else {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-    }
+    await persistStoredSession(nextSession);
   }
 
   async function submitAuth(): Promise<void> {
@@ -2059,27 +1664,7 @@ function App() {
     setAuthError('');
     setSkipOnboardingWhenNoDevice(false);
     try {
-      const nextSession = await authenticateWithCloud(
-        {
-          login: (payload) =>
-            apiJson<Session>('/api/auth/login', {
-              method: 'POST',
-              body: payload,
-            }),
-          register: (payload) =>
-            apiJson('/api/auth/register', {
-              method: 'POST',
-              body: payload,
-            }),
-          join: (payload) =>
-            apiJson<Session>('/api/auth/join', {
-              method: 'POST',
-              body: payload,
-            }),
-        },
-        authMode,
-        { email, password, displayName, inviteCode },
-      );
+      const nextSession = await authenticateSession(authMode, { email, password, displayName, inviteCode });
       setSession(nextSession);
       await persistSession(nextSession);
     } catch (error) {
@@ -2090,16 +1675,7 @@ function App() {
   }
 
   async function logout(): Promise<void> {
-    if (session?.token) {
-      try {
-        await apiJson('/api/auth/session', {
-          method: 'DELETE',
-          token: session.token,
-        });
-      } catch {
-        // ignore logout failures
-      }
-    }
+    await revokeSession(session?.token);
     setSession(null);
     setSkipOnboardingWhenNoDevice(false);
     await persistSession(null);
@@ -2413,36 +1989,6 @@ function App() {
     }
   }
 
-  function resetSetupFlowState(): void {
-    // Reset every transient onboarding input so first-run and reprovision flows
-    // never leak state into each other.
-    const resetState = buildSetupFlowResetState();
-    setSetupFlowKind(resetState.setupFlowKind);
-    setReprovisionDeviceId(resetState.reprovisionDeviceId);
-    setClaimInput('');
-    setClaimPayload(null);
-    setPairingToken(resetState.pairingToken);
-    setClaimError(resetState.claimError);
-    setBleError(resetState.bleError);
-    setScannerOpen(false);
-    setNetworks([]);
-    setSelectedSsid(resetState.selectedSsid);
-    setSelectedNetwork(null);
-    setWifiPassword(resetState.wifiPassword);
-    setManualEntry(resetState.manualEntry);
-    setNetworkSheetOpen(resetState.networkSheetOpen);
-    setProvisionBusy(resetState.provisionBusy);
-    setProvisionMessage(resetState.provisionMessage);
-    setPortalUrl(resetState.portalUrl);
-    setCompletedDeviceId(resetState.completedDeviceId);
-    setHotspotStage(resetState.hotspotStage);
-    setInviteCode(resetState.inviteCode);
-    setHomeWifiTarget(null);
-    setPreviousInternetSsid(resetState.previousInternetSsid);
-    setSetupPageState(resetState.setupPageState);
-    setSetupNetworksLoaded(resetState.setupNetworksLoaded);
-  }
-
   function resetShellState(): void {
     // Full shell reset for logout and hard flow transitions. The pane
     // components are intentionally stateless enough that this can remain the
@@ -2516,8 +2062,6 @@ function App() {
     setDiagnosticsError('');
     setDiagnosticsDeviceId('');
     setDiagnosticsPayload(null);
-    verificationStartedRef.current = false;
-    lastOpenedPortalUrlRef.current = null;
   }
 
   function resetFlow(): void {
@@ -2526,381 +2070,6 @@ function App() {
     resetShellState();
   }
 
-  function applyClaimInput(rawValue: string): void {
-    setClaimInput(rawValue);
-    const parsed = parseClaimPayload(rawValue);
-    setClaimPayload(parsed);
-    if (parsed) {
-      setClaimError('');
-    }
-  }
-
-  async function startClaim(): Promise<void> {
-    if (!session) {
-      return;
-    }
-    if (!claimPayload) {
-      setClaimError('Scan the Sparkbox label or paste the setup code first.');
-      return;
-    }
-    setClaimBusy(true);
-    setClaimError('');
-    setProvisionMessage('Sparkbox is now reserved for your household. Connecting your phone to Sparkbox-Setup...');
-    try {
-      const response = await apiJson<{ pairing_token: string }>('/api/pairing/start', {
-        method: 'POST',
-        token: session.token,
-        body: {
-          device_id: claimPayload.deviceId,
-          short_claim_code: claimPayload.claimCode,
-        },
-      });
-      setPairingToken(response.pairing_token);
-      setPreviousInternetSsid(await getCurrentSsid().catch(() => null));
-      await beginHotspotOnboarding(claimPayload.deviceId, response.pairing_token);
-    } catch (error) {
-      setClaimError(error instanceof Error ? error.message : 'Could not attach this Sparkbox.');
-      setHotspotStage('failed');
-    } finally {
-      setClaimBusy(false);
-    }
-  }
-
-  async function beginHotspotOnboarding(deviceId: string, nextPairingToken: string): Promise<void> {
-    if (!deviceId) {
-      setBleError('Pick a Sparkbox before starting Wi-Fi setup.');
-      return;
-    }
-    setBleError('');
-    setProvisionBusy(true);
-    setHotspotStage('joining_setup');
-    setPortalUrl(null);
-    setSetupNetworksLoaded(false);
-    verificationStartedRef.current = false;
-    lastOpenedPortalUrlRef.current = null;
-    try {
-      await connectToSetupHotspot(HOTSPOT_SSID);
-      setHotspotStage('local_setup');
-      setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
-    } catch (error) {
-      setBleError(error instanceof Error ? error.message : 'Could not switch to Sparkbox-Setup automatically.');
-      setProvisionMessage('Open Wi-Fi settings, join Sparkbox-Setup, and the app will continue automatically.');
-      await openInternetPanel().catch(() => undefined);
-    } finally {
-      setProvisionBusy(false);
-    }
-  }
-
-  async function returnPhoneToHomeWifi(): Promise<void> {
-    const targetSsid = homeWifiTarget?.ssid || previousInternetSsid;
-    const targetPassword = homeWifiTarget?.password || '';
-    verificationStartedRef.current = false;
-    setHotspotStage('returning_home');
-    setProvisionBusy(true);
-    setProvisionMessage('Returning your phone to a Wi-Fi network with internet so Sparkbox can finish setup...');
-    try {
-      await clearSessionWifiState().catch(() => undefined);
-      if (!targetSsid || !targetPassword) {
-        throw new Error('Need system help to reconnect this phone to Wi-Fi.');
-      }
-      await connectToHomeWifi(targetSsid, targetPassword);
-    } catch {
-      await openInternetPanel().catch(() => undefined);
-    } finally {
-      setProvisionBusy(false);
-    }
-  }
-
-  async function startCloudVerification(): Promise<void> {
-    if (!setupDeviceId) {
-      return;
-    }
-    setHotspotStage('verifying');
-    setProvisionBusy(true);
-    setProvisionMessage(
-      portalUrl
-        ? 'Finish the network sign-in in your browser. Sparkbox will complete setup automatically after internet access is restored.'
-        : 'Waiting for Sparkbox to come online in your household...',
-    );
-    try {
-      const success = await waitForCloudActivation(setupDeviceId);
-      if (!success) {
-        throw new Error('Sparkbox did not come online in time.');
-      }
-      setCompletedDeviceId(setupDeviceId);
-      setHotspotStage('completed');
-      setPortalUrl(null);
-      setProvisionMessage('Sparkbox is online and ready inside your household.');
-    } catch (error) {
-      setHotspotStage('failed');
-      verificationStartedRef.current = false;
-      setBleError(error instanceof Error ? error.message : 'Sparkbox could not finish setup.');
-    } finally {
-      setProvisionBusy(false);
-    }
-  }
-
-  async function waitForCloudActivation(deviceId: string): Promise<boolean> {
-    if (!session?.token) {
-      return false;
-    }
-    const deadline = Date.now() + 300000;
-    while (Date.now() < deadline) {
-      try {
-        const devices = await apiJson<HouseholdDevice[]>('/api/devices', { token: session.token });
-        const matched = devices.find((item) => item.device_id === deviceId);
-        if (matched?.online) {
-          return true;
-        }
-      } catch {
-        // The phone may still be switching networks. Keep waiting.
-      }
-      await sleep(2500);
-    }
-    return false;
-  }
-
-  async function refreshNetworks(): Promise<void> {
-    setNetworksBusy(true);
-    setBleError('');
-    try {
-      const response = await listLocalSetupNetworks();
-      const nextNetworks = response.networks ?? [];
-      setNetworks(nextNetworks);
-      setSetupNetworksLoaded(true);
-      if (response.scan_error) {
-        setBleError(response.scan_error);
-      }
-      if (nextNetworks.length === 0) {
-        setManualEntry(true);
-        setNetworkSheetOpen(true);
-        if (!selectedSsid.trim() && previousInternetSsid) {
-          setSelectedSsid(previousInternetSsid);
-        }
-        setProvisionMessage(
-          response.scan_mode === 'manual_only'
-            ? 'Sparkbox is keeping its hotspot online, so type your home Wi-Fi manually.'
-            : 'Nearby Wi-Fi did not come through. Type your home Wi-Fi manually.',
-        );
-      } else {
-        setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
-      }
-    } catch (error) {
-      setBleError(error instanceof Error ? error.message : 'Could not refresh nearby Wi-Fi.');
-    } finally {
-      setNetworksBusy(false);
-    }
-  }
-
-  async function submitWifi(): Promise<void> {
-    if (!setupDeviceId) {
-      return;
-    }
-    if (!selectedSsid.trim()) {
-      Alert.alert('Choose Wi-Fi', 'Select a Wi-Fi network or enter one manually.');
-      return;
-    }
-    setProvisionBusy(true);
-    setBleError('');
-    setProvisionMessage(`Connecting Sparkbox to ${selectedSsid.trim()}...`);
-    try {
-      const result = await submitLocalSetupNetwork({
-        ssid: selectedSsid.trim(),
-        password: wifiPassword,
-        pairingToken: pairingToken || undefined,
-      });
-      setSetupPageState(result);
-      setHomeWifiTarget({
-        ssid: selectedSsid.trim(),
-        password: wifiPassword,
-      });
-      if (result.status === 'wifi_failed_retryable' || result.status === 'binding_failed_retryable') {
-        throw new Error(
-          result.pairing?.last_error ||
-            result.last_command?.message ||
-            result.wifi?.network_apply_mode ||
-            'Sparkbox could not finish setup.',
-        );
-      }
-      if (result.status === 'wifi_portal_required') {
-        setPortalUrl(result.wifi?.portal_url ?? null);
-      }
-      setProvisionBusy(false);
-      void returnPhoneToHomeWifi();
-      return;
-    } catch (error) {
-      if (isLikelyLocalSetupHandoffError(error)) {
-        setSetupPageState({
-          status: pairingToken ? 'pairing_pending' : 'wifi_connecting',
-          wifi: { ssid: selectedSsid.trim() },
-        });
-        setHomeWifiTarget({
-          ssid: selectedSsid.trim(),
-          password: wifiPassword,
-        });
-        setProvisionBusy(false);
-        void returnPhoneToHomeWifi();
-        return;
-      }
-      setBleError(error instanceof Error ? error.message : 'Sparkbox could not finish setup.');
-    } finally {
-      setProvisionBusy(false);
-    }
-  }
-
-  function chooseNetwork(network: LocalSetupNetwork): void {
-    setSelectedNetwork(network);
-    setSelectedSsid(network.ssid);
-    setManualEntry(false);
-    setNetworkSheetOpen(true);
-    if (!network.known) {
-      setWifiPassword('');
-    }
-  }
-
-  function openManualEntry(): void {
-    setManualEntry(true);
-    setSelectedNetwork(null);
-    setSelectedSsid(previousInternetSsid ?? '');
-    setWifiPassword('');
-    setNetworkSheetOpen(true);
-  }
-
-  async function openScanner(): Promise<void> {
-    if (!cameraPermission?.granted) {
-      const result = await requestCameraPermission();
-      if (!result.granted) {
-        setClaimError(CAMERA_PERMISSION_RECOVERY_MESSAGE);
-        return;
-      }
-    }
-    setScannerOpen(true);
-  }
-
-  function beginNewDeviceOnboarding(): void {
-    setSkipOnboardingWhenNoDevice(false);
-    resetSetupFlowState();
-    setSetupFlowKind('first_run');
-    setHomeError('');
-    setShellSurface('onboarding');
-  }
-
-  async function beginDeviceReprovision(device: DeviceSummary): Promise<void> {
-    setSkipOnboardingWhenNoDevice(false);
-    resetSetupFlowState();
-    setSetupFlowKind('reprovision');
-    setReprovisionDeviceId(device.device_id);
-    setHomeError('');
-    setBleError('');
-    if (session?.token && device.online) {
-      setProvisionBusy(true);
-      setProvisionMessage('Asking Sparkbox to get ready again for Wi-Fi changes...');
-      try {
-        await startDeviceReprovision(session.token, device.device_id);
-        setProvisionMessage('Sparkbox is getting ready again. Wait for Sparkbox-Setup, then continue.');
-      } catch (error) {
-        setBleError(error instanceof Error ? error.message : 'Could not get Sparkbox ready again.');
-        setProvisionMessage(
-          'If Sparkbox is already in a new place, power it on and wait for Sparkbox-Setup to appear.',
-        );
-      } finally {
-        setProvisionBusy(false);
-      }
-    } else {
-      setProvisionMessage(
-        'Get Sparkbox ready again. If it is in a new place, power it on and wait for Sparkbox-Setup to appear.',
-      );
-    }
-    setPreviousInternetSsid(await getCurrentSsid().catch(() => null));
-    setShellSurface('onboarding');
-  }
-
-  async function refreshChatSessions(options?: { force?: boolean }): Promise<void> {
-    if (!session?.token) {
-      return;
-    }
-    setChatBusy(true);
-    setChatListRefreshBusy(true);
-    setChatError('');
-    try {
-      const sessions = await fetchChatSessions(chatScope, activeChatSpaceId || '', {
-        force: options?.force === true,
-      });
-      const cachedEntry = readFreshChatSessionCache(chatScope, activeChatSpaceId || '');
-      setChatListSyncSource(options?.force ? 'network' : cachedEntry ? 'cache' : 'network');
-      setChatListLastSyncedAt(cachedEntry?.fetchedAt ?? Date.now());
-      setChatSessions(sessions);
-      if (activeChatSpaceId) {
-        setSpaceSessionCounts((current) => ({
-          ...current,
-          [activeChatSpaceId]: sessions.length,
-        }));
-      }
-      setActiveChatSessionId((current) => {
-        if (current && sessions.some((item) => item.id === current)) {
-          return current;
-        }
-        return '';
-      });
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not load chat sessions.');
-    } finally {
-      setChatBusy(false);
-      setChatListRefreshBusy(false);
-    }
-  }
-
-  function handleChatScopeChange(nextScope: ChatSessionScope): void {
-    if (nextScope === chatScope) {
-      return;
-    }
-    const resetState = buildChatScopeResetState();
-    setChatScope(nextScope);
-    setChatSessions(resetState.chatSessions);
-    setActiveChatSessionId(resetState.activeChatSessionId);
-    setActiveChatSession(resetState.activeChatSession);
-    setChatDraft(resetState.chatDraft);
-    setChatError('');
-    setChatSendPhase('idle');
-    setChatPendingMessage(null);
-    setChatPendingNoteIndex(0);
-  }
-
-  async function openCurrentSpaceSideChannel(): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    setChatBusy(true);
-    setChatError('');
-    try {
-      const sideChannel = await openSpaceSideChannel(session.token, activeSpaceId);
-      if (!sideChannel.sessionId) {
-        throw new Error('Sparkbox has not opened the private chat for this space yet.');
-      }
-      setActiveSpaceDetail((current) =>
-        current
-          ? {
-              ...current,
-              privateSideChannel: sideChannel,
-            }
-          : current,
-      );
-      setChatScope('private');
-      setActiveChatSessionId(sideChannel.sessionId);
-      const sessions = await fetchChatSessions('private', activeSpaceId, {
-        force: true,
-      });
-      setChatSessions(sessions);
-      setSpaceSessionCounts((current) => ({
-        ...current,
-        [activeSpaceId]: sessions.length,
-      }));
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not open the private chat right now.');
-    } finally {
-      setChatBusy(false);
-    }
-  }
 
   function openRelayComposer(): void {
     if (!activeSpace || activeSpace.kind !== 'shared' || relayTargets.length === 0) {
@@ -2944,280 +2113,36 @@ function App() {
     }
   }
 
-  async function openSpaceThread(threadId: string): Promise<void> {
-    if (!session?.token || !activeSpaceId || !activeSpaceDetail) {
-      return;
-    }
-    setChatBusy(true);
-    setChatError('');
-    try {
-      const opened = await openSpaceThreadSession(session.token, activeSpaceId, threadId);
-      setChatScope(opened.scope);
-      setActiveChatSessionId(opened.id);
-      const [sessions, detail, refreshedSpace] = await Promise.all([
-        fetchChatSessions(opened.scope, activeSpaceId, { force: true }),
-        getHouseholdChatSession(session.token, opened.id),
-        getHouseholdSpaceDetail(session.token, activeSpaceId),
-      ]);
-      setChatSessions(sessions);
-      setSpaceSessionCounts((current) => ({
-        ...current,
-        [activeSpaceId]: sessions.length,
-      }));
-      setActiveChatSession(detail);
-      setActiveSpaceDetail(refreshedSpace);
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : describeChatSessionOpenError(activeSpaceDetail));
-    } finally {
-      setChatBusy(false);
-    }
-  }
 
   function openChatSessionEditor(sessionItem?: HouseholdChatSessionSummary): void {
-    if (!sessionItem && !canCreateActiveChat) {
-      setChatError(describeChatSessionCreatePermissionError(activeSpaceDetail, chatScope));
-      return;
-    }
-    if (sessionItem) {
-      setEditingChatSession(sessionItem);
-      setChatSessionName(sessionItem.name);
-      setChatSessionSystemPrompt(sessionItem.systemPrompt);
-      setChatSessionTemperature(String(sessionItem.temperature));
-      setChatSessionMaxTokens(String(sessionItem.maxTokens));
-    } else {
-      setEditingChatSession(null);
-      setChatSessionName('');
-      setChatSessionSystemPrompt('');
-      setChatSessionTemperature('0.7');
-      setChatSessionMaxTokens('2048');
-    }
-    setChatError('');
-    setChatSessionEditorOpen(true);
+    runOpenChatSessionEditor(sessionItem, canCreateActiveChat);
   }
 
   async function submitChatSessionEditor(): Promise<void> {
-    if (!session?.token) {
-      return;
-    }
-    const trimmedName = chatSessionName.trim();
-    if (!trimmedName) {
-      setChatError('Give this chat a name first.');
-      return;
-    }
-    setChatBusy(true);
-    setChatError('');
-    try {
-      const temperature = Number(chatSessionTemperature || '0.7');
-      const maxTokens = Number(chatSessionMaxTokens || '2048');
-      if (editingChatSession) {
-        const updated = await updateHouseholdChatSession(session.token, editingChatSession.id, {
-          name: trimmedName,
-          systemPrompt: chatSessionSystemPrompt,
-          temperature,
-          maxTokens,
-          lastKnownUpdatedAt: editingChatSession.updatedAt,
-        });
-        setActiveChatSessionId(updated.id);
-      } else {
-        const created = await createHouseholdChatSession(session.token, {
-          name: trimmedName,
-          scope: chatScope,
-          spaceId: activeChatSpaceId,
-          systemPrompt: chatSessionSystemPrompt,
-          temperature,
-          maxTokens,
-        });
-        setActiveChatSessionId(created.id);
-      }
-      setChatSessionEditorOpen(false);
-      clearChatSessionCache(chatScope, activeChatSpaceId);
-      await refreshChatSessions({ force: true });
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not save this chat.');
-    } finally {
-      setChatBusy(false);
-    }
+    await runSubmitChatSessionEditor({
+      editingChatSession,
+      chatSessionName,
+      chatSessionSystemPrompt,
+      chatSessionTemperature,
+      chatSessionMaxTokens,
+    });
   }
 
   async function submitChatMessage(overrideContent?: string): Promise<void> {
-    if (!session?.token || !activeChatSessionId) {
-      return;
-    }
-    const content = (overrideContent ?? chatDraft).trim();
-    if (!content) {
-      return;
-    }
-    if (!overrideContent) {
-      setChatDraft('');
-    }
-    setChatBusy(true);
-    setChatError('');
-    setChatPendingNoteIndex(0);
-    setChatSendPhase('sending');
-    setChatPendingMessage({
-      role: 'assistant',
-      content: CHAT_PENDING_FALLBACK,
-      senderDisplayName: null,
-      pending: true,
-      retryContent: content,
+    await runSubmitChatMessage({
+      activeChatSessionId,
+      chatDraft,
+      activeChatSession,
+      overrideContent,
     });
-    if (activeChatSession) {
-      setActiveChatSession({
-        ...activeChatSession,
-        messages: [...activeChatSession.messages, { role: 'user', content, senderDisplayName: session.user.display_name }],
-      });
-    }
-    let keepPendingBubble = false;
-    try {
-      let streamedMessage = '';
-      const response = await streamHouseholdChatSessionMessage(session.token, activeChatSessionId, content, {
-        onPending: (event) => {
-          setChatSendPhase('sending');
-          if (event.message?.trim()) {
-            setChatPendingMessage((current) =>
-              current?.pending
-                ? {
-                    ...current,
-                    content: event.message,
-                    retryContent: content,
-                  }
-                : current,
-            );
-          }
-        },
-        onToken: (event) => {
-          streamedMessage += event.content;
-          setChatSendPhase('streaming');
-          setChatPendingMessage({
-            role: 'assistant',
-            content: streamedMessage,
-            senderDisplayName: null,
-            pending: true,
-            retryContent: content,
-          });
-        },
-      });
-      if (response.error) {
-        keepPendingBubble = true;
-        const timedOut = response.reason === 'ttft_timeout';
-        setChatSendPhase(timedOut ? 'timed_out' : 'failed');
-        setChatError(response.error);
-        setChatPendingMessage({
-          role: 'assistant',
-          content:
-            streamedMessage ||
-            (timedOut
-              ? 'Sparkbox is taking longer than usual to send the first reply.'
-              : 'Sparkbox could not send the reply this time.'),
-          senderDisplayName: null,
-          pending: false,
-          failed: true,
-          retryable: response.retryable === true,
-          retryContent: content,
-          errorMessage: response.error,
-        });
-        return;
-      }
-      if (shouldAppendAssistantReply(response.message)) {
-        setActiveChatSession((current) =>
-          current
-            ? {
-                ...current,
-                messages: [...current.messages, { role: 'assistant', content: response.message, senderDisplayName: null }],
-              }
-            : current,
-        );
-      }
-      try {
-        const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
-        setActiveChatSession(detail);
-        setChatSessions((current) =>
-          current.map((item) =>
-            item.id === detail.id
-              ? {
-                  ...item,
-                  name: detail.name,
-                  updatedAt: detail.updatedAt,
-                  systemPrompt: detail.systemPrompt,
-                  temperature: detail.temperature,
-                  maxTokens: detail.maxTokens,
-                }
-              : item,
-          ),
-        );
-      } catch {
-        setChatSessions((current) =>
-          current.map((item) =>
-            item.id === activeChatSessionId
-              ? {
-                  ...item,
-                  updatedAt: new Date().toISOString(),
-                }
-              : item,
-          ),
-        );
-      }
-      await refreshHouseholdSummary({ silent: true });
-    } catch (error) {
-      keepPendingBubble = true;
-      setChatSendPhase('failed');
-      setChatError(error instanceof Error ? error.message : 'Chat is unavailable right now.');
-      setChatPendingMessage({
-        role: 'assistant',
-        content: 'Sparkbox could not send the reply this time.',
-        senderDisplayName: null,
-        pending: false,
-        failed: true,
-        retryable: true,
-        retryContent: content,
-        errorMessage: error instanceof Error ? error.message : 'Chat is unavailable right now.',
-      });
-    } finally {
-      if (!keepPendingBubble) {
-        setChatPendingMessage(null);
-        setChatSendPhase('idle');
-        setChatPendingNoteIndex(0);
-      }
-      setChatBusy(false);
-    }
   }
 
   async function clearCurrentChatSession(): Promise<void> {
-    if (!session?.token || !activeChatSessionId) {
-      return;
-    }
-    setChatBusy(true);
-    setChatError('');
-    try {
-      await clearChatSessionMessages(session.token, activeChatSessionId);
-      const detail = await getHouseholdChatSession(session.token, activeChatSessionId);
-      setActiveChatSession(detail);
-      await refreshHouseholdSummary({ silent: true });
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not clear this chat.');
-    } finally {
-      setChatBusy(false);
-    }
+    await runClearCurrentChatSession(activeChatSessionId);
   }
 
   async function deleteCurrentChatSession(): Promise<void> {
-    if (!session?.token || !activeChatSessionId) {
-      return;
-    }
-    const deletedId = activeChatSessionId;
-    setChatBusy(true);
-    setChatError('');
-    try {
-      await deleteHouseholdChatSession(session.token, deletedId);
-      setActiveChatSession(null);
-      setActiveChatSessionId('');
-      clearChatSessionCache(chatScope, activeChatSpaceId);
-      await refreshChatSessions({ force: true });
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'Could not delete this chat.');
-    } finally {
-      setChatBusy(false);
-    }
+    await runDeleteCurrentChatSession(activeChatSessionId);
   }
 
   function closeActiveChatDetail(): void {
@@ -3862,8 +2787,8 @@ function App() {
                   })),
                   onOpenSpaceCreator: openSpaceCreator,
                   onSelectSpace: setActiveSpaceId,
-                  onSelectScope: (scopeId: string) => handleChatScopeChange(scopeId as ChatSessionScope),
-                  onRefresh: () => void refreshChatSessions({ force: true }),
+                  onSelectScope: (scopeId: string) => runHandleChatScopeChange(scopeId as ChatSessionScope),
+                  onRefresh: () => void runRefreshChatSessions({ force: true }),
                   onCreateChat: () => openChatSessionEditor(),
                   onOpenSession: setActiveChatSessionId,
                 }}
@@ -3890,7 +2815,7 @@ function App() {
                       ),
                     })) || [],
                   emptyThreadCopy: describeSpaceThreadEmptyStateCopy(activeSpaceCopyContext),
-                  onOpenThread: (threadId: string) => void openSpaceThread(threadId),
+                  onOpenThread: (threadId: string) => void runOpenSpaceThread(threadId),
                   showRelayHelper: activeSpaceDetail?.kind === 'shared',
                   canOpenRelay: relayTargets.length > 0,
                   onOpenRelay: openRelayComposer,
@@ -3899,7 +2824,7 @@ function App() {
                       ? activeSpaceDetail.privateSideChannel.label
                       : '',
                   onOpenPrivateSideChannel: () => {
-                    void openCurrentSpaceSideChannel();
+                    void runOpenCurrentSpaceSideChannel();
                   },
                   enabledFamilyApps: enabledFamilyAppCards,
                   canManageActiveSpaceFamilyApps,
@@ -4166,10 +3091,11 @@ function App() {
             ) : null}
           </ScrollView>
 
-          <SpaceCreatorModal
-            visible={spaceCreatorOpen}
-            busy={spaceCreatorBusy}
-            error={spaceCreatorError}
+          <ShellModals
+            styles={styles}
+            spaceCreatorOpen={spaceCreatorOpen}
+            spaceCreatorBusy={spaceCreatorBusy}
+            spaceCreatorError={spaceCreatorError}
             spaceName={spaceName}
             selectedTemplateLabel={describeSpaceTemplate(spaceTemplate)}
             templateOptions={SPACE_TEMPLATE_OPTIONS.map((template) => ({
@@ -4179,86 +3105,65 @@ function App() {
             }))}
             memberOptions={spaceMemberOptions}
             selectedMemberIds={spaceMemberIds}
-            styles={styles}
-            onRequestClose={() => setSpaceCreatorOpen(false)}
+            onCloseSpaceCreator={() => setSpaceCreatorOpen(false)}
             onChangeSpaceName={setSpaceName}
             onSelectTemplate={(templateId) => setSpaceTemplate(templateId as Exclude<SpaceTemplate, 'private' | 'household'>)}
-            onToggleMember={toggleSpaceMember}
-            onSubmit={() => void submitSpaceCreator()}
-          />
-
-          <ChatSessionEditorModal
-            styles={styles}
-            visible={chatSessionEditorOpen}
+            onToggleSpaceMember={toggleSpaceMember}
+            onSubmitSpaceCreator={() => void submitSpaceCreator()}
+            chatSessionEditorOpen={chatSessionEditorOpen}
             editingChatSession={Boolean(editingChatSession)}
             activeSpaceDetail={activeSpaceDetail}
             chatScope={chatScope}
             chatSessionName={chatSessionName}
             chatError={chatError}
             chatBusy={chatBusy}
-            onRequestClose={() => setChatSessionEditorOpen(false)}
-            onChangeName={setChatSessionName}
-            onSubmit={() => void submitChatSessionEditor()}
-          />
-
-          <SpaceMembersEditorModal
-            visible={spaceMembersEditorOpen}
+            onCloseChatSessionEditor={() => setChatSessionEditorOpen(false)}
+            onChangeChatSessionName={setChatSessionName}
+            onSubmitChatSessionEditor={() => void submitChatSessionEditor()}
+            spaceMembersEditorOpen={spaceMembersEditorOpen}
             activeSpaceName={activeSpace?.name || ''}
             ownerDisplayName={session?.user.display_name || 'You'}
-            memberOptions={activeSharedSpaceMemberOptions}
-            selectedMemberIds={spaceMembersEditorIds}
-            error={spaceMembersEditorError}
-            busy={spaceMembersEditorBusy}
+            memberEditorOptions={activeSharedSpaceMemberOptions}
+            selectedEditorMemberIds={spaceMembersEditorIds}
+            spaceMembersEditorError={spaceMembersEditorError}
+            spaceMembersEditorBusy={spaceMembersEditorBusy}
             settingsBusy={settingsBusy}
             showInviteButton={activeSpace?.kind === 'shared'}
-            styles={styles}
-            onRequestClose={() => setSpaceMembersEditorOpen(false)}
-            onToggleMember={toggleSpaceMembersEditorMember}
+            onCloseSpaceMembersEditor={() => setSpaceMembersEditorOpen(false)}
+            onToggleSpaceMembersEditorMember={toggleSpaceMembersEditorMember}
             onInviteToSpace={() =>
               void generateInvite('member', {
                 targetSpaceId: activeSpace?.id,
                 targetSpaceName: activeSpace?.name,
               })
             }
-            onSubmit={() => void submitSpaceMembersEditor()}
-          />
-
-          <MemoryEditorModal
-            styles={styles}
-            visible={memoryEditorOpen}
+            onSubmitSpaceMembersEditor={() => void submitSpaceMembersEditor()}
+            memoryEditorOpen={memoryEditorOpen}
             editingMemory={Boolean(editingMemory)}
             memoryTitle={memoryTitle}
             memoryContent={memoryContent}
             memoryPinned={memoryPinned}
             libraryError={libraryError}
             libraryBusy={libraryBusy}
-            onRequestClose={closeMemoryEditor}
-            onChangeTitle={setMemoryTitle}
-            onChangeContent={setMemoryContent}
-            onTogglePinned={() => setMemoryPinned((current) => !current)}
-            onSubmit={() => void submitMemoryEditor()}
-          />
-
-          <TaskHistoryModal
-            styles={styles}
-            visible={taskHistoryOpen}
+            onCloseMemoryEditor={closeMemoryEditor}
+            onChangeMemoryTitle={setMemoryTitle}
+            onChangeMemoryContent={setMemoryContent}
+            onToggleMemoryPinned={() => setMemoryPinned((current) => !current)}
+            onSubmitMemoryEditor={() => void submitMemoryEditor()}
+            taskHistoryOpen={taskHistoryOpen}
             taskHistoryTask={taskHistoryTask}
             taskHistoryRuns={taskHistoryRuns}
-            onRequestClose={() => setTaskHistoryOpen(false)}
-          />
-
-          <RelayComposerModal
-            styles={styles}
-            visible={relayComposerOpen}
+            onCloseTaskHistory={() => setTaskHistoryOpen(false)}
+            relayComposerOpen={relayComposerOpen}
             relayTargets={relayTargets}
             relayTargetUserId={relayTargetUserId}
             relayMessage={relayMessage}
             relayError={relayError}
             relayBusy={relayBusy}
-            onRequestClose={() => setRelayComposerOpen(false)}
+            onCloseRelayComposer={() => setRelayComposerOpen(false)}
             onSelectRelayTarget={setRelayTargetUserId}
             onChangeRelayMessage={setRelayMessage}
-            onSubmit={() => void submitRelayMessage()}
+            onSubmitRelayMessage={() => void submitRelayMessage()}
           />
         </View>
       </SafeAreaView>
@@ -4266,1213 +3171,127 @@ function App() {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="dark" />
-      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content}>
-        <SetupFlowPane
-          styles={styles}
-          householdName={householdName}
-          session={session}
-          canReturnToShell={canReturnToShell}
-          returnToShell={returnToShell}
-          resetFlow={resetFlow}
-          logout={() => void logout()}
-          claimStepVisible={claimStepVisible}
-          activeStep={activeStep}
-          setupStepLabels={setupStepLabels}
-          step1Collapsed={step1Collapsed}
-          step2Visible={step2Visible}
-          step2Collapsed={step2Collapsed}
-          step3Visible={step3Visible}
-          step3Collapsed={step3Collapsed}
-          step4Visible={step4Visible}
-          authCardTitle={authCardTitle}
-          authCardCopy={authCardCopy}
-          authMode={authMode}
-          email={email}
-          displayName={displayName}
-          inviteCode={inviteCode}
-          password={password}
-          invitePreviewBusy={invitePreviewBusy}
-          invitePreviewError={invitePreviewError}
-          invitePreview={invitePreview}
-          authError={authError}
-          authBusy={authBusy}
-          authSubmitLabel={authSubmitLabel}
-          claimInput={claimInput}
-          claimPayload={claimPayload}
-          claimError={claimError}
-          cameraPermissionRecoveryMessage={CAMERA_PERMISSION_RECOVERY_MESSAGE}
-          claimBusy={claimBusy}
-          bleError={bleError}
-          setupDeviceId={setupDeviceId}
-          hotspotSsid={HOTSPOT_SSID}
-          hotspotStage={hotspotStage}
-          setupFlowKind={setupFlowKind}
-          pairingToken={pairingToken}
-          provisionBusy={provisionBusy}
-          provisionMessage={provisionMessage}
-          homeWifiTarget={homeWifiTarget}
-          selectedSsid={selectedSsid}
-          previousInternetSsid={previousInternetSsid}
-          networksBusy={networksBusy}
-          networks={networks}
-          selectedNetwork={selectedNetwork}
-          networkSheetOpen={networkSheetOpen}
-          manualEntry={manualEntry}
-          portalUrl={portalUrl}
-          completedDeviceId={completedDeviceId}
-          setupPageState={setupPageState}
-          onCaptureStepOffset={captureStepOffset}
-          onChangeAuthMode={(mode) => {
-            setAuthMode(mode);
-            setAuthError('');
-          }}
-          onChangeEmail={setEmail}
-          onChangeDisplayName={setDisplayName}
-          onChangeInviteCode={setInviteCode}
-          onChangePassword={setPassword}
-          onSubmitAuth={() => void submitAuth()}
-          renderInvitePreviewSummary={buildInvitePreviewSummary}
-          onApplyClaimInput={applyClaimInput}
-          onOpenScanner={() => void openScanner()}
-          onStartClaim={() => void startClaim()}
-          onBeginHotspotOnboarding={() => void beginHotspotOnboarding(setupDeviceId || '', '')}
-          onOpenInternetPanel={() => void openInternetPanel()}
-          onRefreshNetworks={() => void refreshNetworks()}
-          onOpenManualEntry={openManualEntry}
-          onChooseNetwork={chooseNetwork}
-          onStartCloudVerification={() => void startCloudVerification()}
-        />
-      </ScrollView>
-
-      <SetupUtilityModals
-        styles={styles}
-        fileEditorOpen={fileEditorOpen}
-        fileEditorMode={fileEditorMode}
-        fileTargetEntry={fileTargetEntry}
-        fileEditorValue={fileEditorValue}
-        filesError={filesError}
-        filesBusy={filesBusy}
-        networkSheetOpen={networkSheetOpen}
-        manualEntry={manualEntry}
-        selectedNetwork={selectedNetwork}
-        selectedSsid={selectedSsid}
-        previousInternetSsid={previousInternetSsid}
-        wifiPassword={wifiPassword}
-        canSubmitWifi={canSubmitWifi}
-        provisionBusy={provisionBusy}
-        onCloseFileEditor={() => setFileEditorOpen(false)}
-        onChangeFileEditorValue={setFileEditorValue}
-        onSubmitFileEditor={() => void submitFileEditor()}
-        onCloseNetworkSheet={() => setNetworkSheetOpen(false)}
-        onChangeSelectedSsid={setSelectedSsid}
-        onChangeWifiPassword={setWifiPassword}
-        onSubmitWifi={() => {
-          setNetworkSheetOpen(false);
-          void submitWifi();
-        }}
-      />
-
-      <TaskEditorModal
-        styles={styles}
-        visible={taskEditorOpen}
-        editingTask={editingTask}
-        activeSpaceName={activeSpace?.name || ''}
-        taskScope={taskScope}
-        taskEditorCopy={taskEditorCopy}
-        canManage={canManage}
-        taskName={taskName}
-        taskCronExpr={taskCronExpr}
-        taskCommand={taskCommand}
-        taskCommandType={taskCommandType}
-        taskEnabled={taskEnabled}
-        tasksError={tasksError}
-        tasksBusy={tasksBusy}
-        onRequestClose={() => setTaskEditorOpen(false)}
-        onChangeTaskName={setTaskName}
-        onChangeTaskCronExpr={setTaskCronExpr}
-        onChangeTaskCommand={setTaskCommand}
-        onChangeTaskCommandType={setTaskCommandType}
-        onToggleTaskEnabled={() => setTaskEnabled((current) => !current)}
-        onSubmit={() => void submitTaskEditor()}
-      />
-
-      <ScannerOverlay
-        styles={styles}
-        visible={scannerOpen}
-        onScan={(value) => {
-          applyClaimInput(value);
-          setScannerOpen(false);
-        }}
-        onClose={() => setScannerOpen(false)}
-      />
-    </SafeAreaView>
+    <SetupSurface
+      styles={styles}
+      scrollViewRef={scrollViewRef}
+      householdName={householdName}
+      session={session}
+      canReturnToShell={canReturnToShell}
+      returnToShell={returnToShell}
+      resetFlow={resetFlow}
+      logout={() => void logout()}
+      claimStepVisible={claimStepVisible}
+      activeStep={activeStep}
+      setupStepLabels={setupStepLabels}
+      step1Collapsed={step1Collapsed}
+      step2Visible={step2Visible}
+      step2Collapsed={step2Collapsed}
+      step3Visible={step3Visible}
+      step3Collapsed={step3Collapsed}
+      step4Visible={step4Visible}
+      authCardTitle={authCardTitle}
+      authCardCopy={authCardCopy}
+      authMode={authMode}
+      email={email}
+      displayName={displayName}
+      inviteCode={inviteCode}
+      password={password}
+      invitePreviewBusy={invitePreviewBusy}
+      invitePreviewError={invitePreviewError}
+      invitePreview={invitePreview}
+      authError={authError}
+      authBusy={authBusy}
+      authSubmitLabel={authSubmitLabel}
+      claimInput={claimInput}
+      claimPayload={claimPayload}
+      claimError={claimError}
+      cameraPermissionRecoveryMessage={CAMERA_PERMISSION_RECOVERY_MESSAGE}
+      claimBusy={claimBusy}
+      bleError={bleError}
+      setupDeviceId={setupDeviceId}
+      hotspotSsid={HOTSPOT_SSID}
+      hotspotStage={hotspotStage}
+      setupFlowKind={setupFlowKind}
+      pairingToken={pairingToken}
+      provisionBusy={provisionBusy}
+      provisionMessage={provisionMessage}
+      homeWifiTarget={homeWifiTarget}
+      selectedSsid={selectedSsid}
+      wifiPassword={wifiPassword}
+      previousInternetSsid={previousInternetSsid}
+      networksBusy={networksBusy}
+      networks={networks}
+      selectedNetwork={selectedNetwork}
+      networkSheetOpen={networkSheetOpen}
+      manualEntry={manualEntry}
+      portalUrl={portalUrl}
+      completedDeviceId={completedDeviceId}
+      setupPageState={setupPageState}
+      onCaptureStepOffset={captureStepOffset}
+      onChangeAuthMode={(mode) => {
+        setAuthMode(mode);
+        setAuthError('');
+      }}
+      onChangeEmail={setEmail}
+      onChangeDisplayName={setDisplayName}
+      onChangeInviteCode={setInviteCode}
+      onChangePassword={setPassword}
+      onSubmitAuth={() => void submitAuth()}
+      renderInvitePreviewSummary={buildInvitePreviewSummary}
+      onApplyClaimInput={applyClaimInput}
+      onOpenScanner={() => void openScanner()}
+      onStartClaim={() => void startClaim()}
+      onBeginHotspotOnboarding={() => void beginHotspotOnboarding(setupDeviceId || '')}
+      onOpenInternetPanel={() => void openInternetPanel()}
+      onRefreshNetworks={() => void refreshNetworks()}
+      onOpenManualEntry={openManualEntry}
+      onChooseNetwork={chooseNetwork}
+      onStartCloudVerification={() => void startCloudVerification()}
+      fileEditorOpen={fileEditorOpen}
+      fileEditorMode={fileEditorMode}
+      fileTargetEntry={fileTargetEntry}
+      fileEditorValue={fileEditorValue}
+      filesError={filesError}
+      filesBusy={filesBusy}
+      canSubmitWifi={canSubmitWifi}
+      onCloseFileEditor={() => setFileEditorOpen(false)}
+      onChangeFileEditorValue={setFileEditorValue}
+      onSubmitFileEditor={() => void submitFileEditor()}
+      onCloseNetworkSheet={() => setNetworkSheetOpen(false)}
+      onChangeSelectedSsid={setSelectedSsid}
+      onChangeWifiPassword={setWifiPassword}
+      onSubmitWifi={() => {
+        setNetworkSheetOpen(false);
+        void submitWifi();
+      }}
+      taskEditorOpen={taskEditorOpen}
+      editingTask={editingTask}
+      activeSpaceName={activeSpace?.name || ''}
+      taskScope={taskScope}
+      taskEditorCopy={taskEditorCopy}
+      canManage={canManage}
+      taskName={taskName}
+      taskCronExpr={taskCronExpr}
+      taskCommand={taskCommand}
+      taskCommandType={taskCommandType}
+      taskEnabled={taskEnabled}
+      tasksError={tasksError}
+      tasksBusy={tasksBusy}
+      onCloseTaskEditor={() => setTaskEditorOpen(false)}
+      onChangeTaskName={setTaskName}
+      onChangeTaskCronExpr={setTaskCronExpr}
+      onChangeTaskCommand={setTaskCommand}
+      onChangeTaskCommandType={setTaskCommandType}
+      onToggleTaskEnabled={() => setTaskEnabled((current) => !current)}
+      onSubmitTaskEditor={() => void submitTaskEditor()}
+      scannerOpen={scannerOpen}
+      onScannerScan={(value) => {
+        applyClaimInput(value);
+        setScannerOpen(false);
+      }}
+      onCloseScanner={() => setScannerOpen(false)}
+    />
   );
 }
 
 export default App;
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#f8f3e6',
-  },
-  shellScreen: {
-    flex: 1,
-    padding: 16,
-    gap: 14,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 56,
-    gap: 14,
-  },
-  chatContent: {
-    paddingBottom: 56,
-    gap: 10,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  hero: {
-    paddingTop: 10,
-    gap: 10,
-  },
-  stepRail: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  stepRailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#ecf4ec',
-  },
-  stepRailItemDone: {
-    backgroundColor: '#e3f2ea',
-  },
-  stepRailItemCurrent: {
-    backgroundColor: '#2d5b46',
-  },
-  stepRailNumber: {
-    color: '#61746a',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  stepRailNumberActive: {
-    color: '#ffffff',
-  },
-  stepRailLabel: {
-    color: '#61746a',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  stepRailLabelActive: {
-    color: '#ffffff',
-  },
-  eyebrow: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    color: '#4f6b5e',
-    fontWeight: '700',
-  },
-  authLogo: {
-    fontSize: 42,
-    lineHeight: 48,
-    color: '#224736',
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  title: {
-    fontSize: 34,
-    lineHeight: 40,
-    color: '#224736',
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#456253',
-  },
-  shellTabBar: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#2f7254',
-    backgroundColor: '#e9f4ee',
-    overflow: 'hidden',
-  },
-  shellTab: {
-    flex: 1,
-    minHeight: 44,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e9f4ee',
-    borderRightWidth: 1,
-    borderRightColor: '#c6dece',
-  },
-  shellTabLast: {
-    borderRightWidth: 0,
-  },
-  shellTabActive: {
-    backgroundColor: '#2f7254',
-  },
-  shellTabLabel: {
-    color: '#2f7254',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  shellTabLabelActive: {
-    color: '#ffffff',
-  },
-  scopeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  authModeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  scopePill: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#edf1ef',
-    borderWidth: 1,
-    borderColor: '#d7dfda',
-  },
-  scopePillActive: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
-  },
-  scopePillLabel: {
-    color: '#51665b',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  scopePillLabelActive: {
-    color: '#ffffff',
-  },
-  card: {
-    backgroundColor: '#fffdf7',
-    borderRadius: 24,
-    padding: 20,
-    gap: 14,
-    shadowColor: '#2b312d',
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-  cardTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#234936',
-  },
-  cardCopy: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#4d6357',
-  },
-  libraryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  librarySectionCard: {
-    width: '48%',
-    minWidth: 140,
-    flexGrow: 1,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: '#edf5ef',
-    borderWidth: 1,
-    borderColor: '#d7e2db',
-    gap: 8,
-  },
-  librarySectionTitle: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  librarySectionCopy: {
-    color: '#5a6b62',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  input: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#cad8cf',
-    backgroundColor: '#fffefb',
-    paddingHorizontal: 14,
-    paddingVertical: 15,
-    fontSize: 17,
-    color: '#234936',
-    minHeight: 52,
-  },
-  textArea: {
-    minHeight: 110,
-    textAlignVertical: 'top',
-  },
-  primaryButton: {
-    borderRadius: 18,
-    backgroundColor: '#3f7d5f',
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 54,
-  },
-  primaryButtonSmall: {
-    borderRadius: 16,
-    backgroundColor: '#3f7d5f',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  secondaryButton: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#c7d6cc',
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-    backgroundColor: '#f6f0df',
-  },
-  secondaryButtonSmall: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#c7d6cc',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    backgroundColor: '#f6f0df',
-  },
-  secondaryButtonText: {
-    color: '#254a37',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  errorText: {
-    color: '#9f2a26',
-    lineHeight: 20,
-    fontSize: 14,
-  },
-  noticeText: {
-    color: '#0b6e4f',
-    lineHeight: 20,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  loadingText: {
-    color: '#456253',
-    fontSize: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingInline: {
-    color: '#476257',
-    fontSize: 14,
-  },
-  claimPreview: {
-    backgroundColor: '#eef5ef',
-    borderRadius: 18,
-    padding: 14,
-    gap: 6,
-  },
-  claimPreviewLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1.3,
-    color: '#638070',
-    fontWeight: '700',
-  },
-  claimPreviewValue: {
-    fontSize: 16,
-    color: '#17352a',
-    fontWeight: '700',
-  },
-  stepSummary: {
-    backgroundColor: '#eef5ef',
-    borderRadius: 18,
-    padding: 14,
-    gap: 6,
-  },
-  stepSummaryTitle: {
-    color: '#17352a',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  stepSummaryCopy: {
-    color: '#556860',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  deviceRowCard: {
-    borderRadius: 18,
-    backgroundColor: '#f8f4ea',
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    padding: 14,
-    gap: 8,
-  },
-  deviceRowHeadline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  chatInboxHeader: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#f7f9f7',
-    padding: 14,
-    gap: 14,
-  },
-  chatInboxHeaderTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  chatInboxHeaderBody: {
-    flex: 1,
-    gap: 6,
-  },
-  chatInboxHeaderTitle: {
-    color: '#17352a',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  chatInboxHeaderCopy: {
-    color: '#556860',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  chatInboxStatusCopy: {
-    color: '#6b7f73',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  chatInboxSpaceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  chatInboxSpaceChip: {
-    minWidth: 150,
-    flexGrow: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
-  },
-  chatInboxSpaceChipActive: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
-  },
-  chatInboxSpaceChipLabel: {
-    color: '#17352a',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  chatInboxSpaceChipLabelActive: {
-    color: '#ffffff',
-  },
-  chatInboxSpaceChipMeta: {
-    color: '#61746a',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  chatInboxSpaceChipMetaActive: {
-    color: 'rgba(255,255,255,0.82)',
-  },
-  chatSessionRow: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  chatSessionRowActive: {
-    backgroundColor: '#eef5ef',
-    borderColor: '#c4ded1',
-  },
-  chatSessionRowExplorer: {
-    borderRadius: 12,
-  },
-  chatSessionAvatarRail: {
-    width: 44,
-    alignItems: 'center',
-    paddingTop: 2,
-  },
-  chatSessionAvatarBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chatSessionAvatarBubbleGroup: {
-    backgroundColor: '#17352a',
-  },
-  chatSessionAvatarBubbleShared: {
-    backgroundColor: '#eef5ef',
-  },
-  chatSessionAvatarBubblePrivate: {
-    backgroundColor: '#fff1cf',
-  },
-  chatSessionAvatarLabel: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  chatSessionAvatarLabelOnDark: {
-    color: '#ffffff',
-  },
-  chatSessionBody: {
-    flex: 1,
-    gap: 6,
-    minWidth: 0,
-  },
-  chatSessionTitle: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  chatSessionTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  chatSessionMeta: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  chatSessionTimestamp: {
-    color: '#61746a',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chatSessionPreview: {
-    color: '#556860',
-    fontSize: 14,
-    lineHeight: 20,
-    flex: 1,
-  },
-  chatDetailHeader: {
-    gap: 12,
-    marginBottom: 12,
-  },
-  chatDetailHeaderTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  chatDetailHeaderBody: {
-    gap: 6,
-  },
-  chatDetailTitle: {
-    color: '#17352a',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  chatDetailSubtitle: {
-    color: '#556860',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  chatDetailParticipants: {
-    color: '#4f6b5e',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
-  chatMessageGroup: {
-    gap: 6,
-    maxWidth: '88%',
-    marginBottom: 8,
-  },
-  chatMessageGroupUser: {
-    alignSelf: 'flex-end',
-  },
-  chatMessageGroupAssistant: {
-    alignSelf: 'flex-start',
-  },
-  chatStatusNotice: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#f7f9f7',
-    padding: 14,
-    gap: 8,
-    marginBottom: 10,
-  },
-  chatStatusNoticeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  chatStatusNoticeCopy: {
-    color: '#17352a',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  chatStatusTimestamp: {
-    color: '#61746a',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chatExplorerRail: {
-    gap: 10,
-    paddingHorizontal: 0,
-  },
-  chatTreeFolder: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fffef9',
-    overflow: 'hidden',
-  },
-  chatTreeFolderActive: {
-    borderColor: '#95b8a6',
-  },
-  chatTreeFolderHeader: {
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  chatTreeFolderHeaderBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  chatTreeFolderTitle: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  chatTreeFolderMeta: {
-    color: '#5d7266',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  chatTreeFolderChevron: {
-    color: '#95b8a6',
-    fontSize: 22,
-    lineHeight: 22,
-    fontWeight: '800',
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  chatTreeFolderBody: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 12,
-    gap: 10,
-  },
-  chatTreeAppList: {
-    marginTop: 4,
-    gap: 10,
-  },
-  chatTreeSectionDivider: {
-    height: 1,
-    backgroundColor: '#dfe8e2',
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  chatTreeSectionDividerCompact: {
-    height: 1,
-    backgroundColor: '#dfe8e2',
-    marginTop: 0,
-    marginBottom: 2,
-  },
-  chatTreeAppListHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 2,
-  },
-  chatTreeAppListToggle: {
-    color: '#95b8a6',
-    fontSize: 20,
-    lineHeight: 20,
-    fontWeight: '800',
-    minWidth: 22,
-    textAlign: 'center',
-  },
-  chatAppCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fffdf7',
-    padding: 12,
-    gap: 8,
-  },
-  chatAppHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  chatAppTitle: {
-    color: '#17352a',
-    fontSize: 15,
-    fontWeight: '800',
-    flex: 1,
-    minWidth: 0,
-  },
-  chatAppCopy: {
-    color: '#56695e',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  chatEmptyStateCopy: {
-    color: '#456556',
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  chatScopeNavRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-    width: '100%',
-  },
-  chatScopeNavTabs: {
-    flex: 1,
-    flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2f7254',
-    backgroundColor: '#e9f4ee',
-    overflow: 'hidden',
-  },
-  chatScopeNavTab: {
-    flex: 1,
-    minHeight: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRightWidth: 1,
-    borderRightColor: '#c6dece',
-  },
-  chatScopeNavTabLast: {
-    borderRightWidth: 0,
-  },
-  chatScopeNavTabActive: {
-    backgroundColor: '#2f7254',
-  },
-  chatScopeNavTabLabel: {
-    color: '#2f7254',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  chatScopeNavTabLabelActive: {
-    color: '#ffffff',
-  },
-  chatScopeRefreshButton: {
-    minWidth: 42,
-    minHeight: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2f7254',
-    backgroundColor: '#2f7254',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  chatScopeRefreshIcon: {
-    color: '#ffffff',
-    fontSize: 19,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  chatTreeEmbeddedPanel: {
-    gap: 12,
-  },
-  statusTagOnline: {
-    color: '#0b6e4f',
-    backgroundColor: '#e8f5ee',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statusTagOffline: {
-    color: '#7b4630',
-    backgroundColor: '#f8e7df',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  chatBubble: {
-    borderRadius: 20,
-    padding: 14,
-    gap: 8,
-  },
-  chatBubbleMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  chatBubbleUser: {
-    backgroundColor: '#17352a',
-  },
-  chatBubbleAssistant: {
-    backgroundColor: '#eef5ef',
-  },
-  chatBubblePending: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#b9c8c0',
-    opacity: 0.92,
-  },
-  chatBubbleCopy: {
-    color: '#17352a',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  chatBubbleCopyUser: {
-    color: '#ffffff',
-  },
-  chatBubbleCopyPending: {
-    color: '#4f6b5e',
-  },
-  chatBubbleTimestamp: {
-    color: '#61746a',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chatBubbleTimestampUser: {
-    color: 'rgba(255,255,255,0.8)',
-  },
-  groupParticipantPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#d7dfda',
-    backgroundColor: '#fffdf8',
-  },
-  groupParticipantPillSelf: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
-  },
-  groupParticipantPillOnline: {
-    backgroundColor: '#e8f5ee',
-    borderColor: '#c4ded1',
-  },
-  groupParticipantPillOffline: {
-    backgroundColor: '#f8e7df',
-    borderColor: '#eccabc',
-  },
-  groupParticipantLabel: {
-    color: '#51665b',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  groupParticipantLabelSelf: {
-    color: '#ffffff',
-  },
-  groupParticipantLabelOnline: {
-    color: '#0b6e4f',
-  },
-  groupParticipantLabelOffline: {
-    color: '#7b4630',
-  },
-  networkRow: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  networkRowDisabled: {
-    opacity: 0.55,
-  },
-  networkLeft: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  networkName: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  networkMeta: {
-    color: '#61746a',
-    fontSize: 13,
-  },
-  networkWarning: {
-    color: '#8a5a00',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  networkTags: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  tag: {
-    color: '#0b6e4f',
-    backgroundColor: '#e8f5ee',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tagWarning: {
-    color: '#8a5a00',
-    backgroundColor: '#fff1cf',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tagMuted: {
-    color: '#58655e',
-    backgroundColor: '#eef1ef',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  selectionCard: {
-    backgroundColor: '#eef5ef',
-    borderRadius: 20,
-    padding: 16,
-    gap: 10,
-  },
-  selectionLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: '#4f6b5e',
-    fontWeight: '700',
-  },
-  selectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#17352a',
-  },
-  selectionCopy: {
-    color: '#556860',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  statusText: {
-    color: '#375346',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  linkText: {
-    color: '#0b6e4f',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  linkTextDisabled: {
-    color: '#6d7d74',
-  },
-  rowAction: {
-    flexShrink: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#e8f5ee',
-    borderWidth: 1,
-    borderColor: '#c4ded1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 88,
-  },
-  rowActionDisabled: {
-    backgroundColor: '#edf1ef',
-    borderColor: '#d6dfd9',
-  },
-  networkSheetBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(8,22,16,0.32)',
-    padding: 12,
-  },
-  networkSheetCard: {
-    backgroundColor: '#fffdf8',
-    borderRadius: 24,
-    padding: 18,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-  },
-  debugCard: {
-    backgroundColor: '#f3f7f4',
-    borderRadius: 18,
-    padding: 14,
-    gap: 10,
-  },
-  debugTitle: {
-    color: '#17352a',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  debugCopy: {
-    color: '#5a6b62',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  debugRow: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  webviewFrame: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
-  },
-  webview: {
-    backgroundColor: '#fff',
-  },
-  successBox: {
-    backgroundColor: '#e7f5ee',
-    borderRadius: 18,
-    padding: 16,
-    gap: 8,
-  },
-  portalBox: {
-    backgroundColor: '#fff8e6',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#f0d98a',
-    padding: 16,
-    gap: 10,
-  },
-  successTitle: {
-    color: '#0b6e4f',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  successCopy: {
-    color: '#355244',
-    lineHeight: 21,
-  },
-  scannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#081610',
-  },
-  modalSurface: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#f8f3e6',
-    paddingTop: 18,
-  },
-  spaceCreatorSheet: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: '#fffdf7',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: '#d6dfd9',
-    overflow: 'hidden',
-  },
-  spaceCreatorSheetContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 20,
-    gap: 14,
-  },
-  spaceCreatorFooter: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 18,
-    borderTopWidth: 1,
-    borderTopColor: '#e3ebe5',
-    backgroundColor: '#fffdf7',
-  },
-  scanner: {
-    flex: 1,
-  },
-  scannerChrome: {
-    padding: 20,
-    gap: 10,
-    backgroundColor: 'rgba(8,22,16,0.92)',
-  },
-  scannerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#f7f4ec',
-  },
-  scannerCopy: {
-    color: '#d2ddd5',
-    lineHeight: 21,
-  },
-});

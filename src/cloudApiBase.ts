@@ -17,3 +17,7 @@ export function setCloudApiBase(value: string | null | undefined): void {
 export function getCloudApiBase(): string {
   return cloudApiBase;
 }
+
+export function initializeCloudApiBase(value: string | null | undefined): void {
+  setCloudApiBase(value ?? DEFAULT_CLOUD_API_BASE);
+}
