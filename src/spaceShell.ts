@@ -64,7 +64,7 @@ export function describeSpaceCounts(kind: SpaceKind, threadCount: number, member
   const memberLabel = '人';
   const conversationLabel =
     kind === 'shared'
-      ? `${threadCount} 个聊天`
+      ? `${threadCount} 个话题入口`
       : describeTopicCount(threadCount);
   return `${conversationLabel} · ${memberCount}${memberLabel}`;
 }
@@ -103,7 +103,7 @@ export function describeCurrentSpaceSummaryCopy(
 ): string {
   const conversationLabel =
     spaceKind === 'shared'
-      ? `${threadCount} ${threadCount === 1 ? 'chat' : 'chats'}`
+      ? `${threadCount} 个话题入口`
       : describeTopicCount(threadCount);
   return `当前查看：${spaceName}（${spaceKindLabel}），已包含 ${conversationLabel}。`;
 }

@@ -71,7 +71,6 @@ import {
   describeTaskRunStartedAt,
   describeTaskRunStatus,
   describeTaskSchedule,
-  describeUiDateTime,
   describeShellSubtitle,
   PHASE_ONE_TABS,
   resolvePhaseOneSurface,
@@ -353,6 +352,43 @@ type ChatTimelineGroup =
     };
 
 const CHAT_PENDING_FALLBACK = 'Sparkbox 正在准备回复，请稍候。';
+const CHAT_SESSION_CACHE_TTL_MS = 3 * 60 * 1000;
+
+type ChatSessionCacheEntry = {
+  sessions: HouseholdChatSessionSummary[];
+  fetchedAt: number;
+};
+
+type ChatListSyncSource = 'idle' | 'cache' | 'network';
+
+function buildChatSessionCacheKey(scope: ChatSessionScope, spaceId: string): string {
+  return `${scope}::${spaceId || 'none'}`;
+}
+
+function formatChatSyncDateTime(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(parsed);
+}
+
+function describeSpaceSessionCountCopy(sessionCount: number | undefined, memberCount: number): string {
+  const normalizedCount = typeof sessionCount === 'number' ? Math.max(0, sessionCount) : null;
+  const sessionsLabel = normalizedCount === null ? '会话数加载中' : `${normalizedCount}个会话`;
+  return `${sessionsLabel} · ${memberCount}人`;
+}
 
 function describeTimelineSenderLabel(message: ChatTimelineMessage, chatSendPhase: ChatSendPhase): string {
   if (message.pending) {
@@ -618,9 +654,13 @@ function App() {
   const [spaceMembersEditorIds, setSpaceMembersEditorIds] = useState<string[]>([]);
   const [chatScope, setChatScope] = useState<ChatSessionScope>('family');
   const [chatSessions, setChatSessions] = useState<HouseholdChatSessionSummary[]>([]);
+  const [spaceSessionCounts, setSpaceSessionCounts] = useState<Record<string, number>>({});
   const [activeChatSessionId, setActiveChatSessionId] = useState('');
   const [activeChatSession, setActiveChatSession] = useState<HouseholdChatSessionDetail | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatListRefreshBusy, setChatListRefreshBusy] = useState(false);
+  const [chatListSyncSource, setChatListSyncSource] = useState<ChatListSyncSource>('idle');
+  const [chatListLastSyncedAt, setChatListLastSyncedAt] = useState(0);
   const [chatSendPhase, setChatSendPhase] = useState<ChatSendPhase>('idle');
   const [chatPendingMessage, setChatPendingMessage] = useState<ChatTimelineMessage | null>(null);
   const [chatPendingNoteIndex, setChatPendingNoteIndex] = useState(0);
@@ -706,6 +746,7 @@ function App() {
   const lastOpenedPortalUrlRef = useRef<string | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const stepOffsetsRef = useRef<Record<number, number>>({});
+  const chatSessionCacheRef = useRef<Record<string, ChatSessionCacheEntry>>({});
   const setupDeviceId = claimPayload?.deviceId || reprovisionDeviceId;
   const setupStepLabels = buildSetupStepLabels(setupFlowKind);
   const claimStepVisible = shouldShowClaimStep(setupFlowKind);
@@ -749,6 +790,61 @@ function App() {
         {ownerConsoleBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
       </>
     ) : null;
+
+  function readFreshChatSessionCache(
+    scope: ChatSessionScope,
+    spaceId: string,
+  ): ChatSessionCacheEntry | null {
+    const key = buildChatSessionCacheKey(scope, spaceId);
+    const cached = chatSessionCacheRef.current[key];
+    if (!cached) {
+      return null;
+    }
+    if (Date.now() - cached.fetchedAt > CHAT_SESSION_CACHE_TTL_MS) {
+      delete chatSessionCacheRef.current[key];
+      return null;
+    }
+    return cached;
+  }
+
+  function writeChatSessionCache(
+    scope: ChatSessionScope,
+    spaceId: string,
+    sessions: HouseholdChatSessionSummary[],
+  ): void {
+    const key = buildChatSessionCacheKey(scope, spaceId);
+    chatSessionCacheRef.current[key] = {
+      sessions,
+      fetchedAt: Date.now(),
+    };
+  }
+
+  function clearChatSessionCache(scope?: ChatSessionScope, spaceId?: string): void {
+    if (scope && typeof spaceId === 'string') {
+      delete chatSessionCacheRef.current[buildChatSessionCacheKey(scope, spaceId)];
+      return;
+    }
+    chatSessionCacheRef.current = {};
+  }
+
+  async function fetchChatSessions(
+    scope: ChatSessionScope,
+    spaceId: string,
+    options?: { force?: boolean },
+  ): Promise<HouseholdChatSessionSummary[]> {
+    if (!session?.token) {
+      return [];
+    }
+    if (!options?.force) {
+      const cached = readFreshChatSessionCache(scope, spaceId);
+      if (cached) {
+        return cached.sessions;
+      }
+    }
+    const sessions = await getHouseholdChatSessions(session.token, scope, { spaceId });
+    writeChatSessionCache(scope, spaceId, sessions);
+    return sessions;
+  }
 
   useEffect(() => {
     void (async () => {
@@ -1501,16 +1597,21 @@ function App() {
 
   useEffect(() => {
     if (!session?.token) {
+      clearChatSessionCache();
       setHomeDevices([]);
       setHomeMembers([]);
       setHomePendingInvites([]);
       setHomeRecentActivity([]);
       setSpaces([]);
+      setSpaceSessionCounts({});
       setActiveSpaceId('');
       setPreferredActiveSpaceId('');
       setLoadedActiveSpaceStorageKey('');
       setActiveSpaceDetail(null);
       setChatSessions([]);
+      setChatListRefreshBusy(false);
+      setChatListSyncSource('idle');
+      setChatListLastSyncedAt(0);
       setActiveChatSessionId('');
       setActiveChatSession(null);
       setSpaceLibrary({ memories: [], summaries: [] });
@@ -1646,28 +1747,93 @@ function App() {
   }, [activeSpaceId]);
 
   useEffect(() => {
+    if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token || spaces.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const entries = await Promise.all(
+          spaces.map(async (space) => {
+            const mapped = mapSpaceKindToLegacyScope(space.kind);
+            const sessions = await fetchChatSessions(mapped.chatScope, space.id, { force: false });
+            return [space.id, sessions.length] as const;
+          }),
+        );
+        if (cancelled) {
+          return;
+        }
+        const nextCounts = Object.fromEntries(entries) as Record<string, number>;
+        setSpaceSessionCounts((current) => ({
+          ...current,
+          ...nextCounts,
+        }));
+      } catch {
+        if (!cancelled) {
+          // Keep existing counts if one of the background loads fails.
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.token, shellSurface, shellTab, spaces]);
+
+  useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token) {
       return;
     }
     // Chat session summaries are tab-scoped and space-scoped. Refresh them when
     // either the space or the family/private scope changes.
+    const cached = readFreshChatSessionCache(chatScope, activeChatSpaceId || '');
+    if (cached) {
+      setChatError('');
+      setChatListRefreshBusy(false);
+      setChatListSyncSource('cache');
+      setChatListLastSyncedAt(cached.fetchedAt);
+      setChatSessions(cached.sessions);
+      if (activeChatSpaceId) {
+        setSpaceSessionCounts((current) => ({
+          ...current,
+          [activeChatSpaceId]: cached.sessions.length,
+        }));
+      }
+      setActiveChatSessionId((current) => {
+        if (current && cached.sessions.some((sessionItem) => sessionItem.id === current)) {
+          return current;
+        }
+        return '';
+      });
+      return;
+    }
+
     let cancelled = false;
     setChatBusy(true);
+    setChatListRefreshBusy(true);
     setChatError('');
     void (async () => {
       try {
-        const sessions = await getHouseholdChatSessions(session.token, chatScope, {
-          spaceId: activeChatSpaceId,
-        });
+        const sessions = await fetchChatSessions(chatScope, activeChatSpaceId || '', { force: true });
         if (cancelled) {
           return;
         }
+        const cachedEntry = readFreshChatSessionCache(chatScope, activeChatSpaceId || '');
+        setChatListSyncSource('network');
+        setChatListLastSyncedAt(cachedEntry?.fetchedAt ?? Date.now());
         setChatSessions(sessions);
+        if (activeChatSpaceId) {
+          setSpaceSessionCounts((current) => ({
+            ...current,
+            [activeChatSpaceId]: sessions.length,
+          }));
+        }
         setActiveChatSessionId((current) => {
           if (current && sessions.some((sessionItem) => sessionItem.id === current)) {
             return current;
           }
-          return sessions[0]?.id ?? '';
+          return '';
         });
       } catch (error) {
         if (cancelled) {
@@ -1677,6 +1843,7 @@ function App() {
       } finally {
         if (!cancelled) {
           setChatBusy(false);
+          setChatListRefreshBusy(false);
         }
       }
     })();
@@ -2604,27 +2771,38 @@ function App() {
     setShellSurface('onboarding');
   }
 
-  async function refreshChatSessions(): Promise<void> {
+  async function refreshChatSessions(options?: { force?: boolean }): Promise<void> {
     if (!session?.token) {
       return;
     }
     setChatBusy(true);
+    setChatListRefreshBusy(true);
     setChatError('');
     try {
-      const sessions = await getHouseholdChatSessions(session.token, chatScope, {
-        spaceId: activeChatSpaceId,
+      const sessions = await fetchChatSessions(chatScope, activeChatSpaceId || '', {
+        force: options?.force === true,
       });
+      const cachedEntry = readFreshChatSessionCache(chatScope, activeChatSpaceId || '');
+      setChatListSyncSource(options?.force ? 'network' : cachedEntry ? 'cache' : 'network');
+      setChatListLastSyncedAt(cachedEntry?.fetchedAt ?? Date.now());
       setChatSessions(sessions);
+      if (activeChatSpaceId) {
+        setSpaceSessionCounts((current) => ({
+          ...current,
+          [activeChatSpaceId]: sessions.length,
+        }));
+      }
       setActiveChatSessionId((current) => {
         if (current && sessions.some((item) => item.id === current)) {
           return current;
         }
-        return sessions[0]?.id ?? '';
+        return '';
       });
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not load chat sessions.');
     } finally {
       setChatBusy(false);
+      setChatListRefreshBusy(false);
     }
   }
 
@@ -2665,10 +2843,14 @@ function App() {
       );
       setChatScope('private');
       setActiveChatSessionId(sideChannel.sessionId);
-      const sessions = await getHouseholdChatSessions(session.token, 'private', {
-        spaceId: activeSpaceId,
+      const sessions = await fetchChatSessions('private', activeSpaceId, {
+        force: true,
       });
       setChatSessions(sessions);
+      setSpaceSessionCounts((current) => ({
+        ...current,
+        [activeSpaceId]: sessions.length,
+      }));
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not open the private chat right now.');
     } finally {
@@ -2729,13 +2911,15 @@ function App() {
       setChatScope(opened.scope);
       setActiveChatSessionId(opened.id);
       const [sessions, detail, refreshedSpace] = await Promise.all([
-        getHouseholdChatSessions(session.token, opened.scope, {
-          spaceId: activeSpaceId,
-        }),
+        fetchChatSessions(opened.scope, activeSpaceId, { force: true }),
         getHouseholdChatSession(session.token, opened.id),
         getHouseholdSpaceDetail(session.token, activeSpaceId),
       ]);
       setChatSessions(sessions);
+      setSpaceSessionCounts((current) => ({
+        ...current,
+        [activeSpaceId]: sessions.length,
+      }));
       setActiveChatSession(detail);
       setActiveSpaceDetail(refreshedSpace);
     } catch (error) {
@@ -2802,7 +2986,8 @@ function App() {
         setActiveChatSessionId(created.id);
       }
       setChatSessionEditorOpen(false);
-      await refreshChatSessions();
+      clearChatSessionCache(chatScope, activeChatSpaceId);
+      await refreshChatSessions({ force: true });
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not save this chat.');
     } finally {
@@ -2982,7 +3167,8 @@ function App() {
       await deleteHouseholdChatSession(session.token, deletedId);
       setActiveChatSession(null);
       setActiveChatSessionId('');
-      await refreshChatSessions();
+      clearChatSessionCache(chatScope, activeChatSpaceId);
+      await refreshChatSessions({ force: true });
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not delete this chat.');
     } finally {
@@ -3471,6 +3657,14 @@ function App() {
   const canSubmitWifi = Boolean(selectedSsid.trim()) && !provisionBusy;
   const libraryTabActive = shellTab === 'library';
 
+  function handleShellTabSelect(tabId: ShellTab): void {
+    setShellTab(tabId);
+    if (tabId === 'chats') {
+      setActiveChatSessionId('');
+      setActiveChatSession(null);
+    }
+  }
+
   if (booting) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -3504,18 +3698,12 @@ function App() {
           <ShellHeader
             styles={styles}
             householdName={householdName}
-            subtitle={describeShellSubtitle({
-              shellTab,
-              activeSpaceName: activeSpace?.name || '',
-              activeSpaceKindLabel: activeSpaceKindLabel || '空间',
-              spacesReady: !waitingForSpaces,
-            })}
             tabs={PHASE_ONE_TABS.map((tab) => ({
               id: tab.key,
               label: tab.label,
               active: tab.key === shellTab,
             }))}
-            onSelectTab={setShellTab}
+            onSelectTab={handleShellTabSelect}
           />
 
           {libraryTabActive ? (
@@ -3530,7 +3718,11 @@ function App() {
             />
           ) : null}
 
-          <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.content}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
+            contentContainerStyle={shellTab === 'chats' ? styles.chatContent : styles.content}
+          >
             {shellTab === 'chats' ? (
               <ChatsPane
                 styles={styles}
@@ -3539,7 +3731,7 @@ function App() {
                   headerCopy: describeShellSubtitle({
                     shellTab: 'chats',
                     activeSpaceName: activeSpace?.name || '',
-                    activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+                    activeSpaceKindLabel: activeSpaceKindLabel || '空间',
                     spacesReady: !waitingForSpaces,
                   }),
                   spacesError,
@@ -3557,6 +3749,17 @@ function App() {
                           : 'Select a space to open its chats.'
                         : 'Sparkbox is offline right now. You can still browse chat history and settings.',
                   chatSendPhaseCopy: chatSendPhase !== 'idle' ? describeChatSendPhase(chatSendPhase) : '',
+                  chatListRefreshing: chatListRefreshBusy,
+                  chatListSyncCopy:
+                    chatListLastSyncedAt > 0
+                      ? `${
+                          chatListSyncSource === 'cache'
+                            ? '已从本地缓存读取'
+                            : chatListSyncSource === 'network'
+                              ? '已与云端同步'
+                              : '聊天列表已就绪'
+                        } · 最近同步 ${formatChatSyncDateTime(chatListLastSyncedAt)}`
+                      : '',
                   chatError,
                   scopeOptions: (['family', 'private'] as ChatSessionScope[]).map((scope) => ({
                     id: scope,
@@ -3618,13 +3821,13 @@ function App() {
                   spaceChips: spaces.map((space) => ({
                     id: space.id,
                     name: space.name,
-                    countsCopy: describeSpaceCounts(space.kind, space.threadCount, space.memberCount),
+                    countsCopy: describeSpaceSessionCountCopy(spaceSessionCounts[space.id], space.memberCount),
                     active: space.id === activeSpaceId,
                   })),
                   onOpenSpaceCreator: openSpaceCreator,
                   onSelectSpace: setActiveSpaceId,
                   onSelectScope: (scopeId: string) => handleChatScopeChange(scopeId as ChatSessionScope),
-                  onRefresh: () => void refreshChatSessions(),
+                  onRefresh: () => void refreshChatSessions({ force: true }),
                   onCreateChat: () => openChatSessionEditor(),
                   onOpenSession: setActiveChatSessionId,
                 }}
@@ -4202,6 +4405,10 @@ const styles = StyleSheet.create({
     paddingBottom: 56,
     gap: 14,
   },
+  chatContent: {
+    paddingBottom: 56,
+    gap: 10,
+  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -4514,11 +4721,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chatInboxHeader: {
-    borderRadius: 24,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#d6dfd9',
     backgroundColor: '#f7f9f7',
-    padding: 16,
+    padding: 14,
     gap: 14,
   },
   chatInboxHeaderTopRow: {
@@ -4540,6 +4747,11 @@ const styles = StyleSheet.create({
     color: '#556860',
     fontSize: 14,
     lineHeight: 20,
+  },
+  chatInboxStatusCopy: {
+    color: '#6b7f73',
+    fontSize: 12,
+    lineHeight: 18,
   },
   chatInboxSpaceRow: {
     flexDirection: 'row',
@@ -4578,7 +4790,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.82)',
   },
   chatSessionRow: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#d6dfd9',
     backgroundColor: '#fff',
@@ -4590,6 +4802,9 @@ const styles = StyleSheet.create({
   chatSessionRowActive: {
     backgroundColor: '#eef5ef',
     borderColor: '#c4ded1',
+  },
+  chatSessionRowExplorer: {
+    borderRadius: 12,
   },
   chatSessionAvatarRail: {
     width: 44,
@@ -4715,6 +4930,62 @@ const styles = StyleSheet.create({
     color: '#61746a',
     fontSize: 12,
     fontWeight: '600',
+  },
+  chatExplorerRail: {
+    gap: 10,
+    paddingHorizontal: 0,
+  },
+  chatTreeFolder: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#fffef9',
+    overflow: 'hidden',
+  },
+  chatTreeFolderActive: {
+    borderColor: '#95b8a6',
+  },
+  chatTreeFolderHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chatTreeFolderHeaderBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  chatTreeFolderTitle: {
+    color: '#17352a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  chatTreeFolderMeta: {
+    color: '#5d7266',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  chatTreeFolderChevron: {
+    color: '#95b8a6',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '800',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  chatTreeFolderBody: {
+    borderTopWidth: 1,
+    borderTopColor: '#e3ebe5',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  chatTreeEmbeddedPanel: {
+    gap: 12,
   },
   statusTagOnline: {
     color: '#0b6e4f',
@@ -5008,6 +5279,35 @@ const styles = StyleSheet.create({
   scannerOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#081610',
+  },
+  modalSurface: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#f8f3e6',
+    paddingTop: 18,
+  },
+  spaceCreatorSheet: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#fffdf7',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    overflow: 'hidden',
+  },
+  spaceCreatorSheetContent: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 20,
+    gap: 14,
+  },
+  spaceCreatorFooter: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 18,
+    borderTopWidth: 1,
+    borderTopColor: '#e3ebe5',
+    backgroundColor: '#fffdf7',
   },
   scanner: {
     flex: 1,

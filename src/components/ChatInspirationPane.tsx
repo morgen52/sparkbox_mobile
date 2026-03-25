@@ -28,6 +28,7 @@ type ReadyCatalogApp = {
 
 type ChatInspirationPaneProps = {
   styles: Record<string, any>;
+  embedded?: boolean;
   activeSpaceName: string;
   activeSpaceTemplateLabel: string;
   canManage: boolean;
@@ -43,6 +44,7 @@ type ChatInspirationPaneProps = {
 
 export function ChatInspirationPane({
   styles,
+  embedded = false,
   activeSpaceName,
   activeSpaceTemplateLabel,
   canManage,
@@ -56,7 +58,7 @@ export function ChatInspirationPane({
   onOpenAllFamilyApps,
 }: ChatInspirationPaneProps) {
   return (
-    <View style={styles.card}>
+    <View style={embedded ? styles.chatTreeEmbeddedPanel : styles.card}>
       <Text style={styles.cardTitle}>{activeSpaceName} 的灵感建议</Text>
       <Text style={styles.cardCopy}>
         家庭应用能让 Sparkbox 更贴近日常场景。先在设备上安装，再按需在合适空间中启用。

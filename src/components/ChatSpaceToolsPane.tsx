@@ -1,12 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-
-type ThreadRow = {
-  id: string;
-  title: string;
-  badge: string;
-  copy: string;
-};
+import { Pressable, Text, View } from 'react-native';
 
 type EnabledFamilyApp = {
   slug: string;
@@ -31,13 +24,10 @@ type ReadyInstalledFamilyApp = {
 
 type ChatSpaceToolsPaneProps = {
   styles: Record<string, any>;
-  waitingForSpaces: boolean;
+  embedded?: boolean;
   title: string;
   copy: string;
   relayNotice: string;
-  threadRows: ThreadRow[];
-  emptyThreadCopy: string;
-  onOpenThread: (threadId: string) => void;
   showRelayHelper: boolean;
   canOpenRelay: boolean;
   onOpenRelay: () => void;
@@ -56,13 +46,10 @@ type ChatSpaceToolsPaneProps = {
 
 export function ChatSpaceToolsPane({
   styles,
-  waitingForSpaces,
+  embedded = false,
   title,
   copy,
   relayNotice,
-  threadRows,
-  emptyThreadCopy,
-  onOpenThread,
   showRelayHelper,
   canOpenRelay,
   onOpenRelay,
@@ -79,29 +66,10 @@ export function ChatSpaceToolsPane({
   onEnableFamilyApp,
 }: ChatSpaceToolsPaneProps) {
   return (
-    <View style={styles.card}>
+    <View style={embedded ? styles.chatTreeEmbeddedPanel : styles.card}>
       <Text style={styles.cardTitle}>{title}</Text>
       <Text style={styles.cardCopy}>{copy}</Text>
       {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
-      {waitingForSpaces ? (
-        <ActivityIndicator color="#0b6e4f" />
-      ) : threadRows.length ? (
-        threadRows.map((thread) => (
-          <Pressable
-            key={thread.id}
-            style={styles.deviceRowCard}
-            onPress={() => onOpenThread(thread.id)}
-          >
-            <View style={styles.deviceRowHeadline}>
-              <Text style={styles.networkName}>{thread.title}</Text>
-              <Text style={styles.tagMuted}>{thread.badge}</Text>
-            </View>
-            <Text style={styles.cardCopy}>{thread.copy}</Text>
-          </Pressable>
-        ))
-      ) : (
-        <Text style={styles.cardCopy}>{emptyThreadCopy}</Text>
-      )}
       {showRelayHelper ? (
         <>
           <Text style={styles.cardCopy}>

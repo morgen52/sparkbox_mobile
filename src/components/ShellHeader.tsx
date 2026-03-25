@@ -5,7 +5,6 @@ import type { ShellTab } from '../householdState';
 type ShellHeaderProps = {
   styles: Record<string, any>;
   householdName: string;
-  subtitle: string;
   tabs: Array<{
     id: ShellTab;
     label: string;
@@ -17,7 +16,6 @@ type ShellHeaderProps = {
 export function ShellHeader({
   styles,
   householdName,
-  subtitle,
   tabs,
   onSelectTab,
 }: ShellHeaderProps) {
@@ -26,7 +24,6 @@ export function ShellHeader({
       <View style={styles.hero}>
         <Text style={styles.eyebrow}>Sparkbox</Text>
         <Text style={styles.title}>{householdName}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
 
       <View style={styles.shellTabBar}>
