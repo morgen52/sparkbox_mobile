@@ -257,6 +257,7 @@ import {
   getCurrentSsid,
   openInternetPanel,
 } from './src/wifiOnboarding';
+import { setCloudApiBase } from './src/cloudApiBase';
 import { buildInvitePreviewSummary, shouldLoadInvitePreview } from './src/invitePreview';
 
 
@@ -268,6 +269,7 @@ if (!globalWithBuffer.Buffer) {
 const CLOUD_API_BASE =
   (Constants.expoConfig?.extra?.cloudApiBase as string | undefined)?.replace(/\/$/, '') ??
   'https://morgen52.site/familyserver';
+setCloudApiBase(CLOUD_API_BASE);
 
 const STORAGE_KEY = 'sparkbox.mobile.session';
 const ACTIVE_SPACE_STORAGE_KEY_PREFIX = 'sparkbox.mobile.activeSpace';

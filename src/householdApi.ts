@@ -1,4 +1,4 @@
-const CLOUD_API_BASE = 'https://morgen52.site/familyserver';
+import { getCloudApiBase } from './cloudApiBase';
 
 export type DeviceSummary = {
   device_id: string;
@@ -993,7 +993,7 @@ export async function streamHouseholdChatSessionMessage(
       }
     };
 
-    xhr.open('POST', `${CLOUD_API_BASE}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`);
+    xhr.open('POST', `${getCloudApiBase()}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`);
     xhr.setRequestHeader('Accept', 'text/event-stream');
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1246,7 +1246,7 @@ export async function uploadHouseholdFiles(
   if (options.spaceId) {
     params.set('space_id', options.spaceId);
   }
-  const response = await fetch(`${CLOUD_API_BASE}/api/files/upload?${params.toString()}`, {
+  const response = await fetch(`${getCloudApiBase()}/api/files/upload?${params.toString()}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -1278,7 +1278,7 @@ export function buildHouseholdFileDownloadUrl(
   if (options.spaceId) {
     params.set('space_id', options.spaceId);
   }
-  return `${CLOUD_API_BASE}/api/files/download?${params.toString()}`;
+  return `${getCloudApiBase()}/api/files/download?${params.toString()}`;
 }
 
 export async function getDeviceDiagnostics(
@@ -1594,7 +1594,7 @@ async function cloudJson<T>(
     body?: unknown;
   },
 ): Promise<T> {
-  const response = await fetch(`${CLOUD_API_BASE}${path}`, {
+  const response = await fetch(`${getCloudApiBase()}${path}`, {
     method: options.method ?? 'GET',
     headers: {
       Accept: 'application/json',
