@@ -29,18 +29,18 @@ export function canReprovisionDeviceFromSettings(role: string): boolean {
 }
 
 const DEVICE_STATUS_LABELS: Record<string, string> = {
-  bound_online: 'Connected and ready',
-  bound_offline: 'Offline right now',
-  claimed: 'Attached to your household',
-  local_setup: 'Ready for setup',
-  setup_ap_active: 'Ready for setup',
-  provisioning: 'Finishing setup',
+  bound_online: '在线可用',
+  bound_offline: '当前离线',
+  claimed: '已绑定到家庭',
+  local_setup: '等待配置',
+  setup_ap_active: '等待配置',
+  provisioning: '正在完成配置',
 };
 
 export function describeDeviceStatus(status: string): string {
   const normalized = String(status).trim();
   if (!normalized) {
-    return 'Status unavailable';
+    return '状态未知';
   }
   return (
     DEVICE_STATUS_LABELS[normalized] ??
@@ -54,9 +54,9 @@ export function describeDeviceStatus(status: string): string {
 
 export function describeDeviceLabel(deviceId: string, index: number, total: number): string {
   if (total <= 1) {
-    return 'Sparkbox device';
+    return 'Sparkbox 设备';
   }
-  return `Sparkbox device ${index + 1}`;
+  return `Sparkbox 设备 ${index + 1}`;
 }
 
 export function describeSetupDeviceLabel(deviceId?: string | null): string {
@@ -66,17 +66,17 @@ export function describeSetupDeviceLabel(deviceId?: string | null): string {
 export function describeOwnerConsoleModelStatus(service?: string | null, api?: string | null): string {
   const serviceState = String(service ?? '').trim().toLowerCase();
   const apiState = String(api ?? '').trim().toLowerCase();
-  const modelLine = serviceState === 'active' ? 'Ready' : 'Needs attention';
-  const apiLine = apiState === 'ok' ? 'Connection OK' : 'Connection needs attention';
-  return `On-device AI: ${modelLine} · ${apiLine}`;
+  const modelLine = serviceState === 'active' ? '正常' : '需处理';
+  const apiLine = apiState === 'ok' ? '连接正常' : '连接异常';
+  return `本地 AI：${modelLine} · ${apiLine}`;
 }
 
 export function describeOwnerConsoleRuntimeStatus(daemon?: string | null, gateway?: string | null): string {
   const daemonState = String(daemon ?? '').trim().toLowerCase();
   const gatewayState = String(gateway ?? '').trim().toLowerCase();
-  const runtimeLine = daemonState === 'ok' ? 'Running' : 'Needs attention';
-  const bridgeLine = gatewayState === 'ok' ? 'Home connection ready' : 'Home connection needs attention';
-  return `Sparkbox service: ${runtimeLine} · ${bridgeLine}`;
+  const runtimeLine = daemonState === 'ok' ? '运行中' : '需处理';
+  const bridgeLine = gatewayState === 'ok' ? '家庭连接正常' : '家庭连接异常';
+  return `设备服务：${runtimeLine} · ${bridgeLine}`;
 }
 
 export function describeOwnerConsoleInference(
@@ -87,71 +87,71 @@ export function describeOwnerConsoleInference(
   const queued = Math.max(0, Number(queuedRequests ?? 0) || 0);
   const limit = Math.max(0, Number(queueLimit ?? 0) || 0);
   if (queued === 0) {
-    return `Requests right now: None · Queue room: ${limit}`;
+    return `当前请求：无 · 队列容量：${limit}`;
   }
-  return `Requests right now: ${queued} in line · ${active ? 'Sparkbox is busy' : `Queue room: ${limit}`}`;
+  return `当前请求：排队 ${queued} 个 · ${active ? '设备忙碌中' : `剩余容量：${limit}`}`;
 }
 
 export function describeOwnerRuntimeQueueSummary(queuedRequests?: number | null, queueLimit?: number | null): string {
   const queued = Math.max(0, Number(queuedRequests ?? 0) || 0);
   const limit = Math.max(0, Number(queueLimit ?? 0) || 0);
   if (queued === 0) {
-    return `Nothing is waiting right now. Sparkbox still has room for ${limit} requests.`;
+    return `当前无人排队，设备还可处理 ${limit} 个请求。`;
   }
-  return `${queued} requests are waiting. Sparkbox can hold up to ${limit} at once.`;
+  return `当前有 ${queued} 个请求排队，队列上限 ${limit}。`;
 }
 
 export function describeOwnerRuntimeActiveRequest(username?: string | null): string {
   const normalized = String(username ?? '').trim();
   if (!normalized) {
-    return 'No one is waiting on Sparkbox right now.';
+    return '当前没有人等待设备处理。';
   }
-  return 'Sparkbox is helping someone right now.';
+  return '设备正在处理请求。';
 }
 
 export function describeOwnerRuntimeQueueEntry(username?: string | null, position?: number | null): string {
   const slot = Math.max(0, Number(position ?? 0) || 0);
   if (slot <= 1) {
-    return 'Another request is next.';
+    return '下一条请求即将执行。';
   }
-  return 'Another request is later in line.';
+  return '该请求仍在排队中。';
 }
 
 export function describeOwnerServiceActionLabel(service: string, action: string): string {
-  const serviceLabel = service === 'ollama' ? 'on-device AI' : 'Sparkbox service';
-  const actionLabel = action === 'restart' ? 'Restart' : action === 'stop' ? 'Stop' : 'Start';
+  const serviceLabel = service === 'ollama' ? '本地 AI 服务' : 'Sparkbox 服务';
+  const actionLabel = action === 'restart' ? '重启' : action === 'stop' ? '停止' : '启动';
   return `${actionLabel} ${serviceLabel}`;
 }
 
 export function describeHouseholdRole(role: string): string {
   const normalized = String(role).trim().toLowerCase();
   if (!normalized) {
-    return 'Member';
+    return '成员';
   }
   if (normalized === 'owner') {
-    return 'Owner';
+    return '管理员';
   }
   if (normalized === 'member') {
-    return 'Member';
+    return '成员';
   }
   return normalized.replace(/^./, (value) => value.toUpperCase());
 }
 
 const WIFI_INTERFACE_PATTERN = /\bwl[a-z0-9._-]+\b/gi;
 const DIAGNOSTICS_PREFLIGHT_REASON_LABELS: Record<string, string> = {
-  network_control_requires_auth: 'Sparkbox cannot control its Wi-Fi settings yet.',
-  wifi_share_protected_denied: 'Sparkbox cannot share its protected setup hotspot yet.',
-  ap_mode_unsupported: 'Sparkbox Wi-Fi hardware cannot host a setup hotspot.',
-  configured_interface_missing: 'Sparkbox is configured to use a missing Wi-Fi interface.',
-  nmcli_unavailable_or_disabled: 'Sparkbox does not have an active Wi-Fi control service.',
-  wifi_radio_disabled: 'Sparkbox Wi-Fi radio is currently disabled.',
-  no_wifi_device: 'Sparkbox does not detect a usable Wi-Fi adapter.',
+  network_control_requires_auth: '设备暂时无法管理 Wi-Fi 设置。',
+  wifi_share_protected_denied: '设备暂时无法开启受保护热点。',
+  ap_mode_unsupported: '当前 Wi-Fi 硬件不支持热点模式。',
+  configured_interface_missing: '配置中的 Wi-Fi 网卡不存在。',
+  nmcli_unavailable_or_disabled: 'Wi-Fi 控制服务不可用。',
+  wifi_radio_disabled: 'Wi-Fi 无线已关闭。',
+  no_wifi_device: '未检测到可用 Wi-Fi 网卡。',
 };
 
 const DIAGNOSTICS_ISSUE_LABELS: Record<string, string> = {
-  'ollama:service_failed': 'On-device AI needs attention.',
-  'ollama:api_unreachable': 'On-device AI is not responding.',
-  'zeroclaw:service_inactive': 'Sparkbox service is not running.',
+  'ollama:service_failed': '本地 AI 服务异常。',
+  'ollama:api_unreachable': '本地 AI 接口无响应。',
+  'zeroclaw:service_inactive': 'Sparkbox 服务未运行。',
 };
 
 export function describeDiagnosticsNetworkSummary(summary: string): string {
@@ -169,9 +169,9 @@ export function describeDiagnosticsWifiConnection(wifiInterface?: string | null,
   }
   const normalizedRadio = String(wifiRadio ?? '').trim();
   if (!normalizedRadio || normalizedRadio.toLowerCase() === 'unknown') {
-    return 'Wi-Fi: Connected';
+    return 'Wi-Fi：已连接';
   }
-  return `Wi-Fi: Connected · ${normalizedRadio.replace(WIFI_INTERFACE_PATTERN, 'Wi-Fi')}`;
+  return `Wi-Fi：已连接 · ${normalizedRadio.replace(WIFI_INTERFACE_PATTERN, 'Wi-Fi')}`;
 }
 
 export function describeDiagnosticsPreflightReasons(reasons: string[] = []): string {

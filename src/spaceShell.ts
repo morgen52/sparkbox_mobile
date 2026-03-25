@@ -57,25 +57,24 @@ export function resolveTaskSpaceId(space: HouseholdSpaceSummary | null): string 
 export type ChatSendPhase = 'idle' | 'sending' | 'streaming' | 'timed_out' | 'failed';
 
 export function describeSpaceKind(kind: SpaceKind): string {
-  return kind === 'private' ? 'Just you + Sparkbox' : 'Shared space';
+  return kind === 'private' ? '仅自己可见' : '家庭共享';
 }
 
 export function describeSpaceCounts(kind: SpaceKind, threadCount: number, memberCount: number): string {
-  const memberLabel = memberCount === 1 ? 'member' : 'members';
+  const memberLabel = '人';
   const conversationLabel =
     kind === 'shared'
-      ? `${threadCount} ${threadCount === 1 ? 'chat' : 'chats'}`
+      ? `${threadCount} 个聊天`
       : describeTopicCount(threadCount);
-  return `${conversationLabel} · ${memberCount} ${memberLabel}`;
+  return `${conversationLabel} · ${memberCount}${memberLabel}`;
 }
 
 export function describeTopicCount(threadCount: number): string {
-  const topicLabel = threadCount === 1 ? 'topic' : 'topics';
-  return `${threadCount} ${topicLabel}`;
+  return `${threadCount} 个话题`;
 }
 
 export function describeSpaceOverviewCopy(): string {
-  return 'Start with the people first. Every space keeps its own chats, memories, and shared history.';
+  return '先确定参与成员，每个空间都会独立保存聊天、记忆和历史。';
 }
 
 export type SpaceCopyContext = Pick<HouseholdSpaceSummary, 'kind' | 'name'> | Pick<HouseholdSpaceDetail, 'kind' | 'name'> | null;
@@ -106,11 +105,11 @@ export function describeCurrentSpaceSummaryCopy(
     spaceKind === 'shared'
       ? `${threadCount} ${threadCount === 1 ? 'chat' : 'chats'}`
       : describeTopicCount(threadCount);
-  return `You're viewing ${spaceName} (${spaceKindLabel}), and it already has ${conversationLabel}.`;
+  return `当前查看：${spaceName}（${spaceKindLabel}），已包含 ${conversationLabel}。`;
 }
 
 export function describeChatAccess(scope: ChatSessionScope): string {
-  return scope === 'private' ? 'Just you' : 'Shared here';
+  return scope === 'private' ? '仅自己' : '空间共享';
 }
 
 export function shouldAppendAssistantReply(message: string): boolean {
@@ -140,7 +139,7 @@ export function describeChatSessionBadge(options: {
   active: boolean;
 }): string {
   if (options.sessionName && looksLikeSharedGroupChatSession(options.sessionName, options.scope, options.spaceDetail)) {
-    return 'group chat';
+    return '群聊';
   }
   return describeChatAccess(options.scope);
 }
@@ -151,18 +150,18 @@ export function describeChatSessionPurpose(options: {
   spaceDetail: SpaceCopyContext;
 }): string {
   if (options.sessionName && looksLikeSharedGroupChatSession(options.sessionName, options.scope, options.spaceDetail)) {
-    return 'Sparkbox helping everyone stay in sync.';
+    return 'Sparkbox 正在帮助大家保持同步。';
   }
   if (options.scope === 'private' && options.spaceDetail?.kind === 'shared') {
-    return 'Private side chat with Sparkbox before you bring anything back to the shared space.';
+    return '先在私密对话中整理想法，再决定是否同步到共享空间。';
   }
   if (options.scope === 'private') {
-    return 'Private topic with Sparkbox just for you.';
+    return '与你专属的私密话题。';
   }
   if (options.spaceDetail?.kind === 'shared' && options.scope === 'family') {
-    return 'Shared chat with Sparkbox for this space.';
+    return '该空间内的共享聊天。';
   }
-  return 'Chat with Sparkbox for this space.';
+  return '在该空间中与 Sparkbox 对话。';
 }
 
 function summarizeChatPreviewText(content: string): string {
@@ -188,15 +187,15 @@ export function describeChatSessionPreview(
     return '';
   }
   if (sessionItem.lastMessageRole === 'assistant') {
-    return `Sparkbox: ${preview}`;
+    return `Sparkbox：${preview}`;
   }
   const normalizedCurrentUser = String(currentUserDisplayName ?? '').trim().toLowerCase();
   const normalizedSender = String(sessionItem.lastMessageSenderDisplayName ?? '').trim();
   const speaker =
     normalizedSender && normalizedSender.toLowerCase() !== normalizedCurrentUser
       ? normalizedSender
-      : 'You';
-  return `${speaker}: ${preview}`;
+        : '你';
+      return `${speaker}：${preview}`;
 }
 
 function usesChatLanguage(spaceDetail: SpaceCopyContext, scope: ChatSessionScope): boolean {
@@ -207,7 +206,7 @@ export function describeChatSessionPrimaryActionLabel(
   spaceDetail: SpaceCopyContext,
   scope: ChatSessionScope,
 ): string {
-  return usesChatLanguage(spaceDetail, scope) ? 'New chat' : 'New topic';
+  return usesChatLanguage(spaceDetail, scope) ? '新建聊天' : '新建话题';
 }
 
 export function describeChatSessionEmptyStateCopy(
@@ -215,12 +214,12 @@ export function describeChatSessionEmptyStateCopy(
   scope: ChatSessionScope,
 ): string {
   return usesChatLanguage(spaceDetail, scope)
-    ? 'No chats yet. Start one when this space needs Sparkbox.'
-    : 'No topics yet. Start one when this space needs Sparkbox.';
+    ? '还没有聊天，点击创建即可开始。'
+    : '还没有话题，点击创建即可开始。';
 }
 
 export function describeChatSessionOpenError(spaceDetail: SpaceCopyContext): string {
-  return spaceDetail?.kind === 'shared' ? 'Could not open this chat yet.' : 'Could not open this topic yet.';
+  return spaceDetail?.kind === 'shared' ? '暂时无法打开该聊天。' : '暂时无法打开该话题。';
 }
 
 export function describeChatSessionCreatePermissionError(
@@ -228,12 +227,12 @@ export function describeChatSessionCreatePermissionError(
   scope: ChatSessionScope,
 ): string {
   return usesChatLanguage(spaceDetail, scope)
-    ? 'Only owners can create shared chats in this space.'
-    : 'Only owners can create shared topics in this space.';
+    ? '仅管理员可以创建共享聊天。'
+    : '仅管理员可以创建共享话题。';
 }
 
 export function describeChatEditorVerb(spaceDetail: SpaceCopyContext, scope: ChatSessionScope): string {
-  return usesChatLanguage(spaceDetail, scope) ? 'chat' : 'topic';
+  return usesChatLanguage(spaceDetail, scope) ? '聊天' : '话题';
 }
 
 export function describeChatEditorTitle(
@@ -242,12 +241,12 @@ export function describeChatEditorTitle(
   editing: boolean,
 ): string {
   if (editing) {
-    return usesChatLanguage(spaceDetail, scope) ? 'Keep this chat clear for everyone' : 'Keep this topic clear for everyone';
+    return usesChatLanguage(spaceDetail, scope) ? '编辑聊天信息' : '编辑话题信息';
   }
   if (scope === 'private') {
-    return 'Start a private topic with Sparkbox';
+    return '新建私密话题';
   }
-  return usesChatLanguage(spaceDetail, scope) ? 'Start a chat for this shared space' : 'Start a topic for this shared space';
+  return usesChatLanguage(spaceDetail, scope) ? '为该共享空间新建聊天' : '为该共享空间新建话题';
 }
 
 export function describeChatEditorPrimaryActionLabel(
@@ -256,29 +255,29 @@ export function describeChatEditorPrimaryActionLabel(
   editing: boolean,
 ): string {
   const verb = describeChatEditorVerb(spaceDetail, scope);
-  return `${editing ? 'Save' : 'Create'} ${verb}`;
+  return `${editing ? '保存' : '创建'}${verb}`;
 }
 
 export function describeChatNamePlaceholder(spaceDetail: SpaceCopyContext, scope: ChatSessionScope): string {
-  return usesChatLanguage(spaceDetail, scope) ? 'Chat name' : 'Topic name';
+  return usesChatLanguage(spaceDetail, scope) ? '聊天名称' : '话题名称';
 }
 
 export function describeSpaceThreadSectionTitle(spaceDetail: SpaceCopyContext): string {
-  return spaceDetail?.kind === 'shared' ? 'Chats in this space' : 'Topics';
+  return spaceDetail?.kind === 'shared' ? '本空间聊天' : '话题列表';
 }
 
 export function describeSpaceThreadSectionCopy(spaceDetail: SpaceCopyContext): string {
   if (!spaceDetail) {
-    return 'Pick a space to see the chats Sparkbox keeps ready for it.';
+    return '请先选择空间，再查看该空间聊天。';
   }
   if (spaceDetail.kind === 'shared') {
-    return `${spaceDetail.name} keeps the main group chat and any extra shared chats together here.`;
+    return `${spaceDetail.name} 的群聊与扩展聊天都会集中展示在这里。`;
   }
-  return `${spaceDetail.name} stays easier to follow when each conversation has its own topic.`;
+  return `${spaceDetail.name} 采用按话题分组，阅读更清晰。`;
 }
 
 export function describeSpaceThreadEmptyStateCopy(spaceDetail: SpaceCopyContext): string {
-  return spaceDetail?.kind === 'shared' ? 'No chats yet.' : 'No topics yet.';
+  return spaceDetail?.kind === 'shared' ? '还没有聊天。' : '还没有话题。';
 }
 
 export function describeSpaceThreadRowBadge(
@@ -288,12 +287,12 @@ export function describeSpaceThreadRowBadge(
   active: boolean,
 ): string {
   if (spaceDetail?.kind === 'shared') {
-    return looksLikeSharedGroupChatSession(threadTitle, 'family', null) ? 'group chat' : 'shared chat';
+    return looksLikeSharedGroupChatSession(threadTitle, 'family', null) ? '群聊' : '共享聊天';
   }
   if (hasChatSession && active) {
-    return 'open';
+    return '已打开';
   }
-  return 'topic';
+  return '话题';
 }
 
 export function describeSpaceThreadRowCopy(
@@ -303,17 +302,17 @@ export function describeSpaceThreadRowCopy(
   active: boolean,
 ): string {
   if (spaceDetail?.kind === 'shared') {
-    const noun = looksLikeSharedGroupChatSession(threadTitle, 'family', null) ? 'group chat' : 'shared chat';
-    return `${hasChatSession ? 'Continue' : 'Start'} this ${noun} with everyone in the space.`;
+    const noun = looksLikeSharedGroupChatSession(threadTitle, 'family', null) ? '群聊' : '共享聊天';
+    return `${hasChatSession ? '继续' : '开始'}该${noun}。`;
   }
   if (hasChatSession && active) {
-    return 'Continue this topic.';
+    return '继续这个话题。';
   }
-  return hasChatSession ? 'Continue this topic.' : 'Start this topic with Sparkbox.';
+  return hasChatSession ? '继续这个话题。' : '开始这个话题。';
 }
 
 export function describeActiveChatFallbackTitle(spaceDetail: SpaceCopyContext): string {
-  return spaceDetail?.kind === 'shared' ? 'Active group chat' : 'Active topic chat';
+  return spaceDetail?.kind === 'shared' ? '当前群聊' : '当前话题';
 }
 
 export function describeActiveChatSessionCopy(
@@ -322,16 +321,16 @@ export function describeActiveChatSessionCopy(
   sharedChatIsVisible: boolean,
 ): string {
   if (sharedChatIsVisible && spaceDetail) {
-    return `${spaceDetail.name} uses this as one group chat for everyone in the space, and Sparkbox helps the shared conversation keep moving.`;
+    return `${spaceDetail.name} 当前采用群聊协作，Sparkbox 会帮助对话持续推进。`;
   }
-  return `This chat keeps Sparkbox focused on ${activeChatSessionName}.`;
+  return `当前聊天聚焦：${activeChatSessionName}。`;
 }
 
 export function describeActiveChatEmptyStateCopy(spaceDetail: SpaceCopyContext): string {
   if (spaceDetail?.kind === 'shared') {
-    return 'Pick the main group chat or another shared chat to keep everyone in one running conversation.';
+    return '请选择群聊或共享聊天，方便大家在同一线程沟通。';
   }
-  return 'Pick or create a topic chat to keep this conversation grounded in one clear subject.';
+  return '请选择或创建话题，让对话更聚焦。';
 }
 
 export function describeChatComposerPlaceholder(
@@ -341,28 +340,28 @@ export function describeChatComposerPlaceholder(
 ): string {
   if (hasActiveChatSession) {
     if (sharedChatIsVisible) {
-      return 'Message the group';
+      return '发送到群聊';
     }
-    return spaceDetail?.kind === 'shared' ? 'Ask Sparkbox in this chat' : 'Ask Sparkbox about this topic';
+    return spaceDetail?.kind === 'shared' ? '在此聊天中提问' : '围绕此话题提问';
   }
-  return spaceDetail?.kind === 'shared' ? 'Pick a chat in this space first' : 'Pick a topic chat first';
+  return spaceDetail?.kind === 'shared' ? '请先选择聊天' : '请先选择话题';
 }
 
 export function describeSpaceSummaryCaptureMissingChatCopy(spaceDetail: HouseholdSpaceDetail | null): string {
   if (spaceDetail?.kind === 'shared') {
-    return 'Open a chat in Chats first so Sparkbox knows what to summarize.';
+    return '请先在聊天页打开一个聊天，才能生成摘要。';
   }
-  return 'Open a topic chat first so Sparkbox knows what to summarize.';
+  return '请先打开一个话题，才能生成摘要。';
 }
 
 export function describeCaptureSummaryActionLabel(spaceDetail: HouseholdSpaceDetail | null): string {
-  return spaceDetail?.kind === 'shared' ? 'Save recap from open chat' : 'Capture active topic';
+  return spaceDetail?.kind === 'shared' ? '从当前聊天生成摘要' : '从当前话题生成摘要';
 }
 
 export function describeSummarySectionCopy(spaceDetail: HouseholdSpaceDetail | null): string {
   return spaceDetail?.kind === 'shared'
-    ? 'Summaries are read-only snapshots Sparkbox can generate from a chat so other family members can catch up quickly.'
-    : 'Summaries are read-only snapshots Sparkbox can generate from a topic so other family members can catch up quickly.';
+    ? '摘要是只读快照，可帮助家人快速了解聊天进展。'
+    : '摘要是只读快照，可帮助家人快速了解话题进展。';
 }
 
 export function describeSummaryEmptyStateCopy(
@@ -371,32 +370,32 @@ export function describeSummaryEmptyStateCopy(
   activeChatSessionName: string,
 ): string {
   if (activeChatSessionName) {
-    return `${spaceDetail?.kind === 'shared' ? 'Open chat' : 'Current topic'}: ${activeChatSessionName}`;
+    return `${spaceDetail?.kind === 'shared' ? '当前聊天' : '当前话题'}：${activeChatSessionName}`;
   }
   if (spaceDetail?.kind === 'shared') {
     return canMutate
-      ? 'Pick a chat in Chats first if you want Sparkbox to snapshot that conversation.'
-      : 'Owners can capture chat snapshots from Chats. You can still read every summary saved for this space.';
+      ? '先在聊天页选择一个聊天，再生成摘要。'
+      : '仅管理员可从聊天生成摘要，你仍可阅读已保存内容。';
   }
   return canMutate
-    ? 'Pick a topic in Chats first if you want Sparkbox to snapshot that conversation.'
-    : 'Owners can capture topic snapshots from Chats. You can still read every summary saved for this space.';
+    ? '先选择一个话题，再生成摘要。'
+    : '仅管理员可生成话题摘要，你仍可阅读已保存内容。';
 }
 
 export function describeSpaceTemplate(template: SpaceTemplate | string): string {
   switch (template) {
     case 'private':
-      return 'Just you + Sparkbox';
+      return '仅自己可见';
     case 'household':
-      return 'Shared home';
+      return '家庭共享';
     case 'partner':
-      return 'Partner';
+      return '伴侣';
     case 'parents':
-      return 'Parents';
+      return '父母';
     case 'child':
-      return 'Child';
+      return '孩子';
     case 'household_ops':
-      return 'Home routines';
+      return '家庭事务';
     default:
       return String(template)
         .replace(/_/g, ' ')
@@ -410,14 +409,14 @@ export function formatSpaceTemplateList(spaceTemplates: string[]): string {
 }
 
 const FAMILY_APP_CAPABILITY_LABELS: Record<string, string> = {
-  create_tasks: 'plans and routines',
-  send_proactive_messages: 'proactive check-ins',
-  suggest_memories: 'shared memories',
-  generate_summaries: 'recap summaries',
-  use_photos_as_context: 'shared photos',
-  open_private_side_channel: 'private check-ins',
-  request_confirmed_relay: 'owner-approved relays',
-  create_recommended_threads: 'suggested group topics',
+  create_tasks: '计划与任务',
+  send_proactive_messages: '主动提醒',
+  suggest_memories: '记忆建议',
+  generate_summaries: '摘要生成',
+  use_photos_as_context: '照片上下文',
+  open_private_side_channel: '私密沟通',
+  request_confirmed_relay: '管理员确认转达',
+  create_recommended_threads: '推荐话题',
 };
 
 export function formatFamilyAppCapabilities(capabilities: string[]): string {
@@ -441,19 +440,19 @@ export function formatFamilyAppCapabilities(capabilities: string[]): string {
 
 export function formatFamilyAppConfigSummary(config: Record<string, unknown>): string {
   const entries = Object.entries(config).filter(([, value]) => value !== undefined && value !== null && value !== '');
-  return entries.length ? 'Ready in this space' : 'Ready in this space';
+  return entries.length ? '已在该空间启用' : '已在该空间启用';
 }
 
 const FAMILY_APP_RISK_LEVEL_LABELS: Record<string, string> = {
-  normal: 'Routine',
-  sensitive: 'Sensitive',
-  restricted: 'Restricted',
+  normal: '常规',
+  sensitive: '敏感',
+  restricted: '受限',
 };
 
 export function describeFamilyAppRiskLevel(riskLevel: string): string {
   const normalized = String(riskLevel).trim();
   if (!normalized) {
-    return 'Unspecified';
+    return '未标注';
   }
   return (
     FAMILY_APP_RISK_LEVEL_LABELS[normalized] ??
@@ -468,13 +467,13 @@ export function describeFamilyAppRiskLevel(riskLevel: string): string {
 export function describeChatSendPhase(phase: ChatSendPhase): string {
   switch (phase) {
     case 'sending':
-      return 'Sparkbox is preparing the first reply';
+      return 'Sparkbox 正在准备首条回复';
     case 'streaming':
-      return 'Sparkbox is still replying';
+      return 'Sparkbox 正在持续回复';
     case 'timed_out':
-      return 'Sparkbox is taking longer than usual';
+      return 'Sparkbox 响应时间较长';
     case 'failed':
-      return 'Sparkbox could not finish the reply';
+      return 'Sparkbox 未能完成回复';
     default:
       return '';
   }
@@ -549,7 +548,7 @@ export function buildSharedChatParticipantLabels(
     ? spaceDetail.members.find((member) => member.id === currentUserId)
     : null;
   const otherMembers = spaceDetail.members.filter((member) => member.id !== currentUserId);
-  return [...(currentUser ? ['You'] : []), ...otherMembers.map((member) => member.displayName)];
+  return [...(currentUser ? ['你'] : []), ...otherMembers.map((member) => member.displayName)];
 }
 
 export function buildSharedChatParticipantSummary(

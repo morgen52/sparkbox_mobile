@@ -123,9 +123,9 @@ export function OwnerSettingsPane({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Device tools</Text>
+        <Text style={styles.cardTitle}>设备工具</Text>
         <Text style={styles.cardCopy}>
-          Use these when Sparkbox needs a closer check or recovery.
+          当 Sparkbox 需要进一步排查或恢复时，可使用这里的工具。
         </Text>
         <View style={styles.scopeRow}>
           {homeDevices.map((device, deviceIndex) => {
@@ -150,21 +150,21 @@ export function OwnerSettingsPane({
             onPress={onRefreshOwnerConsole}
             disabled={!ownerDeviceId || ownerConsoleBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh device</Text>
+            <Text style={styles.secondaryButtonText}>刷新设备状态</Text>
           </Pressable>
           <Pressable
             style={styles.secondaryButtonSmall}
             onPress={onReconnectOwnerDevice}
             disabled={!ownerDeviceId || ownerConsoleBusy}
           >
-            <Text style={styles.secondaryButtonText}>Try to reconnect Sparkbox</Text>
+            <Text style={styles.secondaryButtonText}>尝试重连 Sparkbox</Text>
           </Pressable>
         </View>
         {renderOwnerConsoleFeedback('tools')}
         {ownerStatus ? (
           <View style={styles.deviceRowCard}>
             <Text style={styles.networkName}>
-              {describeDeviceLabel(ownerDeviceId, activeOwnerDeviceIndex, homeDevices.length || 1)} summary
+              {describeDeviceLabel(ownerDeviceId, activeOwnerDeviceIndex, homeDevices.length || 1)} 概览
             </Text>
             <Text style={styles.cardCopy}>
               {describeOwnerConsoleModelStatus(ownerStatus.ollama?.service, ownerStatus.ollama?.api)}
@@ -184,7 +184,7 @@ export function OwnerSettingsPane({
             </Text>
             {ownerStatus.system ? (
               <Text style={styles.cardCopy}>
-                CPU {ownerStatus.system.cpu_percent ?? 0}% · Memory {ownerStatus.system.memory?.used_percent ?? 0}%/{ownerStatus.system.memory?.total_gb ?? 0} GB · Disk {ownerStatus.system.disk?.used_percent ?? 0}%/{ownerStatus.system.disk?.total_gb ?? 0} GB
+                CPU {ownerStatus.system.cpu_percent ?? 0}% · 内存 {ownerStatus.system.memory?.used_percent ?? 0}%/{ownerStatus.system.memory?.total_gb ?? 0} GB · 磁盘 {ownerStatus.system.disk?.used_percent ?? 0}%/{ownerStatus.system.disk?.total_gb ?? 0} GB
               </Text>
             ) : null}
           </View>
@@ -192,13 +192,13 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>AI service for Sparkbox</Text>
+        <Text style={styles.cardTitle}>Sparkbox 的 AI 服务</Text>
         <Text style={styles.cardCopy}>
-          Keep one shared AI service and model ready for Sparkbox, then update it here if the sign-in changes.
+          为 Sparkbox 维护默认 AI 服务和模型；如登录信息变化，可在这里更新。
         </Text>
-        <Text style={styles.selectionLabel}>Default AI service</Text>
+        <Text style={styles.selectionLabel}>默认 AI 服务</Text>
         <TextInput
-          placeholder="Default AI service"
+          placeholder="默认 AI 服务"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={describeAiProvider(ownerProviderConfig.defaultProvider)}
@@ -222,22 +222,22 @@ export function OwnerSettingsPane({
             })}
           </View>
         ) : null}
-        <Text style={styles.selectionLabel}>Default model</Text>
+        <Text style={styles.selectionLabel}>默认模型</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Preferred model"
+          placeholder="首选模型"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerProviderConfig.defaultModel}
           onChangeText={onChangeDefaultModel}
         />
-        <Text style={styles.selectionLabel}>Response timeout</Text>
+        <Text style={styles.selectionLabel}>响应超时</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="number-pad"
-          placeholder="Timeout in seconds"
+          placeholder="超时秒数"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={String(ownerProviderConfig.providerTimeoutSecs)}
@@ -248,12 +248,12 @@ export function OwnerSettingsPane({
           onPress={onSaveOwnerProviderSettings}
           disabled={!ownerDeviceId || ownerConsoleBusy}
         >
-          <Text style={styles.primaryButtonText}>Save AI setup</Text>
+          <Text style={styles.primaryButtonText}>保存 AI 配置</Text>
         </Pressable>
         {renderOwnerConsoleFeedback('provider')}
         {ownerModels.length ? (
           <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>Local models on this device</Text>
+            <Text style={styles.networkName}>此设备本地模型</Text>
             {ownerModels.map((model) => (
               <Text key={model.name} style={styles.cardCopy}>
                 {model.name}
@@ -265,46 +265,46 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Add another AI service</Text>
+        <Text style={styles.cardTitle}>添加其他 AI 服务</Text>
         <Text style={styles.cardCopy}>
-          Use this when Sparkbox needs to connect to another AI service or refresh its sign-in.
+          当 Sparkbox 需要接入新的 AI 服务或刷新登录信息时，在这里操作。
         </Text>
-        <Text style={styles.selectionLabel}>AI service</Text>
+        <Text style={styles.selectionLabel}>AI 服务</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Service name"
+          placeholder="服务名称"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardProvider}
           onChangeText={onChangeOnboardProvider}
         />
-        <Text style={styles.selectionLabel}>Model name</Text>
+        <Text style={styles.selectionLabel}>模型名称</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Model ID"
+          placeholder="模型 ID"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardModel}
           onChangeText={onChangeOnboardModel}
         />
-        <Text style={styles.selectionLabel}>Access key</Text>
+        <Text style={styles.selectionLabel}>访问密钥</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
-          placeholder="Access key"
+          placeholder="访问密钥"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardApiKey}
           onChangeText={onChangeOnboardApiKey}
         />
-        <Text style={styles.selectionLabel}>Service URL (optional)</Text>
+        <Text style={styles.selectionLabel}>服务 URL（可选）</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Service URL (optional)"
+          placeholder="服务 URL（可选）"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardApiUrl}
@@ -315,20 +315,20 @@ export function OwnerSettingsPane({
           onPress={onRunOwnerOnboard}
           disabled={!ownerDeviceId || ownerConsoleBusy}
         >
-          <Text style={styles.primaryButtonText}>Connect service</Text>
+          <Text style={styles.primaryButtonText}>连接服务</Text>
         </Pressable>
         {renderOwnerConsoleFeedback('onboard')}
         {ownerServiceSummary ? <Text style={styles.cardCopy}>{ownerServiceSummary}</Text> : null}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Restart and recovery</Text>
+        <Text style={styles.cardTitle}>重启与恢复</Text>
         <Text style={styles.cardCopy}>
-          If Sparkbox gets stuck, you can check activity here and restart its main services.
+          如果 Sparkbox 状态异常，可在这里查看运行情况并重启关键服务。
         </Text>
         {ownerInference ? (
           <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>What Sparkbox is doing now</Text>
+            <Text style={styles.networkName}>Sparkbox 当前运行状态</Text>
             <Text style={styles.cardCopy}>
               {describeOwnerRuntimeQueueSummary(
                 ownerInference.queued_requests,
@@ -408,9 +408,9 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Device health and reset</Text>
+        <Text style={styles.cardTitle}>设备健康与重置</Text>
         <Text style={styles.cardCopy}>
-          Owners can inspect Sparkbox health and send it back to setup from here.
+          管理员可在这里查看 Sparkbox 健康状态，并将设备重置回配置流程。
         </Text>
         {diagnosticsError ? <Text style={styles.errorText}>{diagnosticsError}</Text> : null}
         {homeDevices.map((device, deviceIndex) => (
@@ -428,23 +428,23 @@ export function OwnerSettingsPane({
                 onPress={() => onLoadDiagnostics(device.device_id)}
                 disabled={diagnosticsBusy}
               >
-                <Text style={styles.secondaryButtonText}>Check Sparkbox now</Text>
+                <Text style={styles.secondaryButtonText}>立即检查 Sparkbox</Text>
               </Pressable>
               <Pressable
                 style={styles.secondaryButtonSmall}
                 onPress={() =>
                   Alert.alert(
-                    'Reset this Sparkbox?',
-                    'This sends the device back to setup and removes it from the household until it is ready again.',
+                    '要重置这个 Sparkbox 吗？',
+                    '设备将回到配置状态，并暂时从当前家庭移除，直到重新完成接入。',
                     [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Reset', style: 'destructive', onPress: () => onFactoryResetDevice(device) },
+                      { text: '取消', style: 'cancel' },
+                      { text: '重置', style: 'destructive', onPress: () => onFactoryResetDevice(device) },
                     ],
                   )
                 }
                 disabled={diagnosticsBusy}
               >
-                <Text style={styles.secondaryButtonText}>Reset Sparkbox</Text>
+                <Text style={styles.secondaryButtonText}>重置 Sparkbox</Text>
               </Pressable>
             </View>
           </View>
@@ -460,10 +460,10 @@ export function OwnerSettingsPane({
                   homeDevices.findIndex((device) => device.device_id === diagnosticsDeviceId),
                 ),
                 homeDevices.length || 1,
-              )} health check
+              )} 健康检查
             </Text>
             <Text style={styles.cardCopy}>
-              Check source: {describeDiagnosticsSource(diagnosticsPayload.cache?.source || 'live')}
+              检查来源：{describeDiagnosticsSource(diagnosticsPayload.cache?.source || 'live')}
               {diagnosticsPayload.cache?.summary
                 ? ` · ${describeDiagnosticsNetworkSummary(diagnosticsPayload.cache.summary)}`
                 : ''}
@@ -481,17 +481,17 @@ export function OwnerSettingsPane({
             ) : null}
             {diagnosticsPayload.network?.preflight?.reasons?.length ? (
               <Text style={styles.cardCopy}>
-                Still to check: {describeDiagnosticsPreflightReasons(diagnosticsPayload.network.preflight.reasons)}
+                待处理项：{describeDiagnosticsPreflightReasons(diagnosticsPayload.network.preflight.reasons)}
               </Text>
             ) : null}
             {diagnosticsPayload.self_heal?.plan?.issues?.length ? (
               <Text style={styles.cardCopy}>
-                Needs attention now: {describeDiagnosticsIssueReasons(diagnosticsPayload.self_heal.plan.issues)}
+                当前需关注：{describeDiagnosticsIssueReasons(diagnosticsPayload.self_heal.plan.issues)}
               </Text>
             ) : null}
             {diagnosticsPayload.system?.memory ? (
               <Text style={styles.cardCopy}>
-                Memory: {diagnosticsPayload.system.memory.used_percent}% of {diagnosticsPayload.system.memory.total_gb} GB
+                内存：{diagnosticsPayload.system.memory.used_percent}% / {diagnosticsPayload.system.memory.total_gb} GB
               </Text>
             ) : null}
           </View>

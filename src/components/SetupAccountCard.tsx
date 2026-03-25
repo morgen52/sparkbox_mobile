@@ -73,9 +73,9 @@ export function AuthSetupCard({
       <Text style={styles.cardCopy}>{authCardCopy}</Text>
       <View style={styles.authModeRow}>
         {([
-          { id: 'login', label: 'Sign in' },
-          { id: 'register', label: 'Create' },
-          { id: 'join', label: 'Join household' },
+          { id: 'login', label: '登录' },
+          { id: 'register', label: '注册' },
+          { id: 'join', label: '加入家庭' },
         ] as Array<{ id: AuthMode; label: string }>).map((modeOption) => {
           const active = authMode === modeOption.id;
           return (
@@ -95,7 +95,7 @@ export function AuthSetupCard({
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="email-address"
-        placeholder="Email"
+        placeholder="邮箱"
         placeholderTextColor="#7e8a83"
         style={styles.input}
         value={email}
@@ -103,7 +103,7 @@ export function AuthSetupCard({
       />
       {authMode === 'register' || authMode === 'join' ? (
         <TextInput
-          placeholder="Display name"
+          placeholder="昵称"
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={displayName}
@@ -115,14 +115,14 @@ export function AuthSetupCard({
           <TextInput
             autoCapitalize="characters"
             autoCorrect={false}
-            placeholder="Invite code"
+            placeholder="邀请码"
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={inviteCode}
             onChangeText={onChangeInviteCode}
           />
           {invitePreviewBusy ? (
-            <Text style={styles.cardCopy}>Checking this invite code...</Text>
+            <Text style={styles.cardCopy}>正在校验邀请码...</Text>
           ) : invitePreview ? (
             <Text style={styles.cardCopy}>
               {renderInvitePreviewSummary(invitePreview.householdName, invitePreview.spaceName)}
@@ -134,7 +134,7 @@ export function AuthSetupCard({
       ) : null}
       <TextInput
         secureTextEntry
-        placeholder="Password"
+        placeholder="密码"
         placeholderTextColor="#7e8a83"
         style={styles.input}
         value={password}
@@ -159,21 +159,21 @@ export function SignedInSetupCard({
 }: SignedInSetupCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>You're signed in</Text>
+      <Text style={styles.cardTitle}>你已登录</Text>
       <Text style={styles.cardCopy}>
         {displayName} · {householdName}
       </Text>
       <View style={styles.inlineActions}>
         <Pressable style={styles.primaryButtonSmall} onPress={onLogout}>
-          <Text style={styles.primaryButtonText}>Log out</Text>
+          <Text style={styles.primaryButtonText}>退出登录</Text>
         </Pressable>
         {canReturnToShell ? (
           <Pressable style={styles.secondaryButtonSmall} onPress={onReturnToShell}>
-            <Text style={styles.secondaryButtonText}>Back to household</Text>
+            <Text style={styles.secondaryButtonText}>返回家庭首页</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.secondaryButtonSmall} onPress={onResetFlow}>
-            <Text style={styles.secondaryButtonText}>Start over</Text>
+            <Text style={styles.secondaryButtonText}>重新开始</Text>
           </Pressable>
         )}
       </View>

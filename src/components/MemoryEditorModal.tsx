@@ -41,22 +41,22 @@ export function MemoryEditorModal({
     >
       <View style={styles.scannerOverlay}>
         <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-          <Text style={styles.selectionLabel}>{editingMemory ? 'Edit memory' : 'New memory'}</Text>
+          <Text style={styles.selectionLabel}>{editingMemory ? '编辑记忆' : '新建记忆'}</Text>
           <Text style={styles.selectionTitle}>
-            {editingMemory ? 'Update what Sparkbox should remember' : 'Save a new memory for this space'}
+            {editingMemory ? '更新 Sparkbox 需要记住的内容' : '为此空间保存一条新记忆'}
           </Text>
           <Text style={styles.selectionCopy}>
-            Memories are the key details Sparkbox should remember for this space.
+            记忆是 Sparkbox 需要长期记住的关键信息。
           </Text>
           <TextInput
-            placeholder="Memory title"
+            placeholder="记忆标题"
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={memoryTitle}
             onChangeText={onChangeTitle}
           />
           <TextInput
-            placeholder="What should Sparkbox remember?"
+            placeholder="希望 Sparkbox 记住什么？"
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             value={memoryContent}
@@ -69,7 +69,7 @@ export function MemoryEditorModal({
               onPress={onTogglePinned}
             >
               <Text style={[styles.secondaryButtonText, memoryPinned ? styles.scopePillLabelActive : null]}>
-                {memoryPinned ? 'Pinned' : 'Pin memory'}
+                {memoryPinned ? '已置顶' : '置顶记忆'}
               </Text>
             </Pressable>
           </View>
@@ -80,7 +80,7 @@ export function MemoryEditorModal({
               onPress={onRequestClose}
               disabled={libraryBusy}
             >
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Text style={styles.secondaryButtonText}>取消</Text>
             </Pressable>
             <Pressable
               style={styles.primaryButtonSmall}
@@ -91,7 +91,7 @@ export function MemoryEditorModal({
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {editingMemory ? 'Save memory' : 'Create memory'}
+                  {editingMemory ? '保存记忆' : '创建记忆'}
                 </Text>
               )}
             </Pressable>

@@ -7,6 +7,6 @@ export function buildInvitePreviewSummary(
   spaceName?: string | null,
 ): string {
   return spaceName
-    ? `This code joins ${householdName} and adds you to ${spaceName}.`
-    : `This code joins ${householdName}.`;
+    ? `该邀请码将加入 ${householdName}，并把你加入空间「${spaceName}」。`
+    : `该邀请码将加入 ${householdName}。`;
 }

@@ -83,12 +83,12 @@ export function ChatInboxPane({
       <View style={styles.chatInboxHeader}>
         <View style={styles.chatInboxHeaderTopRow}>
           <View style={styles.chatInboxHeaderBody}>
-            <Text style={styles.chatInboxHeaderTitle}>Chats</Text>
+            <Text style={styles.chatInboxHeaderTitle}>聊天</Text>
             <Text style={styles.chatInboxHeaderCopy}>{headerCopy}</Text>
           </View>
           {canManage ? (
             <Pressable style={styles.secondaryButtonSmall} onPress={onOpenSpaceCreator} disabled={spacesBusy}>
-              <Text style={styles.secondaryButtonText}>Create shared space</Text>
+              <Text style={styles.secondaryButtonText}>创建共享空间</Text>
             </Pressable>
           ) : null}
         </View>
@@ -123,7 +123,7 @@ export function ChatInboxPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Chats in this space</Text>
+        <Text style={styles.cardTitle}>当前空间聊天</Text>
         <Text style={styles.cardCopy}>{activeSpaceBodyCopy}</Text>
         {chatSendPhaseCopy ? <Text style={styles.selectionLabel}>{chatSendPhaseCopy}</Text> : null}
         {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
@@ -146,7 +146,7 @@ export function ChatInboxPane({
             </View>
             <View style={styles.inlineActions}>
               <Pressable style={styles.secondaryButtonSmall} onPress={onRefresh} disabled={chatBusy}>
-                <Text style={styles.secondaryButtonText}>Refresh</Text>
+                <Text style={styles.secondaryButtonText}>刷新</Text>
               </Pressable>
               <Pressable
                 style={[

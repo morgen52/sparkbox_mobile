@@ -44,11 +44,11 @@ export function SettingsDevicesPane({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Devices and Network</Text>
+        <Text style={styles.cardTitle}>设备与网络</Text>
         <Text style={styles.cardCopy}>
           {canReprovisionDevice
-            ? 'Change Wi-Fi from here without scanning the device again. Sparkbox stays in your household while the app walks through Wi-Fi setup.'
-            : 'Owners can change Wi-Fi from here. Members can still see which Sparkbox devices are attached to this household.'}
+            ? '可在这里直接改 Wi-Fi，无需重新扫码。应用会引导完成网络配置，Sparkbox 仍保留在当前家庭中。'
+            : '仅管理员可在这里更改 Wi-Fi。成员仍可查看当前家庭绑定的 Sparkbox 设备。'}
         </Text>
         {homeDevices.map((device, deviceIndex) => (
           <View key={device.device_id} style={styles.deviceRowCard}>
@@ -62,7 +62,7 @@ export function SettingsDevicesPane({
                   style={styles.secondaryButtonSmall}
                   onPress={() => onBeginDeviceReprovision(device)}
                 >
-                  <Text style={styles.secondaryButtonText}>Change Wi-Fi</Text>
+                  <Text style={styles.secondaryButtonText}>更改 Wi-Fi</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -72,27 +72,27 @@ export function SettingsDevicesPane({
 
       {canManage ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Manage family apps</Text>
+          <Text style={styles.cardTitle}>管理家庭应用</Text>
           <Text style={styles.cardCopy}>
-            Install a family app once on this device, then decide which spaces should actually use it.
+            家庭应用只需在设备安装一次，然后按空间决定是否启用。
           </Text>
           {familyAppsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
           {activeSpaceName && recommendedFamilyApps.length > 0 ? (
             <>
-              <Text style={styles.selectionLabel}>Recommended for {activeSpaceName}</Text>
+              <Text style={styles.selectionLabel}>{activeSpaceName} 推荐</Text>
               {recommendedFamilyApps.map((app) => (
                 <View key={`recommended-${app.slug}`} style={styles.deviceRowCard}>
                   <View style={styles.deviceRowHeadline}>
                     <Text style={styles.networkName}>{app.title}</Text>
-                    <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || 'space'}</Text>
+                    <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || '空间'}</Text>
                   </View>
                   {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                   <Text style={styles.cardCopy}>
-                    Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                    适用场景：{formatSpaceTemplateList(app.spaceTemplates) || '任意空间'}
                   </Text>
                   {app.capabilities.length > 0 ? (
                     <Text style={styles.cardCopy}>
-                      What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
+                      主要能力：{formatFamilyAppCapabilities(app.capabilities)}
                     </Text>
                   ) : null}
                   <View style={styles.inlineActions}>
@@ -101,7 +101,7 @@ export function SettingsDevicesPane({
                       onPress={() => onInstallSelectedFamilyApp(app.slug)}
                       disabled={settingsBusy}
                     >
-                      <Text style={styles.primaryButtonText}>Install on this device</Text>
+                      <Text style={styles.primaryButtonText}>安装到此设备</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -110,21 +110,21 @@ export function SettingsDevicesPane({
           ) : null}
           {installedFamilyApps.length > 0 ? (
             <>
-              <Text style={styles.selectionLabel}>Installed on this device</Text>
+              <Text style={styles.selectionLabel}>已安装到此设备</Text>
               {installedFamilyApps.map((app) => (
                 <View key={`installed-${app.slug}`} style={styles.deviceRowCard}>
                   <View style={styles.deviceRowHeadline}>
                     <Text style={styles.networkName}>{app.title}</Text>
-                    <Text style={styles.statusTagOnline}>On this device</Text>
+                    <Text style={styles.statusTagOnline}>已安装</Text>
                   </View>
                   {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
                   <Text style={styles.cardCopy}>
-                    Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                    适用场景：{formatSpaceTemplateList(app.spaceTemplates) || '任意空间'}
                   </Text>
                   <Text style={styles.cardCopy}>
-                    {app.supportsProactiveMessages ? 'Can take initiative' : 'Only speaks when asked'}
-                    {app.supportsPrivateRelay ? ' · Can help with private relays' : ''}
-                    {app.requiresOwnerConfirmation ? ' · Relays stay owner-approved' : ''}
+                    {app.supportsProactiveMessages ? '可主动提醒' : '仅在被询问时响应'}
+                    {app.supportsPrivateRelay ? ' · 支持私密转达' : ''}
+                    {app.requiresOwnerConfirmation ? ' · 转达需管理员确认' : ''}
                   </Text>
                   <View style={styles.inlineActions}>
                     <Pressable
@@ -132,14 +132,14 @@ export function SettingsDevicesPane({
                       onPress={() => onUninstallInstalledFamilyApp(app.slug)}
                       disabled={settingsBusy}
                     >
-                      <Text style={styles.secondaryButtonText}>Remove from this device</Text>
+                      <Text style={styles.secondaryButtonText}>从此设备移除</Text>
                     </Pressable>
                   </View>
                 </View>
               ))}
             </>
           ) : null}
-          <Text style={styles.selectionLabel}>Available for this device</Text>
+          <Text style={styles.selectionLabel}>此设备可用</Text>
           {availableFamilyApps.map((app) => (
             <View key={`catalog-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
@@ -148,11 +148,11 @@ export function SettingsDevicesPane({
               </View>
               {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
               <Text style={styles.cardCopy}>
-                Best for: {formatSpaceTemplateList(app.spaceTemplates) || 'Any space'}
+                适用场景：{formatSpaceTemplateList(app.spaceTemplates) || '任意空间'}
               </Text>
               {app.capabilities.length > 0 ? (
                 <Text style={styles.cardCopy}>
-                  What it helps with: {formatFamilyAppCapabilities(app.capabilities)}
+                  主要能力：{formatFamilyAppCapabilities(app.capabilities)}
                 </Text>
               ) : null}
               <View style={styles.inlineActions}>
@@ -161,7 +161,7 @@ export function SettingsDevicesPane({
                   onPress={() => onInstallSelectedFamilyApp(app.slug)}
                   disabled={settingsBusy}
                 >
-                  <Text style={styles.primaryButtonText}>Install</Text>
+                  <Text style={styles.primaryButtonText}>安装</Text>
                 </Pressable>
               </View>
             </View>

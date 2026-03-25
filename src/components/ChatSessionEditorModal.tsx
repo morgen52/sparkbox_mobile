@@ -46,14 +46,14 @@ export function ChatSessionEditorModal({
         <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
           <Text style={styles.selectionLabel}>
             {editingChatSession
-              ? `Edit ${describeChatEditorVerb(activeSpaceDetail, chatScope)}`
+              ? `编辑${describeChatEditorVerb(activeSpaceDetail, chatScope)}`
               : describeChatSessionPrimaryActionLabel(activeSpaceDetail, chatScope)}
           </Text>
           <Text style={styles.selectionTitle}>
             {describeChatEditorTitle(activeSpaceDetail, chatScope, editingChatSession)}
           </Text>
           <Text style={styles.selectionCopy}>
-            Give this conversation a clear name so everyone knows what Sparkbox is helping with here.
+            给这段会话起个清晰名字，方便大家理解 Sparkbox 在这里协助的主题。
           </Text>
           <TextInput
             placeholder={describeChatNamePlaceholder(activeSpaceDetail, chatScope)}
@@ -69,7 +69,7 @@ export function ChatSessionEditorModal({
               onPress={onRequestClose}
               disabled={chatBusy}
             >
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Text style={styles.secondaryButtonText}>取消</Text>
             </Pressable>
             <Pressable
               style={styles.primaryButtonSmall}

@@ -274,7 +274,7 @@ setCloudApiBase(CLOUD_API_BASE);
 const STORAGE_KEY = 'sparkbox.mobile.session';
 const ACTIVE_SPACE_STORAGE_KEY_PREFIX = 'sparkbox.mobile.activeSpace';
 const CAMERA_PERMISSION_RECOVERY_MESSAGE =
-  'Allow camera access in Settings, or paste the Sparkbox setup code manually.';
+  '请在系统设置中允许相机权限，或手动粘贴设备配置码。';
 
 function buildActiveSpaceStorageKey(session: Session | null): string {
   if (!session) {
@@ -352,14 +352,14 @@ type ChatTimelineGroup =
       message: ChatTimelineMessage;
     };
 
-const CHAT_PENDING_FALLBACK = 'Sparkbox is still preparing a reply for this message.';
+const CHAT_PENDING_FALLBACK = 'Sparkbox 正在准备回复，请稍候。';
 
 function describeTimelineSenderLabel(message: ChatTimelineMessage, chatSendPhase: ChatSendPhase): string {
   if (message.pending) {
     return describeChatSendPhase(chatSendPhase) || 'Sparkbox';
   }
   if (message.role === 'user') {
-    return message.senderDisplayName || 'You';
+    return message.senderDisplayName || '你';
   }
   return 'Sparkbox';
 }
@@ -389,9 +389,9 @@ function buildChatTimelineGroups(
         senderLabel,
         statusCopy: message.pending
           ? chatSendPhase === 'streaming'
-            ? `Sparkbox is still replying${chatPendingIndicator}`
-            : `The first reply can take 1 to 5 minutes${chatPendingIndicator}`
-          : message.errorMessage || 'Could not send that message.',
+            ? `Sparkbox 正在持续回复${chatPendingIndicator}`
+            : `首次回复可能需要 1 到 5 分钟${chatPendingIndicator}`
+          : message.errorMessage || '发送失败，请重试。',
         message,
       });
       return;
@@ -577,7 +577,7 @@ function App() {
   const [networkSheetOpen, setNetworkSheetOpen] = useState(false);
 
   const [provisionBusy, setProvisionBusy] = useState(false);
-  const [provisionMessage, setProvisionMessage] = useState('Scan the QR code to get Sparkbox ready for Wi-Fi.');
+  const [provisionMessage, setProvisionMessage] = useState('请先扫描二维码，让设备进入配网准备状态。');
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [completedDeviceId, setCompletedDeviceId] = useState('');
   const [hotspotStage, setHotspotStage] = useState<HotspotStage>('idle');
@@ -1040,18 +1040,18 @@ function App() {
   );
   const authCardTitle =
     authMode === 'login'
-      ? 'Sign in'
+      ? '登录账号'
       : authMode === 'register'
-        ? 'Create your household'
-        : 'Join household';
+        ? '创建家庭'
+        : '加入家庭';
   const authCardCopy =
     authMode === 'login'
-      ? 'Use the same account that owns Sparkbox.'
+      ? '请使用已绑定 Sparkbox 的账号登录。'
       : authMode === 'register'
-        ? 'Create the first owner account for this Sparkbox household.'
-        : 'Enter the invite code from an owner to join an existing Sparkbox household.';
+        ? '创建该家庭的首个管理员账号。'
+        : '输入管理员分享的邀请码，加入已有家庭。';
   const authSubmitLabel =
-    authMode === 'login' ? 'Sign in' : authMode === 'register' ? 'Create account' : 'Join household';
+    authMode === 'login' ? '登录' : authMode === 'register' ? '创建账号' : '加入家庭';
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
   const activeSharedSpaceMemberOptions =
     activeSpace?.kind === 'shared' ? homeMembers.filter((member) => member.id !== session?.user.id) : [];
@@ -3468,7 +3468,7 @@ function App() {
         <StatusBar style="dark" />
         <View style={styles.centered}>
           <ActivityIndicator color="#0b6e4f" />
-          <Text style={styles.loadingText}>Preparing Sparkbox setup…</Text>
+          <Text style={styles.loadingText}>正在准备设备引导…</Text>
         </View>
       </SafeAreaView>
     );
@@ -3480,8 +3480,8 @@ function App() {
         <StatusBar style="dark" />
         <View style={styles.centered}>
           <ActivityIndicator color="#0b6e4f" />
-          <Text style={styles.loadingText}>Opening {session.household.name}…</Text>
-          <Text style={styles.cardCopy}>Loading your spaces, chats, and device status.</Text>
+          <Text style={styles.loadingText}>正在打开 {session.household.name}…</Text>
+          <Text style={styles.cardCopy}>正在加载空间、聊天和设备状态。</Text>
         </View>
       </SafeAreaView>
     );
@@ -3498,7 +3498,7 @@ function App() {
             subtitle={describeShellSubtitle({
               shellTab,
               activeSpaceName: activeSpace?.name || '',
-              activeSpaceKindLabel: activeSpaceKindLabel || 'Space',
+              activeSpaceKindLabel: activeSpaceKindLabel || '空间',
               spacesReady: !waitingForSpaces,
             })}
             tabs={PHASE_ONE_TABS.map((tab) => ({
@@ -4181,17 +4181,17 @@ export default App;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f5f1e8',
+    backgroundColor: '#f8f3e6',
   },
   shellScreen: {
     flex: 1,
-    padding: 20,
-    gap: 16,
+    padding: 16,
+    gap: 14,
   },
   content: {
-    padding: 20,
-    paddingBottom: 48,
-    gap: 16,
+    padding: 16,
+    paddingBottom: 56,
+    gap: 14,
   },
   centered: {
     flex: 1,
@@ -4200,8 +4200,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   hero: {
-    paddingTop: 8,
-    gap: 8,
+    paddingTop: 10,
+    gap: 10,
   },
   stepRail: {
     flexDirection: 'row',
@@ -4215,13 +4215,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: '#edf1ef',
+    backgroundColor: '#ecf4ec',
   },
   stepRailItemDone: {
     backgroundColor: '#e3f2ea',
   },
   stepRailItemCurrent: {
-    backgroundColor: '#17352a',
+    backgroundColor: '#2d5b46',
   },
   stepRailNumber: {
     color: '#61746a',
@@ -4247,15 +4247,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   title: {
-    fontSize: 32,
-    lineHeight: 38,
-    color: '#17352a',
+    fontSize: 34,
+    lineHeight: 40,
+    color: '#224736',
     fontWeight: '800',
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#50635a',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#456253',
   },
   shellTabBar: {
     flexDirection: 'row',
@@ -4267,10 +4267,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#edf1ef',
+    backgroundColor: '#eaf3ea',
   },
   shellTabActive: {
-    backgroundColor: '#17352a',
+    backgroundColor: '#2d5b46',
   },
   shellTabLabel: {
     color: '#61746a',
@@ -4311,25 +4311,25 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   card: {
-    backgroundColor: '#fffdf8',
+    backgroundColor: '#fffdf7',
     borderRadius: 24,
-    padding: 18,
-    gap: 12,
+    padding: 20,
+    gap: 14,
     shadowColor: '#2b312d',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#17352a',
+    color: '#234936',
   },
   cardCopy: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#5a6b62',
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#4d6357',
   },
   libraryGrid: {
     flexDirection: 'row',
@@ -4360,12 +4360,13 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#d6dfd9',
-    backgroundColor: '#fff',
+    borderColor: '#cad8cf',
+    backgroundColor: '#fffefb',
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#17352a',
+    paddingVertical: 15,
+    fontSize: 17,
+    color: '#234936',
+    minHeight: 52,
   },
   textArea: {
     minHeight: 110,
@@ -4373,51 +4374,51 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     borderRadius: 18,
-    backgroundColor: '#0b6e4f',
-    paddingVertical: 15,
+    backgroundColor: '#3f7d5f',
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: 54,
   },
   primaryButtonSmall: {
     borderRadius: 16,
-    backgroundColor: '#0b6e4f',
+    backgroundColor: '#3f7d5f',
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 48,
   },
   primaryButtonText: {
     color: '#fff',
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 16,
   },
   secondaryButton: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#c9d5ce',
+    borderColor: '#c7d6cc',
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
-    backgroundColor: '#f8f4ea',
+    backgroundColor: '#f6f0df',
   },
   secondaryButtonSmall: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#c9d5ce',
+    borderColor: '#c7d6cc',
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
-    backgroundColor: '#f8f4ea',
+    minHeight: 48,
+    backgroundColor: '#f6f0df',
   },
   secondaryButtonText: {
-    color: '#17352a',
+    color: '#254a37',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 16,
   },
   inlineActions: {
     flexDirection: 'row',
@@ -4436,8 +4437,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   loadingText: {
-    color: '#476257',
-    fontSize: 15,
+    color: '#456253',
+    fontSize: 16,
   },
   row: {
     flexDirection: 'row',

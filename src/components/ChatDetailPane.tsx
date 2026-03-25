@@ -90,11 +90,11 @@ export function ChatDetailPane({
               onPress={onBack}
               disabled={!hasActiveChatSession}
             >
-              <Text style={styles.secondaryButtonText}>Back to chats</Text>
+              <Text style={styles.secondaryButtonText}>返回聊天列表</Text>
             </Pressable>
             {hasActiveChatSession ? (
               <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
-                {onlineDeviceAvailable ? 'Sparkbox online' : 'Sparkbox offline'}
+                {onlineDeviceAvailable ? '设备在线' : '设备离线'}
               </Text>
             ) : null}
           </View>
@@ -110,7 +110,7 @@ export function ChatDetailPane({
         {showParticipantPills ? (
           <View style={styles.scopeRow}>
             {participantLabels.map((label) => {
-              const isCurrentUser = label === 'You';
+              const isCurrentUser = label === '你';
               return (
                 <View
                   key={`shared-chat-member-${label}`}
@@ -139,7 +139,7 @@ export function ChatDetailPane({
                   onlineDeviceAvailable ? styles.groupParticipantLabelOnline : styles.groupParticipantLabelOffline,
                 ]}
               >
-                {onlineDeviceAvailable ? 'Sparkbox' : 'Sparkbox offline'}
+                {onlineDeviceAvailable ? 'Sparkbox' : '设备离线'}
               </Text>
             </View>
           </View>
@@ -147,27 +147,27 @@ export function ChatDetailPane({
         {showManageActions ? (
           <View style={styles.inlineActions}>
             <Pressable style={styles.secondaryButtonSmall} onPress={onEdit}>
-              <Text style={styles.secondaryButtonText}>Edit settings</Text>
+              <Text style={styles.secondaryButtonText}>编辑设置</Text>
             </Pressable>
             <Pressable style={styles.secondaryButtonSmall} onPress={onClear} disabled={chatBusy}>
-              <Text style={styles.secondaryButtonText}>Clear messages</Text>
+              <Text style={styles.secondaryButtonText}>清空消息</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryButtonSmall}
               onPress={() =>
-                Alert.alert('Delete this chat?', 'Its message history will be removed.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: onDelete },
+                Alert.alert('删除这个聊天？', '聊天历史将被清空且不可恢复。', [
+                  { text: '取消', style: 'cancel' },
+                  { text: '删除', style: 'destructive', onPress: onDelete },
                 ])
               }
               disabled={chatBusy}
             >
-              <Text style={styles.secondaryButtonText}>Delete chat</Text>
+              <Text style={styles.secondaryButtonText}>删除聊天</Text>
             </Pressable>
           </View>
         ) : null}
         {!hasMessages ? (
-          <Text style={styles.cardCopy}>No messages yet in this chat.</Text>
+          <Text style={styles.cardCopy}>当前聊天还没有消息。</Text>
         ) : (
           chatTimelineGroups.map((group) =>
             group.kind === 'status' ? (
@@ -194,7 +194,7 @@ export function ChatDetailPane({
                       onPress={() => onRetry(group.message.retryContent ?? undefined)}
                       disabled={chatBusy}
                     >
-                      <Text style={styles.secondaryButtonText}>Retry</Text>
+                      <Text style={styles.secondaryButtonText}>重试</Text>
                     </Pressable>
                   </View>
                 ) : null}
@@ -262,7 +262,7 @@ export function ChatDetailPane({
             onPress={onSend}
             disabled={!canSend}
           >
-            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send</Text>}
+            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>发送</Text>}
           </Pressable>
         </View>
       </View>

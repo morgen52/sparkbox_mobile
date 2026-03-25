@@ -49,7 +49,7 @@ export function HouseholdPeoplePane({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Household members</Text>
+        <Text style={styles.cardTitle}>家庭成员</Text>
         <Text style={styles.cardCopy}>{householdMembersCopy}</Text>
         {homeMembers.map((member) => {
           const isSelf = member.id === currentUserId;
@@ -72,7 +72,7 @@ export function HouseholdPeoplePane({
                     disabled={settingsBusy || !canDemoteOrPromote}
                   >
                     <Text style={styles.secondaryButtonText}>
-                      {member.role === 'owner' ? 'Remove owner access' : 'Give owner access'}
+                      {member.role === 'owner' ? '移除管理员权限' : '授予管理员权限'}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -83,11 +83,11 @@ export function HouseholdPeoplePane({
                     onPress={() => onRemoveMember(member)}
                     disabled={settingsBusy || !canRemoveMemberEntry}
                   >
-                    <Text style={styles.secondaryButtonText}>Remove</Text>
+                    <Text style={styles.secondaryButtonText}>移除</Text>
                   </Pressable>
                 </View>
               ) : isSelf ? (
-                <Text style={styles.cardCopy}>This is you.</Text>
+                <Text style={styles.cardCopy}>这是你。</Text>
               ) : null}
             </View>
           );
@@ -96,9 +96,9 @@ export function HouseholdPeoplePane({
 
       {canManage ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Invites</Text>
+          <Text style={styles.cardTitle}>邀请</Text>
           <Text style={styles.cardCopy}>
-            Create a standard join invite or invite another owner here. Space-specific invites add people to this household and the shared space you picked.
+            可在这里创建普通加入邀请，或邀请新的管理员。按空间发出的邀请会让对方加入当前家庭，并进入你选择的共享空间。
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -106,25 +106,25 @@ export function HouseholdPeoplePane({
               onPress={() => onGenerateInvite('member')}
               disabled={settingsBusy}
             >
-              <Text style={styles.secondaryButtonText}>Invite someone</Text>
+              <Text style={styles.secondaryButtonText}>邀请成员</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryButtonSmall}
               onPress={() => onGenerateInvite('owner')}
               disabled={settingsBusy}
             >
-              <Text style={styles.secondaryButtonText}>Invite co-owner</Text>
+              <Text style={styles.secondaryButtonText}>邀请管理员</Text>
             </Pressable>
           </View>
           {pendingInvites.length === 0 ? (
-            <Text style={styles.cardCopy}>No active invites right now.</Text>
+            <Text style={styles.cardCopy}>当前没有有效邀请。</Text>
           ) : (
             pendingInvites.map((invite) => (
               <View key={invite.id} style={styles.deviceRowCard}>
-                <Text style={styles.networkName}>{describeInviteRole(invite.role)} invite</Text>
-                <Text style={styles.cardCopy}>Join code: {invite.invite_code || 'Waiting for a fresh code'}</Text>
+                <Text style={styles.networkName}>{describeInviteRole(invite.role)}邀请</Text>
+                <Text style={styles.cardCopy}>邀请码：{invite.invite_code || '等待新邀请码'}</Text>
                 {invite.space_name ? (
-                  <Text style={styles.cardCopy}>Adds them to {invite.space_name}</Text>
+                  <Text style={styles.cardCopy}>将加入到 {invite.space_name}</Text>
                 ) : null}
                 <Text style={styles.cardCopy}>{describeInviteExpiry(invite.expires_at)}</Text>
                 <View style={styles.inlineActions}>
@@ -133,7 +133,7 @@ export function HouseholdPeoplePane({
                     onPress={() => onRevokeInvite(invite)}
                     disabled={settingsBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Revoke</Text>
+                    <Text style={styles.secondaryButtonText}>撤销</Text>
                   </Pressable>
                 </View>
               </View>
@@ -143,9 +143,9 @@ export function HouseholdPeoplePane({
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Recent Activity</Text>
+        <Text style={styles.cardTitle}>最近活动</Text>
         {recentActivity.length === 0 ? (
-          <Text style={styles.cardCopy}>No household activity yet.</Text>
+          <Text style={styles.cardCopy}>暂无家庭活动。</Text>
         ) : (
           recentActivity.slice(0, 5).map((event) => (
             <View key={event.id} style={styles.deviceRowCard}>

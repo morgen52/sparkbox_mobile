@@ -1,9 +1,9 @@
 import { describeOwnerServiceActionLabel, type ShellTab } from './householdState';
 
 export const PHASE_ONE_TABS: Array<{ key: ShellTab; label: string }> = [
-  { key: 'chats', label: 'Chats' },
-  { key: 'library', label: 'Library' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'chats', label: '聊天' },
+  { key: 'library', label: '资料库' },
+  { key: 'settings', label: '设置' },
 ];
 
 export type PhaseOneSurface = 'onboarding' | 'shell';
@@ -43,7 +43,7 @@ export function buildSetupFlowResetState(): SetupFlowResetState {
     manualEntry: false,
     networkSheetOpen: false,
     provisionBusy: false,
-    provisionMessage: 'Scan the QR code to get Sparkbox ready for Wi-Fi.',
+    provisionMessage: '请先扫描二维码，让 Sparkbox 进入配网准备状态。',
     portalUrl: null,
     completedDeviceId: '',
     hotspotStage: 'idle',
@@ -63,16 +63,16 @@ export function describeShellSubtitle(options: {
   if (options.shellTab === 'chats') {
     if (!options.activeSpaceName) {
       if (options.spacesReady === false) {
-        return 'Loading your spaces...';
+        return '正在加载你的空间...';
       }
-      return "Choose a space first, then move into that space's chats.";
+      return '请先选择一个空间，再进入该空间的聊天。';
     }
-    return `Viewing ${options.activeSpaceName} (${options.activeSpaceKindLabel}). Open that space's chats below.`;
+    return `当前空间：${options.activeSpaceName}（${options.activeSpaceKindLabel}），下方可直接进入聊天。`;
   }
   if (options.shellTab === 'library') {
-    return "See what each space has saved, then manage files and routines there.";
+    return '查看空间沉淀的内容，并在这里管理文件与任务。';
   }
-  return "Manage Sparkbox, the space you're viewing, family apps, and your account.";
+  return '管理设备、当前空间、家庭应用与账号信息。';
 }
 
 export function formatByteSize(bytes: number): string {
@@ -130,18 +130,18 @@ export function describeInviteExpiry(expiresAt: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(parsed);
-  return `Expires on ${formatted}`;
+  return `到期时间：${formatted}`;
 }
 
 export function describeInviteRole(role: string): string {
-  return String(role).trim().toLowerCase() === 'owner' ? 'Co-owner' : 'Member';
+  return String(role).trim().toLowerCase() === 'owner' ? '共同管理员' : '成员';
 }
 
 const ACTIVATION_STATUS_LABELS: Record<string, string> = {
-  setup_ap_active: 'Ready for setup',
-  pairing_in_progress: 'Connecting to your household',
-  activation_in_progress: 'Finishing activation',
-  bound_online: 'Connected and ready',
+  setup_ap_active: '等待配网',
+  pairing_in_progress: '正在绑定家庭',
+  activation_in_progress: '正在完成激活',
+  bound_online: '已连接，可正常使用',
 };
 
 export function describeActivationStatus(status: string): string {
@@ -249,7 +249,7 @@ export function describeTaskSchedule(cronExpr: string): string {
   const hourNumber = Number.parseInt(hour, 10);
 
   if (minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    return 'Repeats every hour';
+    return '每小时重复';
   }
 
   if (
@@ -259,7 +259,7 @@ export function describeTaskSchedule(cronExpr: string): string {
     month === '*' &&
     dayOfWeek === '*'
   ) {
-    return `Repeats daily at ${formatScheduleTime(hourNumber, minuteNumber)}`;
+    return `每天 ${formatScheduleTime(hourNumber, minuteNumber)} 执行`;
   }
 
   if (
@@ -269,40 +269,40 @@ export function describeTaskSchedule(cronExpr: string): string {
     month === '*' &&
     dayOfWeek === '1-5'
   ) {
-    return `Repeats on weekdays at ${formatScheduleTime(hourNumber, minuteNumber)}`;
+    return `工作日 ${formatScheduleTime(hourNumber, minuteNumber)} 执行`;
   }
 
-  return 'Repeats on a custom schedule';
+  return '自定义重复规则';
 }
 
 export function describeTaskExecution(commandType: string, scope: string): string {
-  const executionLabel = commandType === 'zeroclaw' ? 'Handled by Sparkbox' : 'Runs on this device';
-  const visibilityLabel = scope === 'family' ? 'Shared space' : 'Just you';
+  const executionLabel = commandType === 'zeroclaw' ? '由 Sparkbox 执行' : '在设备上执行';
+  const visibilityLabel = scope === 'family' ? '共享空间' : '仅自己可见';
   return `${executionLabel} · ${visibilityLabel}`;
 }
 
 export function describeTaskEnabledState(enabled: boolean): string {
-  return enabled ? 'Ready' : 'Paused';
+  return enabled ? '启用中' : '已暂停';
 }
 
 export function describeLibraryPhotoEmptyState(scope: 'family' | 'private'): string {
-  return scope === 'family' ? 'No photos saved in this folder yet.' : 'No photos saved here yet.';
+  return scope === 'family' ? '该空间还没有照片。' : '这里还没有照片。';
 }
 
 export function describeLibraryFileListTitle(scope: 'family' | 'private'): string {
-  return scope === 'family' ? 'Files saved in this space' : 'Files saved just for you';
+  return scope === 'family' ? '空间文件' : '我的文件';
 }
 
 export function describeLibraryFileListEmptyState(scope: 'family' | 'private'): string {
-  return scope === 'family' ? 'No files saved in this folder yet.' : 'No files saved here yet.';
+  return scope === 'family' ? '该空间还没有文件。' : '这里还没有文件。';
 }
 
 export function describeLibraryTaskListTitle(scope: 'family' | 'private'): string {
-  return scope === 'family' ? 'Routines in this space' : 'Routines just for you';
+  return scope === 'family' ? '空间任务' : '我的任务';
 }
 
 export function describeLibraryTaskListEmptyState(scope: 'family' | 'private'): string {
-  return scope === 'family' ? 'No routines saved for this space yet.' : 'No routines saved just for you yet.';
+  return scope === 'family' ? '该空间还没有任务。' : '这里还没有任务。';
 }
 
 const HTML_ENTITY_MAP: Record<string, string> = {
@@ -335,7 +335,7 @@ export function decodeChatMessageContent(content: string): string {
 
 export function describeFileTimestamp(modified: string): string {
   const formatted = describeUiDateTime(modified);
-  return formatted ? `Updated ${formatted}` : 'Stored on Sparkbox';
+  return formatted ? `更新于 ${formatted}` : '已保存到 Sparkbox';
 }
 
 export function describeFileUploader(
@@ -344,24 +344,24 @@ export function describeFileUploader(
   members: Array<{ id: string; display_name: string }>,
 ): string {
   if (uploadedByUserId === currentUserId) {
-    return 'Uploaded by you';
+    return '你上传的';
   }
   const matchedMember = members.find((member) => member.id === uploadedByUserId);
   if (matchedMember?.display_name) {
-    return `Uploaded by ${matchedMember.display_name}`;
+    return `${matchedMember.display_name} 上传`; 
   }
-  return 'Uploaded by another household member';
+  return '其他家庭成员上传';
 }
 
 const SERVICE_AVAILABILITY_ERROR_LABELS: Record<string, string> = {
-  'No online Sparkbox is ready for household files': 'Bring Sparkbox online to work with files in this space.',
-  'No online Sparkbox is ready for household tasks': 'Bring Sparkbox online to work with routines in this space.',
-  'No online Sparkbox is ready for household chat': 'Bring Sparkbox online to keep chatting in this space.',
-  'No online Sparkbox is ready for chat': 'Bring Sparkbox online to keep chatting here.',
-  'Invalid or missing token': 'Please sign in again.',
+  'No online Sparkbox is ready for household files': '设备当前离线，请先让 Sparkbox 联网后再管理文件。',
+  'No online Sparkbox is ready for household tasks': '设备当前离线，请先让 Sparkbox 联网后再管理任务。',
+  'No online Sparkbox is ready for household chat': '设备当前离线，请先让 Sparkbox 联网后再聊天。',
+  'No online Sparkbox is ready for chat': '设备当前离线，请先让 Sparkbox 联网后再聊天。',
+  'Invalid or missing token': '登录状态失效，请重新登录。',
 };
 
-const GENERIC_SERVICE_AVAILABILITY_ERROR = 'Sparkbox hit a temporary issue. Try again in a moment.';
+const GENERIC_SERVICE_AVAILABILITY_ERROR = 'Sparkbox 暂时不可用，请稍后重试。';
 
 export function describeServiceAvailabilityError(message: string): string {
   const normalized = String(message).trim();
@@ -381,10 +381,10 @@ export function describeServiceAvailabilityError(message: string): string {
 export function describeDiagnosticsSource(source: string): string {
   const normalized = String(source).trim().toLowerCase();
   if (!normalized || normalized === 'live') {
-    return 'live check';
+    return '实时诊断';
   }
   if (normalized === 'cached') {
-    return 'latest saved check';
+    return '最近缓存诊断';
   }
   return normalized
     .replace(/[_-]+/g, ' ')
@@ -399,27 +399,27 @@ export function describeDeviceActionNotice(
   action?: 'start' | 'stop' | 'restart',
 ): string {
   if (kind === 'provider_saved') {
-    return 'Saved AI service settings for this device.';
+    return '已保存当前设备的 AI 服务设置。';
   }
   if (kind === 're_onboard_finished') {
-    return 'Finished refreshing AI service settings for this device.';
+    return '已完成 AI 服务重配置。';
   }
   if (kind === 'service_requested' && service && action) {
     return `${describeOwnerServiceActionLabel(service, action)} requested.`;
   }
-  return 'This Sparkbox is ready for setup again.';
+  return '设备已回到可重新配置状态。';
 }
 
 export function describeTaskRunStatus(status: string): string {
   const normalized = String(status).trim().toLowerCase();
   if (!normalized) {
-    return 'Run update';
+    return '运行状态更新';
   }
   if (normalized === 'success' || normalized === 'succeeded') {
-    return 'Completed';
+    return '已完成';
   }
   if (normalized === 'failed' || normalized === 'error') {
-    return 'Needs attention';
+    return '需关注';
   }
   return normalized
     .replace(/[_-]+/g, ' ')
@@ -430,12 +430,12 @@ export function describeTaskRunStatus(status: string): string {
 
 export function describeTaskRunStartedAt(value: string): string {
   const formatted = describeUiDateTime(value);
-  return formatted ? `Started ${formatted}` : 'Started recently';
+  return formatted ? `开始于 ${formatted}` : '刚刚开始';
 }
 
 export function describeTaskRunFinishedAt(value: string): string {
   const formatted = describeUiDateTime(value);
-  return formatted ? `Finished ${formatted}` : 'Finished recently';
+  return formatted ? `结束于 ${formatted}` : '刚刚结束';
 }
 
 function summarizeOutputLine(output: string): string {
@@ -455,12 +455,12 @@ function summarizeOutputLine(output: string): string {
 
 export function summarizeOwnerServiceOutput(output: string): string {
   const summary = summarizeOutputLine(output);
-  return summary ? `Latest service note: ${summary}` : '';
+  return summary ? `服务反馈：${summary}` : '';
 }
 
 export function describeTaskRunOutput(output: string): string {
   const summary = summarizeOutputLine(output);
-  return summary ? `Latest note: ${summary}` : '';
+  return summary ? `最近输出：${summary}` : '';
 }
 
 function sanitizeActivityDetails(details: string): string {
@@ -471,17 +471,17 @@ function sanitizeActivityDetails(details: string): string {
   const withoutSpaceIds = normalized.replace(/\bspace_[a-z0-9_-]+\b/gi, 'this space');
   const roleTransitionMatch = withoutSpaceIds.match(/^(owner|member)\s*(?:→|->)\s*(owner|member)$/i);
   if (roleTransitionMatch) {
-    const nextRole = roleTransitionMatch[2].toLowerCase() === 'owner' ? 'owner access' : 'member access';
-    return `Changed a household role to ${nextRole}`;
+    const nextRole = roleTransitionMatch[2].toLowerCase() === 'owner' ? '管理员' : '成员';
+    return `已将家庭角色改为${nextRole}`;
   }
   if (/^Owner invite code generated$/i.test(withoutSpaceIds)) {
-    return 'Co-owner invite code generated';
+    return '已生成共同管理员邀请码';
   }
   if (/^Created family task(?: for this space)?$/i.test(withoutSpaceIds)) {
-    return 'Created a shared routine';
+    return '已创建共享任务';
   }
   if (/^Sent into setup mode to change Wi-Fi$/i.test(withoutSpaceIds)) {
-    return 'Started Wi-Fi setup again';
+    return '已重新进入配网模式';
   }
   return withoutSpaceIds;
 }
@@ -493,7 +493,7 @@ export function describeActivityEvent(details: string, eventType: string): strin
   }
   const normalizedEventType = String(eventType).trim().replace(/_/g, ' ');
   if (!normalizedEventType) {
-    return 'Household activity';
+    return '家庭动态';
   }
   return normalizedEventType.replace(/^./, (value) => value.toUpperCase());
 }

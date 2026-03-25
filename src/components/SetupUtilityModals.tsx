@@ -63,19 +63,19 @@ export function SetupUtilityModals({
       >
         <View style={styles.networkSheetBackdrop}>
           <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{fileEditorMode === 'rename' ? 'Rename item' : 'New folder'}</Text>
+            <Text style={styles.selectionLabel}>{fileEditorMode === 'rename' ? '重命名项目' : '新建文件夹'}</Text>
             <Text style={styles.selectionTitle}>
-              {fileEditorMode === 'rename' ? fileTargetEntry?.name || 'Rename' : 'Create folder'}
+              {fileEditorMode === 'rename' ? fileTargetEntry?.name || '重命名' : '创建文件夹'}
             </Text>
             <Text style={styles.selectionCopy}>
               {fileEditorMode === 'rename'
-                ? 'Use a short, clear name. Sparkbox keeps the item in the same folder.'
-                : 'Create a new folder here so files for this space stay organized.'}
+                ? '建议使用简短清晰的名称。Sparkbox 会保持该项目在原目录不变。'
+                : '在这里创建新文件夹，便于整理这个空间的文件。'}
             </Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder={fileEditorMode === 'rename' ? 'New name' : 'Folder name'}
+              placeholder={fileEditorMode === 'rename' ? '新名称' : '文件夹名称'}
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={fileEditorValue}
@@ -88,14 +88,14 @@ export function SetupUtilityModals({
                 onPress={onCloseFileEditor}
                 disabled={filesBusy}
               >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>取消</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryButtonSmall}
                 onPress={onSubmitFileEditor}
                 disabled={filesBusy}
               >
-                {filesBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{fileEditorMode === 'rename' ? 'Rename' : 'Create folder'}</Text>}
+                {filesBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{fileEditorMode === 'rename' ? '重命名' : '创建文件夹'}</Text>}
               </Pressable>
             </View>
           </View>
@@ -111,19 +111,19 @@ export function SetupUtilityModals({
       >
         <View style={styles.networkSheetBackdrop}>
           <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{manualEntry || !selectedNetwork ? 'Manual entry' : 'Connect Sparkbox'}</Text>
+            <Text style={styles.selectionLabel}>{manualEntry || !selectedNetwork ? '手动输入' : '连接 Sparkbox'}</Text>
             <Text style={styles.selectionTitle}>
-              {selectedSsid || previousInternetSsid || 'Enter your home Wi-Fi'}
+              {selectedSsid || previousInternetSsid || '输入家庭 Wi-Fi'}
             </Text>
             <Text style={styles.selectionCopy}>
               {selectedNetwork?.known
-                ? 'Sparkbox has used this Wi-Fi before. Leave the password blank unless it changed.'
-                : 'Enter the Wi-Fi password, then Sparkbox will leave setup and join this network.'}
+                ? 'Sparkbox 之前连过这个 Wi-Fi。如密码未变，可留空。'
+                : '输入 Wi-Fi 密码后，Sparkbox 将退出配置模式并接入该网络。'}
             </Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder="Wi-Fi name"
+              placeholder="Wi-Fi 名称"
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={selectedSsid}
@@ -135,7 +135,7 @@ export function SetupUtilityModals({
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry
-                placeholder={selectedNetwork?.known ? 'Password (optional if unchanged)' : 'Wi-Fi password'}
+                placeholder={selectedNetwork?.known ? '密码（未变可选填）' : 'Wi-Fi 密码'}
                 placeholderTextColor="#7e8a83"
                 style={styles.input}
                 value={wifiPassword}
@@ -148,14 +148,14 @@ export function SetupUtilityModals({
                 onPress={onCloseNetworkSheet}
                 disabled={provisionBusy}
               >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>取消</Text>
               </Pressable>
               <Pressable
                 style={[styles.primaryButtonSmall, !canSubmitWifi ? styles.networkRowDisabled : null]}
                 onPress={onSubmitWifi}
                 disabled={!canSubmitWifi}
               >
-                {provisionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Connect</Text>}
+                {provisionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>连接</Text>}
               </Pressable>
             </View>
           </View>

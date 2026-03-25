@@ -43,12 +43,12 @@ export function RelayComposerModal({
     >
       <View style={styles.networkSheetBackdrop}>
         <View style={styles.networkSheetCard}>
-          <Text style={styles.selectionLabel}>Relay message</Text>
-          <Text style={styles.selectionTitle}>Have Sparkbox relay it privately</Text>
+          <Text style={styles.selectionLabel}>转达消息</Text>
+          <Text style={styles.selectionTitle}>让 Sparkbox 私下转达</Text>
           <Text style={styles.selectionCopy}>
-            Choose one other member in this shared space, then write the note Sparkbox should pass along privately.
+            选择本共享空间中的一位成员，再填写要由 Sparkbox 私下转达的内容。
           </Text>
-          <Text style={styles.selectionLabel}>Send to</Text>
+          <Text style={styles.selectionLabel}>发送给</Text>
           <View style={styles.scopeRow}>
             {relayTargets.map((member) => {
               const active = relayTargetUserId === member.id;
@@ -70,7 +70,7 @@ export function RelayComposerModal({
             autoCorrect={false}
             multiline
             numberOfLines={4}
-            placeholder="Write the message Sparkbox should relay"
+            placeholder="输入要由 Sparkbox 转达的内容"
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             value={relayMessage}
@@ -83,14 +83,14 @@ export function RelayComposerModal({
               onPress={onRequestClose}
               disabled={relayBusy}
             >
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Text style={styles.secondaryButtonText}>取消</Text>
             </Pressable>
             <Pressable
               style={[styles.primaryButtonSmall, relayTargets.length === 0 ? styles.networkRowDisabled : null]}
               onPress={onSubmit}
               disabled={relayBusy || relayTargets.length === 0}
             >
-              {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Relay</Text>}
+              {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>转达</Text>}
             </Pressable>
           </View>
         </View>

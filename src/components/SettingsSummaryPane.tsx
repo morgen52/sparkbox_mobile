@@ -57,23 +57,23 @@ export function SettingsSummaryPane({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Household overview</Text>
+        <Text style={styles.cardTitle}>家庭概览</Text>
         <Text style={styles.cardCopy}>
           {homeBusy
-            ? 'Refreshing your household status...'
+            ? '正在刷新家庭状态...'
             : onlineDeviceAvailable
-              ? 'Sparkbox is ready for household chat.'
-              : 'Household history stays available even when Sparkbox is offline.'}
+              ? 'Sparkbox 已就绪，可进行家庭聊天。'
+              : '即使 Sparkbox 离线，家庭历史记录仍可查看。'}
         </Text>
         {homeError ? <Text style={styles.errorText}>{homeError}</Text> : null}
         {homeBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
         <View style={styles.inlineActions}>
           <Pressable style={styles.primaryButtonSmall} onPress={onOpenChats}>
-            <Text style={styles.primaryButtonText}>Open group chat</Text>
+            <Text style={styles.primaryButtonText}>打开群聊</Text>
           </Pressable>
           {canManage ? (
             <Pressable style={styles.secondaryButtonSmall} onPress={onBeginNewDeviceOnboarding}>
-              <Text style={styles.secondaryButtonText}>Set up another device</Text>
+              <Text style={styles.secondaryButtonText}>配置新设备</Text>
             </Pressable>
           ) : null}
         </View>
@@ -94,15 +94,15 @@ export function SettingsSummaryPane({
       />
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Your account</Text>
+        <Text style={styles.cardTitle}>你的账号</Text>
         <Text style={styles.cardCopy}>
-          {accountDisplayName} · {accountRoleLabel} access
+          {accountDisplayName} · {accountRoleLabel}权限
         </Text>
         {settingsNotice ? <Text style={styles.noticeText}>{settingsNotice}</Text> : null}
         {settingsError ? <Text style={styles.errorText}>{settingsError}</Text> : null}
         <View style={styles.inlineActions}>
           <Pressable style={styles.secondaryButtonSmall} onPress={onLogout}>
-            <Text style={styles.secondaryButtonText}>Sign out</Text>
+            <Text style={styles.secondaryButtonText}>退出登录</Text>
           </Pressable>
         </View>
       </View>

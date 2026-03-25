@@ -105,7 +105,7 @@ export function ChatSpaceToolsPane({
       {showRelayHelper ? (
         <>
           <Text style={styles.cardCopy}>
-            If something is hard to phrase, Sparkbox can help you relay it privately to one other person in this space.
+            如果你不方便直接表达，Sparkbox 可以帮你把内容私下转达给本空间的一位成员。
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -113,7 +113,7 @@ export function ChatSpaceToolsPane({
               onPress={onOpenRelay}
               disabled={!canOpenRelay}
             >
-              <Text style={styles.primaryButtonText}>Have Sparkbox relay it privately</Text>
+              <Text style={styles.primaryButtonText}>让 Sparkbox 私下转达</Text>
             </Pressable>
           </View>
         </>
@@ -122,29 +122,29 @@ export function ChatSpaceToolsPane({
         <View style={styles.deviceRowCard}>
           <View style={styles.deviceRowHeadline}>
             <Text style={styles.networkName}>{privateSideChannelLabel}</Text>
-            <Text style={styles.tagMuted}>private</Text>
+            <Text style={styles.tagMuted}>私密</Text>
           </View>
           <Text style={styles.cardCopy}>
-            Use this private chat when you want Sparkbox to help you think first, before you bring anything back to the shared space.
+            当你想先理清思路、再发回共享空间时，可以先在这个私密聊天里和 Sparkbox 沟通。
           </Text>
           <View style={styles.inlineActions}>
             <Pressable style={styles.primaryButtonSmall} onPress={onOpenPrivateSideChannel}>
-              <Text style={styles.primaryButtonText}>Talk privately with Sparkbox</Text>
+              <Text style={styles.primaryButtonText}>与 Sparkbox 私聊</Text>
             </Pressable>
           </View>
         </View>
       ) : null}
       {enabledFamilyApps.length ? (
         <>
-          <Text style={styles.selectionLabel}>On in this space</Text>
+          <Text style={styles.selectionLabel}>本空间已启用</Text>
           {enabledFamilyApps.map((app) => (
             <View key={app.slug} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
                 <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                <Text style={styles.statusTagOnline}>Ready here</Text>
+                <Text style={styles.statusTagOnline}>已就绪</Text>
               </View>
               <Text style={styles.cardCopy}>
-                {app.meta?.entryCopy || app.meta?.description || 'This family app is ready in this space.'}
+                {app.meta?.entryCopy || app.meta?.description || '这个家庭应用已在本空间就绪。'}
               </Text>
               {app.meta?.starterPrompts?.length ? (
                 <View style={styles.scopeRow}>
@@ -167,7 +167,7 @@ export function ChatSpaceToolsPane({
                     onPress={() => onDisableFamilyApp(app.slug)}
                     disabled={settingsBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Disable here</Text>
+                    <Text style={styles.secondaryButtonText}>在此停用</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -177,7 +177,7 @@ export function ChatSpaceToolsPane({
       ) : null}
       {readyInstalledFamilyApps.length ? (
         <>
-          <Text style={styles.selectionLabel}>Ready to enable here</Text>
+          <Text style={styles.selectionLabel}>可在本空间启用</Text>
           {readyInstalledFamilyApps.map((app) => (
             <View key={`ready-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
@@ -191,7 +191,7 @@ export function ChatSpaceToolsPane({
                   onPress={() => onEnableFamilyApp(app.slug)}
                   disabled={settingsBusy}
                 >
-                  <Text style={styles.primaryButtonText}>Enable in this space</Text>
+                  <Text style={styles.primaryButtonText}>在此空间启用</Text>
                 </Pressable>
               </View>
             </View>

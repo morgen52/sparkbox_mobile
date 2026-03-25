@@ -22,9 +22,9 @@ export function LibraryQuickActionsCard({
 }: LibraryQuickActionsCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.selectionLabel}>Quick actions</Text>
+      <Text style={styles.selectionLabel}>快捷操作</Text>
       <Text style={styles.cardCopy}>
-        The creation shortcuts live here so they are always easy to reach.
+        常用创建入口都放在这里，方便随时使用。
       </Text>
       <View style={styles.inlineActions}>
         {canMutateActiveSpaceFiles ? (
@@ -35,7 +35,7 @@ export function LibraryQuickActionsCard({
             onPress={onOpenFileEditor}
             disabled={!onlineDeviceAvailable || filesBusy}
           >
-            <Text style={styles.secondaryButtonText}>New folder</Text>
+            <Text style={styles.secondaryButtonText}>新建文件夹</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -45,7 +45,7 @@ export function LibraryQuickActionsCard({
           onPress={onOpenTaskEditor}
           disabled={!onlineDeviceAvailable || !canCreateTasks}
         >
-          <Text style={styles.primaryButtonText}>New task</Text>
+          <Text style={styles.primaryButtonText}>新建任务</Text>
         </Pressable>
       </View>
     </View>

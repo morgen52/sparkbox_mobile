@@ -162,9 +162,9 @@ export function LibraryPane({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.selectionLabel}>Quick actions</Text>
+        <Text style={styles.selectionLabel}>快捷操作</Text>
         <Text style={styles.cardCopy}>
-          The creation shortcuts live here so they are always easy to reach.
+          常用创建入口都放在这里，方便随时使用。
         </Text>
         <View style={styles.inlineActions}>
           {canMutateActiveSpaceFiles ? (
@@ -175,7 +175,7 @@ export function LibraryPane({
               onPress={onOpenFileEditor}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
-              <Text style={styles.secondaryButtonText}>New folder</Text>
+              <Text style={styles.secondaryButtonText}>新建文件夹</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -185,17 +185,17 @@ export function LibraryPane({
             onPress={onOpenTaskEditor}
             disabled={!onlineDeviceAvailable || !canCreateTasks}
           >
-            <Text style={styles.primaryButtonText}>New task</Text>
+            <Text style={styles.primaryButtonText}>新建任务</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Library overview</Text>
+        <Text style={styles.cardTitle}>资料库概览</Text>
         <Text style={styles.cardCopy}>
           {activeSpace
-            ? `${activeSpace.name} (${activeSpaceKindLabel}) keeps its memories, summaries, photos, files, and tasks together.`
-            : 'Pick a space to browse what Sparkbox has saved there.'}
+            ? `${activeSpace.name}（${activeSpaceKindLabel}）会把记忆、摘要、照片、文件和任务集中管理。`
+            : '先选择一个空间，再查看 Sparkbox 在其中保存的内容。'}
         </Text>
         {libraryNotice ? <Text style={styles.noticeText}>{libraryNotice}</Text> : null}
         {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
@@ -209,18 +209,18 @@ export function LibraryPane({
           ))}
         </View>
         <Text style={styles.cardCopy}>
-          Everything Sparkbox has saved for this space shows up here in one place.
+          Sparkbox 在这个空间保存的内容都会集中显示在这里。
         </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Memories in this space</Text>
+        <Text style={styles.cardTitle}>本空间记忆</Text>
         <Text style={styles.cardCopy}>
-          Memories are the key details Sparkbox should remember for {activeSpace?.name || 'this space'}.
+          记忆是 Sparkbox 需要长期记住的关键信息，适用于{activeSpace?.name || '当前空间'}。
         </Text>
         {!canMutateActiveSpaceLibrary && activeSpace?.kind === 'shared' ? (
           <Text style={styles.cardCopy}>
-            Owners update the shared memories and summaries here. Members can still read everything in this space library.
+            共享空间中的记忆和摘要由管理员维护，成员仍可查看此空间资料库中的全部内容。
           </Text>
         ) : null}
         <View style={styles.inlineActions}>
@@ -229,7 +229,7 @@ export function LibraryPane({
             onPress={() => onRefreshLibrary()}
             disabled={!activeSpace || libraryBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh</Text>
+            <Text style={styles.secondaryButtonText}>刷新</Text>
           </TouchableOpacity>
           {canMutateActiveSpaceLibrary ? (
             <TouchableOpacity
@@ -237,24 +237,24 @@ export function LibraryPane({
               onPress={onOpenMemoryEditor}
               disabled={!activeSpace || libraryBusy}
             >
-              <Text style={styles.primaryButtonText}>New memory</Text>
+              <Text style={styles.primaryButtonText}>新建记忆</Text>
             </TouchableOpacity>
           ) : null}
         </View>
         {memories.length === 0 && !libraryBusy ? (
-          <Text style={styles.cardCopy}>Nothing has been saved to Memories yet.</Text>
+          <Text style={styles.cardCopy}>还没有保存任何记忆。</Text>
         ) : null}
         {memories.map((memory) => (
           <View key={memory.id} style={styles.deviceRowCard}>
             <View style={styles.deviceRowHeadline}>
               <Text style={styles.networkName}>{memory.title}</Text>
               <Text style={memory.pinned ? styles.statusTagOnline : styles.tagMuted}>
-                {memory.pinned ? 'pinned' : 'memory'}
+                {memory.pinned ? '置顶' : '记忆'}
               </Text>
             </View>
             <Text style={styles.cardCopy}>{memory.content}</Text>
             <Text style={styles.cardCopy}>
-              Updated {describeUiDateTime(memory.updatedAt) || memory.updatedAt}
+              更新于 {describeUiDateTime(memory.updatedAt) || memory.updatedAt}
             </Text>
             {canMutateActiveSpaceLibrary ? (
               <View style={styles.inlineActions}>
@@ -263,14 +263,14 @@ export function LibraryPane({
                   onPress={() => onEditMemory(memory)}
                   disabled={libraryBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Edit</Text>
+                  <Text style={styles.secondaryButtonText}>编辑</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDeleteMemory(memory)}
                   disabled={libraryBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Delete</Text>
+                  <Text style={styles.secondaryButtonText}>删除</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -279,7 +279,7 @@ export function LibraryPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Summaries in this space</Text>
+        <Text style={styles.cardTitle}>本空间摘要</Text>
         <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
         <View style={styles.inlineActions}>
           <TouchableOpacity
@@ -287,7 +287,7 @@ export function LibraryPane({
             onPress={() => onRefreshLibrary()}
             disabled={!activeSpace || libraryBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh</Text>
+            <Text style={styles.secondaryButtonText}>刷新</Text>
           </TouchableOpacity>
           {canMutateActiveSpaceLibrary ? (
             <TouchableOpacity
@@ -301,17 +301,17 @@ export function LibraryPane({
         </View>
         <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
         {summaries.length === 0 && !libraryBusy ? (
-          <Text style={styles.cardCopy}>No summaries yet.</Text>
+          <Text style={styles.cardCopy}>暂无摘要。</Text>
         ) : null}
         {summaries.map((summary) => (
           <View key={summary.id} style={styles.deviceRowCard}>
             <View style={styles.deviceRowHeadline}>
               <Text style={styles.networkName}>{summary.title}</Text>
-              <Text style={styles.tagMuted}>{summary.sourceLabel || 'summary'}</Text>
+              <Text style={styles.tagMuted}>{summary.sourceLabel || '摘要'}</Text>
             </View>
             <Text style={styles.cardCopy}>{summary.content}</Text>
             <Text style={styles.cardCopy}>
-              Created {describeUiDateTime(summary.createdAt) || summary.createdAt}
+              创建于 {describeUiDateTime(summary.createdAt) || summary.createdAt}
             </Text>
             {canMutateActiveSpaceLibrary ? (
               <View style={styles.inlineActions}>
@@ -320,14 +320,14 @@ export function LibraryPane({
                   onPress={() => onSaveSummaryAsMemory(summary)}
                   disabled={libraryBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Save as memory</Text>
+                  <Text style={styles.secondaryButtonText}>存为记忆</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDeleteSummary(summary)}
                   disabled={libraryBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Delete</Text>
+                  <Text style={styles.secondaryButtonText}>删除</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -336,13 +336,13 @@ export function LibraryPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Photos in this space</Text>
+        <Text style={styles.cardTitle}>本空间照片</Text>
         <Text style={styles.cardCopy}>
-          Photos belong to this space as shared moments, not just as generic uploads.
+          照片会作为这个空间的共享记录保存，而不仅是普通上传文件。
         </Text>
         {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
           <Text style={styles.cardCopy}>
-            Owners manage shared photos here. Members can still browse and download what is already in this space.
+            共享照片由管理员维护，成员仍可浏览和下载本空间已有照片。
           </Text>
         ) : null}
         <View style={styles.inlineActions}>
@@ -351,7 +351,7 @@ export function LibraryPane({
             onPress={() => onRefreshPhotos()}
             disabled={!onlineDeviceAvailable || filesBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh photos</Text>
+            <Text style={styles.secondaryButtonText}>刷新照片</Text>
           </TouchableOpacity>
           {canMutateActiveSpaceFiles ? (
             <TouchableOpacity
@@ -359,7 +359,7 @@ export function LibraryPane({
               onPress={onUploadPhotos}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
-              <Text style={styles.primaryButtonText}>Upload photos</Text>
+              <Text style={styles.primaryButtonText}>上传照片</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -370,7 +370,7 @@ export function LibraryPane({
           <View key={`photo-${entry.path}`} style={styles.deviceRowCard}>
             <View style={styles.deviceRowHeadline}>
               <Text style={styles.networkName}>{entry.name}</Text>
-              <Text style={styles.statusTagOnline}>photo</Text>
+              <Text style={styles.statusTagOnline}>照片</Text>
             </View>
             <Text style={styles.cardCopy}>
               {describeFileTimestamp(entry.modified || '')}
@@ -382,7 +382,7 @@ export function LibraryPane({
                 onPress={() => onDownloadPhoto(entry)}
                 disabled={filesBusy}
               >
-                <Text style={styles.secondaryButtonText}>Download</Text>
+                <Text style={styles.secondaryButtonText}>下载</Text>
               </TouchableOpacity>
               {canManageFileEntry(entry) ? (
                 <TouchableOpacity
@@ -390,7 +390,7 @@ export function LibraryPane({
                   onPress={() => onDeletePhoto(entry)}
                   disabled={filesBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Delete</Text>
+                  <Text style={styles.secondaryButtonText}>删除</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -399,27 +399,27 @@ export function LibraryPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Files in this space</Text>
+        <Text style={styles.cardTitle}>本空间文件</Text>
         <Text style={styles.cardCopy}>
           {onlineDeviceAvailable
-            ? `Files stay inside ${activeSpace ? activeSpace.name : 'this space'} so each space can keep its own working materials separate.`
-            : 'Bring Sparkbox online to browse or update the files for this space.'}
+            ? `文件会保存在${activeSpace ? activeSpace.name : '当前空间'}内，便于不同空间各自管理资料。`
+            : '请先让 Sparkbox 在线，再浏览或更新此空间文件。'}
         </Text>
         {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
           <Text style={styles.cardCopy}>
-            Owners manage shared files and folders here. Members can still open and download what is already in this space.
+            共享文件与文件夹由管理员维护，成员仍可打开和下载本空间已有内容。
           </Text>
         ) : null}
         {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
         {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
-        <Text style={styles.cardCopy}>Viewing folder: {folderLabel}</Text>
+        <Text style={styles.cardCopy}>当前目录：{folderLabel}</Text>
         <View style={styles.inlineActions}>
           <TouchableOpacity
             style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshFiles()}
             disabled={!onlineDeviceAvailable || filesBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh</Text>
+            <Text style={styles.secondaryButtonText}>刷新</Text>
           </TouchableOpacity>
           {canMutateActiveSpaceFiles ? (
             <TouchableOpacity
@@ -427,13 +427,13 @@ export function LibraryPane({
               onPress={onUploadFiles}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
-              <Text style={styles.primaryButtonText}>Upload</Text>
+              <Text style={styles.primaryButtonText}>上传</Text>
             </TouchableOpacity>
           ) : null}
         </View>
         {fileListing?.parent ? (
           <TouchableOpacity style={styles.secondaryButtonSmall} onPress={() => onRefreshFiles(fileListing.parent || '')}>
-            <Text style={styles.secondaryButtonText}>Go up</Text>
+            <Text style={styles.secondaryButtonText}>返回上级</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -449,7 +449,7 @@ export function LibraryPane({
             <View style={styles.deviceRowHeadline}>
               <Text style={styles.networkName}>{entry.name}</Text>
               <Text style={entry.isDir ? styles.statusTagOnline : styles.statusTagOffline}>
-                {entry.isDir ? 'folder' : 'file'}
+                {entry.isDir ? '文件夹' : '文件'}
               </Text>
             </View>
             <Text style={styles.cardCopy}>
@@ -467,7 +467,7 @@ export function LibraryPane({
                   style={styles.secondaryButtonSmall}
                   onPress={() => onRefreshFiles(entry.path)}
                 >
-                  <Text style={styles.secondaryButtonText}>Open</Text>
+                  <Text style={styles.secondaryButtonText}>打开</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -475,7 +475,7 @@ export function LibraryPane({
                   onPress={() => onDownloadFile(entry)}
                   disabled={filesBusy}
                 >
-                  <Text style={styles.secondaryButtonText}>Download</Text>
+                  <Text style={styles.secondaryButtonText}>下载</Text>
                 </TouchableOpacity>
               )}
               {canManageFileEntry(entry) ? (
@@ -485,14 +485,14 @@ export function LibraryPane({
                     onPress={() => onRenameFile(entry)}
                     disabled={filesBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Rename</Text>
+                    <Text style={styles.secondaryButtonText}>重命名</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.secondaryButtonSmall}
                     onPress={() => onDeleteFile(entry)}
                     disabled={filesBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Delete</Text>
+                    <Text style={styles.secondaryButtonText}>删除</Text>
                   </TouchableOpacity>
                 </>
               ) : null}
@@ -502,11 +502,11 @@ export function LibraryPane({
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Tasks in this space</Text>
+        <Text style={styles.cardTitle}>本空间任务</Text>
         <Text style={styles.cardCopy}>
           {onlineDeviceAvailable
-            ? `Tasks stay attached to ${activeSpace ? activeSpace.name : 'this space'} so routines and reminders stay with the right space.`
-            : 'Bring Sparkbox online to load or update the routines for this space.'}
+            ? `任务会绑定在${activeSpace ? activeSpace.name : '当前空间'}，让例行事项和提醒始终归属正确空间。`
+            : '请先让 Sparkbox 在线，再加载或更新此空间的例行任务。'}
         </Text>
         {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
         {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
@@ -516,13 +516,13 @@ export function LibraryPane({
             onPress={() => onRefreshTasks()}
             disabled={!onlineDeviceAvailable || tasksBusy}
           >
-            <Text style={styles.secondaryButtonText}>Refresh</Text>
+            <Text style={styles.secondaryButtonText}>刷新</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.cardCopy}>{taskEditorQuickActionsCopy}</Text>
         {!canManage && taskScope === 'family' ? (
           <Text style={styles.cardCopy}>
-            Members can run shared routines here, but only owners can create or edit them.
+            成员可以执行共享例行任务，但仅管理员可创建或编辑。
           </Text>
         ) : null}
       </View>
@@ -562,14 +562,14 @@ export function LibraryPane({
                 onPress={() => onRunTask(task)}
                 disabled={!canTriggerTask(task) || tasksBusy}
               >
-                <Text style={styles.secondaryButtonText}>Run now</Text>
+                <Text style={styles.secondaryButtonText}>立即执行</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButtonSmall}
                 onPress={() => onOpenTaskHistory(task)}
                 disabled={tasksBusy}
               >
-                <Text style={styles.secondaryButtonText}>History</Text>
+                <Text style={styles.secondaryButtonText}>历史记录</Text>
               </TouchableOpacity>
               {canEditTask(task) ? (
                 <>
@@ -578,14 +578,14 @@ export function LibraryPane({
                     onPress={() => onEditTask(task)}
                     disabled={tasksBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Edit</Text>
+                    <Text style={styles.secondaryButtonText}>编辑</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.secondaryButtonSmall}
                     onPress={() => onDeleteTask(task)}
                     disabled={tasksBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>Delete</Text>
+                    <Text style={styles.secondaryButtonText}>删除</Text>
                   </TouchableOpacity>
                 </>
               ) : null}
