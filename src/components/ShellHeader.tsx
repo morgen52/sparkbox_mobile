@@ -27,10 +27,14 @@ export function ShellHeader({
       </View>
 
       <View style={styles.shellTabBar}>
-        {tabs.map((tab) => (
+        {tabs.map((tab, index) => (
           <Pressable
             key={tab.id}
-            style={[styles.shellTab, tab.active ? styles.shellTabActive : null]}
+            style={[
+              styles.shellTab,
+              index === tabs.length - 1 ? styles.shellTabLast : null,
+              tab.active ? styles.shellTabActive : null,
+            ]}
             onPress={() => onSelectTab(tab.id)}
           >
             <Text style={[styles.shellTabLabel, tab.active ? styles.shellTabLabelActive : null]}>

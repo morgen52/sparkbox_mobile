@@ -24,11 +24,7 @@ import {
 } from 'react-native';
 import { SpaceMembersEditorModal } from './src/components/SpaceMembersEditorModal';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
-import { ChatInboxPane } from './src/components/ChatInboxPane';
-import { ChatInspirationPane } from './src/components/ChatInspirationPane';
 import { ChatsPane } from './src/components/ChatsPane';
-import { ChatSpaceToolsPane } from './src/components/ChatSpaceToolsPane';
-import { ChatDetailPane } from './src/components/ChatDetailPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
@@ -737,6 +733,8 @@ function App() {
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsNotice, setSettingsNotice] = useState('');
+  const [chatAppActionError, setChatAppActionError] = useState('');
+  const [chatAppActionNotice, setChatAppActionNotice] = useState('');
   const [familyAppsBusy, setFamilyAppsBusy] = useState(false);
   const [familyAppsCatalog, setFamilyAppsCatalog] = useState<FamilyAppInstallation[]>([]);
   const [installedFamilyApps, setInstalledFamilyApps] = useState<FamilyAppInstallation[]>([]);
@@ -1113,23 +1111,25 @@ function App() {
     (app) => !installedFamilyApps.some((installed) => installed.slug === app.slug),
   );
   const installedFamilyAppsBySlug = new Map(installedFamilyApps.map((app) => [app.slug, app] as const));
-  const enabledFamilyAppCards = activeSpaceDetail?.enabledFamilyApps.map((enabled) => ({
-    ...enabled,
-    meta: installedFamilyAppsBySlug.get(enabled.slug) ?? familyAppsCatalog.find((item) => item.slug === enabled.slug) ?? null,
-  })) ?? [];
+  const enabledFamilyAppCards =
+    activeSpaceDetail?.enabledFamilyApps
+      .filter((enabled) => installedFamilyAppsBySlug.has(enabled.slug))
+      .map((enabled) => ({
+        ...enabled,
+        meta:
+          installedFamilyAppsBySlug.get(enabled.slug) ??
+          familyAppsCatalog.find((item) => item.slug === enabled.slug) ??
+          null,
+      })) ?? [];
   const installedFamilyAppsAvailableForActiveSpace = activeSpace
     ? installedFamilyApps.filter(
         (app) =>
-          app.spaceTemplates.includes(activeSpace.template) &&
           !activeSpaceDetail?.enabledFamilyApps.some((enabled) => enabled.slug === app.slug),
       )
     : [];
   const recommendedFamilyApps = activeSpace
     ? availableFamilyApps.filter((app) => app.spaceTemplates.includes(activeSpace.template))
     : [];
-  const chatSpotlightEnabledApps = enabledFamilyAppCards.slice(0, 2);
-  const chatSpotlightRecommendedInstalledApps = installedFamilyAppsAvailableForActiveSpace.slice(0, 2);
-  const chatSpotlightRecommendedCatalogApps = recommendedFamilyApps.slice(0, 2);
   const summaryEmptyStateCopy = describeSummaryEmptyStateCopy(
     activeSpaceDetail,
     canMutateActiveSpaceLibrary,
@@ -1744,6 +1744,8 @@ function App() {
     setMemoryContent('');
     setMemoryPinned(false);
     setLibraryNotice('');
+    setChatAppActionError('');
+    setChatAppActionNotice('');
   }, [activeSpaceId]);
 
   useEffect(() => {
@@ -2171,7 +2173,19 @@ function App() {
   }
 
   async function enableInstalledFamilyAppForActiveSpace(slug: string, confirmed = false): Promise<void> {
-    if (!session?.token || !canManage || !activeSpaceId || !activeSpace) {
+    if (!session?.token) {
+      setSettingsError('登录已过期，请重新登录后再试。');
+      setChatAppActionError('登录已过期，请重新登录后再试。');
+      return;
+    }
+    if (!canManage) {
+      setSettingsError('仅管理员可以在空间中启用家庭应用。');
+      setChatAppActionError('仅管理员可以在空间中启用家庭应用。');
+      return;
+    }
+    if (!activeSpaceId || !activeSpace) {
+      setSettingsError('请先选择一个 Space，再启用应用。');
+      setChatAppActionError('请先选择一个 Space，再启用应用。');
       return;
     }
     const app = installedFamilyApps.find((item) => item.slug === slug) ?? null;
@@ -2188,6 +2202,8 @@ function App() {
     }
     setSettingsBusy(true);
     setSettingsError('');
+    setChatAppActionError('');
+    setChatAppActionNotice('');
     try {
       await enableSpaceFamilyApp(session.token, activeSpaceId, slug, {
         cadence: 'gentle',
@@ -2196,9 +2212,13 @@ function App() {
       });
       const detail = await getHouseholdSpaceDetail(session.token, activeSpaceId);
       setActiveSpaceDetail(detail);
-      setSettingsNotice(`${app?.title || slug} is now enabled in ${activeSpace.name}.`);
+      const nextNotice = `${app?.title || slug} is now enabled in ${activeSpace.name}.`;
+      setSettingsNotice(nextNotice);
+      setChatAppActionNotice(nextNotice);
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : 'Could not turn on this family app in this space.');
+      const nextError = error instanceof Error ? error.message : 'Could not turn on this family app in this space.';
+      setSettingsError(nextError);
+      setChatAppActionError(nextError);
     } finally {
       setSettingsBusy(false);
     }
@@ -2221,13 +2241,20 @@ function App() {
             void (async () => {
               setSettingsBusy(true);
               setSettingsError('');
+              setChatAppActionError('');
+              setChatAppActionNotice('');
               try {
                 await disableSpaceFamilyApp(session.token!, activeSpaceId, slug);
                 const detail = await getHouseholdSpaceDetail(session.token!, activeSpaceId);
                 setActiveSpaceDetail(detail);
-                setSettingsNotice(`${app?.title || slug} is no longer active in ${activeSpace.name}.`);
+                const nextNotice = `${app?.title || slug} is no longer active in ${activeSpace.name}.`;
+                setSettingsNotice(nextNotice);
+                setChatAppActionNotice(nextNotice);
               } catch (error) {
-                setSettingsError(error instanceof Error ? error.message : 'Could not turn off this family app in this space.');
+                const nextError =
+                  error instanceof Error ? error.message : 'Could not turn off this family app in this space.';
+                setSettingsError(nextError);
+                setChatAppActionError(nextError);
               } finally {
                 setSettingsBusy(false);
               }
@@ -2255,9 +2282,24 @@ function App() {
             void (async () => {
               setSettingsBusy(true);
               setSettingsError('');
+              setChatAppActionError('');
+              setChatAppActionNotice('');
               try {
+                const allSpaces = await getHouseholdSpaces(session.token!);
+                await Promise.allSettled(
+                  allSpaces.map((space) => disableSpaceFamilyApp(session.token!, space.id, slug)),
+                );
                 await uninstallFamilyApp(session.token!, slug);
                 setInstalledFamilyApps((current) => current.filter((item) => item.slug !== slug));
+                setActiveSpaceDetail((current) =>
+                  current
+                    ? {
+                        ...current,
+                        enabledFamilyApps: current.enabledFamilyApps.filter((enabled) => enabled.slug !== slug),
+                      }
+                    : current,
+                );
+                await refreshSpaces({ silent: true });
                 if (activeSpaceId) {
                   const detail = await getHouseholdSpaceDetail(session.token!, activeSpaceId);
                   setActiveSpaceDetail(detail);
@@ -2409,6 +2451,8 @@ function App() {
     setSettingsBusy(false);
     setSettingsError('');
     setSettingsNotice('');
+    setChatAppActionError('');
+    setChatAppActionNotice('');
     setChatScope('family');
     setChatSessions(resetState.chatSessions);
     setActiveChatSessionId(resetState.activeChatSessionId);
@@ -3740,14 +3784,6 @@ function App() {
                   canManage,
                   waitingForSpaces,
                   onlineDeviceAvailable,
-                  activeSpaceBodyCopy:
-                    waitingForSpaces
-                      ? 'Loading your spaces...'
-                      : onlineDeviceAvailable
-                        ? activeSpace
-                          ? `Viewing ${activeSpace.name} (${activeSpaceKindLabel})`
-                          : 'Select a space to open its chats.'
-                        : 'Sparkbox is offline right now. You can still browse chat history and settings.',
                   chatSendPhaseCopy: chatSendPhase !== 'idle' ? describeChatSendPhase(chatSendPhase) : '',
                   chatListRefreshing: chatListRefreshBusy,
                   chatListSyncCopy:
@@ -3867,6 +3903,7 @@ function App() {
                   },
                   enabledFamilyApps: enabledFamilyAppCards,
                   canManageActiveSpaceFamilyApps,
+                  activeSpaceTemplate: activeSpace?.template || '',
                   settingsBusy,
                   readyInstalledFamilyApps: installedFamilyAppsAvailableForActiveSpace,
                   describeFamilyAppRiskLevel,
@@ -3874,24 +3911,10 @@ function App() {
                   onOpenFamilyAppStarter: (slug: string, prompt: string) => void openFamilyAppStarter(slug, prompt),
                   onDisableFamilyApp: (slug: string) => void disableFamilyAppForActiveSpace(slug),
                   onEnableFamilyApp: (slug: string) => void enableInstalledFamilyAppForActiveSpace(slug),
+                  onOpenAllFamilyApps: () => setShellTab('settings'),
+                  appActionError: chatAppActionError,
+                  appActionNotice: chatAppActionNotice,
                 }}
-                inspirationProps={
-                  activeSpace
-                    ? {
-                        activeSpaceName: activeSpace.name,
-                        activeSpaceTemplateLabel: activeSpaceTemplateLabel || 'space',
-                        canManage,
-                        settingsBusy,
-                        enabledApps: chatSpotlightEnabledApps,
-                        readyInstalledApps: chatSpotlightRecommendedInstalledApps,
-                        readyCatalogApps: chatSpotlightRecommendedCatalogApps,
-                        onOpenFamilyAppStarter: (slug: string, prompt: string) => void openFamilyAppStarter(slug, prompt),
-                        onEnableFamilyApp: (slug: string) => void enableInstalledFamilyAppForActiveSpace(slug),
-                        onInstallFamilyApp: (slug: string) => void installSelectedFamilyApp(slug),
-                        onOpenAllFamilyApps: () => setShellTab('settings'),
-                      }
-                    : null
-                }
                 detailProps={{
                   waitingForSpaces,
                   activeChatTitle:
@@ -4482,23 +4505,32 @@ const styles = StyleSheet.create({
   },
   shellTabBar: {
     flexDirection: 'row',
-    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#2f7254',
+    backgroundColor: '#e9f4ee',
+    overflow: 'hidden',
   },
   shellTab: {
     flex: 1,
-    borderRadius: 18,
-    paddingVertical: 12,
+    minHeight: 44,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eaf3ea',
+    backgroundColor: '#e9f4ee',
+    borderRightWidth: 1,
+    borderRightColor: '#c6dece',
+  },
+  shellTabLast: {
+    borderRightWidth: 0,
   },
   shellTabActive: {
-    backgroundColor: '#2d5b46',
+    backgroundColor: '#2f7254',
   },
   shellTabLabel: {
-    color: '#61746a',
+    color: '#2f7254',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   shellTabLabelActive: {
     color: '#ffffff',
@@ -4977,12 +5009,129 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   chatTreeFolderBody: {
-    borderTopWidth: 1,
-    borderTopColor: '#e3ebe5',
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 12,
     gap: 10,
+  },
+  chatTreeAppList: {
+    marginTop: 4,
+    gap: 10,
+  },
+  chatTreeSectionDivider: {
+    height: 1,
+    backgroundColor: '#dfe8e2',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  chatTreeSectionDividerCompact: {
+    height: 1,
+    backgroundColor: '#dfe8e2',
+    marginTop: 0,
+    marginBottom: 2,
+  },
+  chatTreeAppListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 2,
+  },
+  chatTreeAppListToggle: {
+    color: '#95b8a6',
+    fontSize: 20,
+    lineHeight: 20,
+    fontWeight: '800',
+    minWidth: 22,
+    textAlign: 'center',
+  },
+  chatAppCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#d6dfd9',
+    backgroundColor: '#fffdf7',
+    padding: 12,
+    gap: 8,
+  },
+  chatAppHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chatAppTitle: {
+    color: '#17352a',
+    fontSize: 15,
+    fontWeight: '800',
+    flex: 1,
+    minWidth: 0,
+  },
+  chatAppCopy: {
+    color: '#56695e',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatEmptyStateCopy: {
+    color: '#456556',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  chatScopeNavRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+    width: '100%',
+  },
+  chatScopeNavTabs: {
+    flex: 1,
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2f7254',
+    backgroundColor: '#e9f4ee',
+    overflow: 'hidden',
+  },
+  chatScopeNavTab: {
+    flex: 1,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#c6dece',
+  },
+  chatScopeNavTabLast: {
+    borderRightWidth: 0,
+  },
+  chatScopeNavTabActive: {
+    backgroundColor: '#2f7254',
+  },
+  chatScopeNavTabLabel: {
+    color: '#2f7254',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  chatScopeNavTabLabelActive: {
+    color: '#ffffff',
+  },
+  chatScopeRefreshButton: {
+    minWidth: 42,
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2f7254',
+    backgroundColor: '#2f7254',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  chatScopeRefreshIcon: {
+    color: '#ffffff',
+    fontSize: 19,
+    fontWeight: '800',
+    lineHeight: 20,
   },
   chatTreeEmbeddedPanel: {
     gap: 12,

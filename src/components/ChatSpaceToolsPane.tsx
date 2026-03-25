@@ -25,8 +25,8 @@ type ReadyInstalledFamilyApp = {
 type ChatSpaceToolsPaneProps = {
   styles: Record<string, any>;
   embedded?: boolean;
-  title: string;
-  copy: string;
+  title?: string;
+  copy?: string;
   relayNotice: string;
   showRelayHelper: boolean;
   canOpenRelay: boolean;
@@ -67,8 +67,8 @@ export function ChatSpaceToolsPane({
 }: ChatSpaceToolsPaneProps) {
   return (
     <View style={embedded ? styles.chatTreeEmbeddedPanel : styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardCopy}>{copy}</Text>
+      {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
+      {copy ? <Text style={styles.cardCopy}>{copy}</Text> : null}
       {relayNotice ? <Text style={styles.noticeText}>{relayNotice}</Text> : null}
       {showRelayHelper ? (
         <>

@@ -34,7 +34,6 @@ type ChatInboxPaneProps = {
   canManage: boolean;
   waitingForSpaces: boolean;
   onlineDeviceAvailable: boolean;
-  activeSpaceBodyCopy: string;
   chatSendPhaseCopy: string;
   chatListRefreshing: boolean;
   chatListSyncCopy: string;
@@ -46,6 +45,7 @@ type ChatInboxPaneProps = {
   sessions: ChatInboxSession[];
   emptyStateCopy: string;
   spaceChips: SpaceChip[];
+  toolsProps?: Record<string, any>;
   onOpenSpaceCreator: () => void;
   onSelectSpace: (spaceId: string) => void;
   onSelectScope: (scopeId: string) => void;
@@ -63,7 +63,6 @@ export function ChatInboxPane({
   canManage,
   waitingForSpaces,
   onlineDeviceAvailable,
-  activeSpaceBodyCopy,
   chatSendPhaseCopy,
   chatListRefreshing,
   chatListSyncCopy,
@@ -75,6 +74,7 @@ export function ChatInboxPane({
   sessions,
   emptyStateCopy,
   spaceChips,
+  toolsProps,
   onOpenSpaceCreator,
   onSelectSpace,
   onSelectScope,
@@ -82,8 +82,35 @@ export function ChatInboxPane({
   onCreateChat,
   onOpenSession,
 }: ChatInboxPaneProps) {
+  type EnabledFamilyApp = {
+    slug: string;
+    title: string;
+    config: Record<string, unknown>;
+    meta?: {
+      entryTitle?: string | null;
+      entryCopy?: string | null;
+      description?: string | null;
+      starterPrompts?: string[];
+    } | null;
+  };
+
+  type ReadyInstalledFamilyApp = {
+    slug: string;
+    title: string;
+    entryTitle?: string | null;
+    entryCopy?: string | null;
+    description?: string | null;
+    riskLevel: string;
+    spaceTemplates?: string[];
+  };
+
+  const enabledFamilyApps = (toolsProps?.enabledFamilyApps || []) as EnabledFamilyApp[];
+  const readyInstalledFamilyApps = (toolsProps?.readyInstalledFamilyApps || []) as ReadyInstalledFamilyApp[];
+
   const activeSpace = spaceChips.find((space) => space.active) ?? null;
   const [expandedSpaceId, setExpandedSpaceId] = React.useState<string | null>(activeSpace?.id ?? null);
+  const [expandedAppLists, setExpandedAppLists] = React.useState<Record<string, boolean>>({});
+  const [expandedEnableLists, setExpandedEnableLists] = React.useState<Record<string, boolean>>({});
   const previousActiveSpaceIdRef = React.useRef<string | null>(activeSpace?.id ?? null);
 
   React.useEffect(() => {
@@ -97,6 +124,20 @@ export function ChatInboxPane({
   function toggleSpace(spaceId: string): void {
     setExpandedSpaceId((current) => (current === spaceId ? null : spaceId));
     onSelectSpace(spaceId);
+  }
+
+  function toggleAppList(spaceId: string): void {
+    setExpandedAppLists((current) => ({
+      ...current,
+      [spaceId]: !current[spaceId],
+    }));
+  }
+
+  function toggleEnableList(spaceId: string): void {
+    setExpandedEnableLists((current) => ({
+      ...current,
+      [spaceId]: !current[spaceId],
+    }));
   }
 
   return (
@@ -124,11 +165,9 @@ export function ChatInboxPane({
       {spaceChips.map((space) => {
         const expanded = expandedSpaceId === space.id;
         const ready = expanded && space.active;
+        const appListExpanded = expandedAppLists[space.id] === true;
         return (
-          <View
-            key={space.id}
-            style={[styles.chatTreeFolder, space.active ? styles.chatTreeFolderActive : null]}
-          >
+          <View key={space.id} style={[styles.chatTreeFolder, space.active ? styles.chatTreeFolderActive : null]}>
             <Pressable style={styles.chatTreeFolderHeader} onPress={() => toggleSpace(space.id)}>
               <View style={styles.chatTreeFolderHeaderBody}>
                 <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
@@ -139,43 +178,46 @@ export function ChatInboxPane({
 
             {expanded ? (
               <View style={styles.chatTreeFolderBody}>
+                <View style={styles.chatTreeSectionDividerCompact} />
                 {!space.active ? <Text style={styles.cardCopy}>正在切换到该空间...</Text> : null}
                 {ready ? (
                   <>
-                    <Text style={styles.cardCopy}>{activeSpaceBodyCopy}</Text>
-                    <View style={styles.scopeRow}>
-                      {scopeOptions.map((scope) => (
-                        <Pressable
-                          key={scope.id}
-                          style={[styles.scopePill, scope.active ? styles.scopePillActive : null]}
-                          onPress={() => onSelectScope(scope.id)}
-                        >
-                          <Text style={[styles.scopePillLabel, scope.active ? styles.scopePillLabelActive : null]}>
-                            {scope.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <View style={styles.inlineActions}>
-                      <Pressable style={styles.secondaryButtonSmall} onPress={onRefresh} disabled={chatBusy}>
-                        <Text style={styles.secondaryButtonText}>刷新聊天</Text>
-                      </Pressable>
+                    <View style={styles.chatScopeNavRow}>
+                      <View style={styles.chatScopeNavTabs}>
+                        {scopeOptions.map((scope, index) => (
+                          <Pressable
+                            key={scope.id}
+                            style={[
+                              styles.chatScopeNavTab,
+                              index === scopeOptions.length - 1 ? styles.chatScopeNavTabLast : null,
+                              scope.active ? styles.chatScopeNavTabActive : null,
+                            ]}
+                            onPress={() => onSelectScope(scope.id)}
+                          >
+                            <Text
+                              style={[
+                                styles.chatScopeNavTabLabel,
+                                scope.active ? styles.chatScopeNavTabLabelActive : null,
+                              ]}
+                            >
+                              {scope.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
                       <Pressable
-                        style={[
-                          styles.primaryButtonSmall,
-                          !onlineDeviceAvailable || !canCreateChat ? styles.networkRowDisabled : null,
-                        ]}
-                        onPress={onCreateChat}
-                        disabled={!onlineDeviceAvailable || chatBusy || !canCreateChat}
+                        style={[styles.chatScopeRefreshButton, chatBusy ? styles.networkRowDisabled : null]}
+                        onPress={onRefresh}
+                        disabled={chatBusy}
                       >
-                        <Text style={styles.primaryButtonText}>{createChatLabel}</Text>
+                        <Text style={styles.chatScopeRefreshIcon}>↻</Text>
                       </Pressable>
                     </View>
                     {chatBusy && sessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
                     {waitingForSpaces ? (
                       <ActivityIndicator color="#0b6e4f" />
                     ) : sessions.length === 0 ? (
-                      <Text style={styles.cardCopy}>{emptyStateCopy}</Text>
+                      <Text style={styles.chatEmptyStateCopy}>{emptyStateCopy}</Text>
                     ) : (
                       sessions.map((session) => (
                         <Pressable
@@ -223,6 +265,194 @@ export function ChatInboxPane({
                         </Pressable>
                       ))
                     )}
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        !onlineDeviceAvailable || !canCreateChat ? styles.networkRowDisabled : null,
+                      ]}
+                      onPress={onCreateChat}
+                      disabled={!onlineDeviceAvailable || chatBusy || !canCreateChat}
+                    >
+                      <Text style={styles.primaryButtonText}>{createChatLabel}</Text>
+                    </Pressable>
+
+                    {toolsProps ? (
+                      <>
+                        <View style={styles.chatTreeSectionDivider} />
+                        <View style={styles.chatTreeAppList}>
+                        <Pressable style={styles.chatTreeAppListHeader} onPress={() => toggleAppList(space.id)}>
+                          <Text style={styles.selectionLabel}>应用列表</Text>
+                          <Text style={styles.chatTreeAppListToggle}>{appListExpanded ? '∧' : '∨'}</Text>
+                        </Pressable>
+
+                        {appListExpanded ? (
+                          <>
+                            {toolsProps?.showRelayHelper ? (
+                              <View style={styles.chatAppCard}>
+                                <View style={styles.chatAppHeader}>
+                                  <Text style={styles.chatAppTitle}>私下转达</Text>
+                                  <Text style={styles.tagMuted}>沟通辅助</Text>
+                                </View>
+                                <Text style={styles.chatAppCopy}>当你不方便直接表达时，可让 Sparkbox 私下转达给本空间成员。</Text>
+                                {toolsProps?.relayNotice ? <Text style={styles.noticeText}>{toolsProps.relayNotice}</Text> : null}
+                                <View style={styles.inlineActions}>
+                                  <Pressable
+                                    style={[
+                                      styles.primaryButtonSmall,
+                                      !toolsProps?.canOpenRelay ? styles.networkRowDisabled : null,
+                                    ]}
+                                    onPress={() => toolsProps?.onOpenRelay && toolsProps.onOpenRelay()}
+                                    disabled={!toolsProps?.canOpenRelay}
+                                  >
+                                    <Text style={styles.primaryButtonText}>让 Sparkbox 私下转达</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ) : null}
+
+                            {toolsProps?.privateSideChannelLabel ? (
+                              <View style={styles.chatAppCard}>
+                                <View style={styles.chatAppHeader}>
+                                  <Text style={styles.chatAppTitle}>{toolsProps.privateSideChannelLabel}</Text>
+                                  <Text style={styles.tagMuted}>私密</Text>
+                                </View>
+                                <Text style={styles.chatAppCopy}>先和 Sparkbox 私聊整理思路，再决定是否同步到共享聊天。</Text>
+                                <View style={styles.inlineActions}>
+                                  <Pressable
+                                    style={styles.primaryButtonSmall}
+                                    onPress={() =>
+                                      toolsProps?.onOpenPrivateSideChannel && toolsProps.onOpenPrivateSideChannel()
+                                    }
+                                  >
+                                    <Text style={styles.primaryButtonText}>与 Sparkbox 私聊</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ) : null}
+
+                            {enabledFamilyApps.map((app) => (
+                              <View key={`enabled-${app.slug}`} style={styles.chatAppCard}>
+                                <View style={styles.chatAppHeader}>
+                                  <Text style={styles.chatAppTitle}>{app.meta?.entryTitle || app.title}</Text>
+                                  <Text style={styles.statusTagOnline}>已启用</Text>
+                                </View>
+                                <Text style={styles.chatAppCopy}>
+                                  {app.meta?.entryCopy || app.meta?.description || '这个应用已在当前 Space 启用。'}
+                                </Text>
+                                {app.meta?.starterPrompts?.length ? (
+                                  <View style={styles.scopeRow}>
+                                    {app.meta.starterPrompts.map((prompt) => (
+                                      <Pressable
+                                        key={`enabled-${app.slug}-${prompt}`}
+                                        style={styles.scopePill}
+                                        onPress={() =>
+                                          toolsProps?.onOpenFamilyAppStarter &&
+                                          toolsProps.onOpenFamilyAppStarter(app.slug, prompt)
+                                        }
+                                      >
+                                        <Text style={styles.scopePillLabel}>{prompt}</Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
+                                ) : null}
+                                {toolsProps?.formatFamilyAppConfigSummary ? (
+                                  <Text style={styles.chatAppCopy}>{toolsProps.formatFamilyAppConfigSummary(app.config)}</Text>
+                                ) : null}
+                                {toolsProps?.canManageActiveSpaceFamilyApps ? (
+                                  <View style={styles.inlineActions}>
+                                    <Pressable
+                                      style={styles.secondaryButtonSmall}
+                                      onPress={() => toolsProps?.onDisableFamilyApp && toolsProps.onDisableFamilyApp(app.slug)}
+                                      disabled={toolsProps?.settingsBusy}
+                                    >
+                                      <Text style={styles.secondaryButtonText}>在此停用</Text>
+                                    </Pressable>
+                                  </View>
+                                ) : null}
+                              </View>
+                            ))}
+
+                            <View style={styles.chatAppCard}>
+                              <Pressable style={styles.chatTreeAppListHeader} onPress={() => toggleEnableList(space.id)}>
+                                <Text style={styles.chatAppTitle}>应用启用</Text>
+                                <Text style={styles.chatTreeAppListToggle}>
+                                  {expandedEnableLists[space.id] ? '∧' : '∨'}
+                                </Text>
+                              </Pressable>
+                              <Text style={styles.chatAppCopy}>管理已安装到设备、但尚未在当前 Space 启用的应用。</Text>
+                              {toolsProps?.appActionNotice ? <Text style={styles.noticeText}>{toolsProps.appActionNotice}</Text> : null}
+                              {toolsProps?.appActionError ? <Text style={styles.errorText}>{toolsProps.appActionError}</Text> : null}
+                              {!toolsProps?.canManageActiveSpaceFamilyApps ? (
+                                <Text style={styles.tagMuted}>仅管理员可在此空间启用应用。</Text>
+                              ) : null}
+
+                              {expandedEnableLists[space.id] ? (
+                                <>
+                                  {readyInstalledFamilyApps.length === 0 ? (
+                                    <Text style={styles.cardCopy}>当前设备中的家庭应用都已在这个 Space 启用。</Text>
+                                  ) : (
+                                    readyInstalledFamilyApps.map((app) => (
+                                      <View key={`ready-installed-${app.slug}`} style={styles.chatAppCard}>
+                                        {(() => {
+                                          const activeSpaceTemplate = String(toolsProps?.activeSpaceTemplate || '').trim();
+                                          const supportedTemplates = Array.isArray(app.spaceTemplates)
+                                            ? app.spaceTemplates.map((item) => String(item))
+                                            : [];
+                                          const supportsCurrentTemplate =
+                                            !activeSpaceTemplate ||
+                                            supportedTemplates.length === 0 ||
+                                            supportedTemplates.includes(activeSpaceTemplate);
+                                          return (
+                                            <>
+                                        <View style={styles.chatAppHeader}>
+                                          <Text style={styles.chatAppTitle}>{app.entryTitle || app.title}</Text>
+                                          <Text style={styles.tagMuted}>
+                                            {toolsProps?.describeFamilyAppRiskLevel
+                                              ? toolsProps.describeFamilyAppRiskLevel(app.riskLevel)
+                                              : '可启用'}
+                                          </Text>
+                                        </View>
+                                        <Text style={styles.chatAppCopy}>{app.entryCopy || app.description || '可在此 Space 启用。'}</Text>
+                                        {!supportsCurrentTemplate ? (
+                                          <Text style={styles.tagMuted}>当前 Space 类型暂不支持此应用。</Text>
+                                        ) : null}
+                                        <View style={styles.inlineActions}>
+                                          <Pressable
+                                            style={[
+                                              styles.primaryButtonSmall,
+                                              !supportsCurrentTemplate ? styles.networkRowDisabled : null,
+                                            ]}
+                                            onPress={() => toolsProps?.onEnableFamilyApp && toolsProps.onEnableFamilyApp(app.slug)}
+                                            disabled={
+                                              toolsProps?.settingsBusy ||
+                                              !toolsProps?.canManageActiveSpaceFamilyApps ||
+                                              !supportsCurrentTemplate
+                                            }
+                                          >
+                                            <Text style={styles.primaryButtonText}>在此空间启用</Text>
+                                          </Pressable>
+                                        </View>
+                                            </>
+                                          );
+                                        })()}
+                                      </View>
+                                    ))
+                                  )}
+
+                                  <Pressable
+                                    style={styles.primaryButton}
+                                    onPress={() => toolsProps?.onOpenAllFamilyApps && toolsProps.onOpenAllFamilyApps()}
+                                  >
+                                    <Text style={styles.primaryButtonText}>更多应用安装与卸载</Text>
+                                  </Pressable>
+                                </>
+                              ) : null}
+                            </View>
+                          </>
+                        ) : null}
+                        </View>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </View>
