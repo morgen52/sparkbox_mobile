@@ -171,11 +171,46 @@ export function SetupFlowPane({
   // SetupFlowPane owns only the onboarding presentation. The underlying
   // hotspot/pairing state machine still lives in App so reprovision and
   // first-run claim can share one source of truth.
+  if (!session) {
+    return (
+      <>
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>开始使用 Sparkbox</Text>
+          <Text style={styles.authLogo}>SparkBox</Text>
+        </View>
+        <AuthSetupCard
+          styles={styles}
+          authCardTitle={authCardTitle}
+          authCardCopy={authCardCopy}
+          authMode={authMode}
+          email={email}
+          displayName={displayName}
+          inviteCode={inviteCode}
+          password={password}
+          invitePreviewBusy={invitePreviewBusy}
+          invitePreviewError={invitePreviewError}
+          invitePreview={invitePreview}
+          authError={authError}
+          authBusy={authBusy}
+          authSubmitLabel={authSubmitLabel}
+          onLayout={(event) => onCaptureStepOffset(1, event)}
+          onChangeAuthMode={onChangeAuthMode}
+          onChangeEmail={onChangeEmail}
+          onChangeDisplayName={onChangeDisplayName}
+          onChangeInviteCode={onChangeInviteCode}
+          onChangePassword={onChangePassword}
+          onSubmit={onSubmitAuth}
+          renderInvitePreviewSummary={renderInvitePreviewSummary}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <View style={styles.hero}>
         <Text style={styles.eyebrow}>设备引导</Text>
-        <Text style={styles.title}>先找到设备，再完成联网</Text>
+        <Text style={styles.title}>绑定设备，完成联网</Text>
         <Text style={styles.subtitle}>
           {claimStepVisible
             ? `先扫描设备标签，将 Sparkbox 绑定到 ${householdName}，再引导它连接家中 Wi-Fi。`
@@ -215,42 +250,14 @@ export function SetupFlowPane({
         })}
       </View>
 
-      {!session ? (
-        <AuthSetupCard
-          styles={styles}
-          authCardTitle={authCardTitle}
-          authCardCopy={authCardCopy}
-          authMode={authMode}
-          email={email}
-          displayName={displayName}
-          inviteCode={inviteCode}
-          password={password}
-          invitePreviewBusy={invitePreviewBusy}
-          invitePreviewError={invitePreviewError}
-          invitePreview={invitePreview}
-          authError={authError}
-          authBusy={authBusy}
-          authSubmitLabel={authSubmitLabel}
-          onLayout={(event) => onCaptureStepOffset(1, event)}
-          onChangeAuthMode={onChangeAuthMode}
-          onChangeEmail={onChangeEmail}
-          onChangeDisplayName={onChangeDisplayName}
-          onChangeInviteCode={onChangeInviteCode}
-          onChangePassword={onChangePassword}
-          onSubmit={onSubmitAuth}
-          renderInvitePreviewSummary={renderInvitePreviewSummary}
-        />
-      ) : (
-        <SignedInSetupCard
-          styles={styles}
-          displayName={session.user.display_name}
-          householdName={session.household.name}
-          canReturnToShell={canReturnToShell}
-          onLogout={logout}
-          onReturnToShell={returnToShell}
-          onResetFlow={resetFlow}
-        />
-      )}
+      <SignedInSetupCard
+        styles={styles}
+        displayName={session.user.display_name}
+        householdName={session.household.name}
+        canReturnToShell={canReturnToShell}
+        onLogout={logout}
+        onResetFlow={resetFlow}
+      />
 
       {session && claimStepVisible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(1, event)}>
@@ -272,7 +279,7 @@ export function SetupFlowPane({
                 autoCorrect={false}
                 multiline
                 numberOfLines={4}
-                placeholder="请粘贴设备配置码或配置链接"
+                placeholder="请粘贴设备配置码或扫码获取"
                 placeholderTextColor="#7e8a83"
                 style={[styles.input, styles.textArea]}
                 value={claimInput}
@@ -295,8 +302,8 @@ export function SetupFlowPane({
                     <Text style={styles.secondaryButtonText}>打开应用设置</Text>
                   </Pressable>
                 ) : null}
-                <Pressable style={styles.secondaryButtonSmall} onPress={onStartClaim} disabled={claimBusy}>
-                  {claimBusy ? <ActivityIndicator color="#0f5132" /> : <Text style={styles.secondaryButtonText}>准备设备</Text>}
+                <Pressable style={styles.primaryButtonSmall} onPress={onStartClaim} disabled={claimBusy}>
+                  {claimBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>绑定设备</Text>}
                 </Pressable>
               </View>
             </>

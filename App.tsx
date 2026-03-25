@@ -591,6 +591,7 @@ function App() {
   // here so cross-surface resets happen in one place.
   const [shellTab, setShellTab] = useState<ShellTab>('chats');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
+  const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
   const [homeLoaded, setHomeLoaded] = useState(false);
   const [homeError, setHomeError] = useState('');
@@ -1040,22 +1041,22 @@ function App() {
   );
   const authCardTitle =
     authMode === 'login'
-      ? '登录账号'
+      ? '欢迎回来'
       : authMode === 'register'
-        ? '创建家庭'
-        : '加入家庭';
+        ? '创建你的家庭'
+        : '输入邀请码加入家庭';
   const authCardCopy =
     authMode === 'login'
-      ? '请使用已绑定 Sparkbox 的账号登录。'
+      ? '使用你之前绑定 Sparkbox 的账号登录即可继续使用。'
       : authMode === 'register'
-        ? '创建该家庭的首个管理员账号。'
-        : '输入管理员分享的邀请码，加入已有家庭。';
+        ? '首次使用请先创建家庭，并成为首位管理员。'
+        : '请粘贴管理员分享的邀请码，系统会自动识别可加入的家庭。';
   const authSubmitLabel =
-    authMode === 'login' ? '登录' : authMode === 'register' ? '创建账号' : '加入家庭';
+    authMode === 'login' ? '登录并进入' : authMode === 'register' ? '创建并进入' : '加入并进入';
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
   const activeSharedSpaceMemberOptions =
     activeSpace?.kind === 'shared' ? homeMembers.filter((member) => member.id !== session?.user.id) : [];
-  const canReturnToShell = Boolean(session) && homeLoaded && homeDevices.length > 0;
+  const canReturnToShell = Boolean(session) && homeLoaded;
   const householdShellLoading =
     Boolean(session) &&
     shellSurface !== 'shell' &&
@@ -1118,6 +1119,7 @@ function App() {
   }
 
   function returnToShell(): void {
+    setSkipOnboardingWhenNoDevice(true);
     resetSetupFlowState();
     setShellSurface('shell');
   }
@@ -1484,6 +1486,7 @@ function App() {
         activationComplete: Boolean(completedDeviceId),
         householdLoaded: homeLoaded,
         hasAnyDevice: homeDevices.length > 0,
+        skipOnboardingWhenNoDevice,
       }),
     );
   }, [
@@ -1493,6 +1496,7 @@ function App() {
     onboardingInProgress,
     session,
     setupFlowRequested,
+    skipOnboardingWhenNoDevice,
   ]);
 
   useEffect(() => {
@@ -1884,6 +1888,7 @@ function App() {
     }
     setAuthBusy(true);
     setAuthError('');
+    setSkipOnboardingWhenNoDevice(false);
     try {
       const nextSession = await authenticateWithCloud(
         {
@@ -1927,6 +1932,7 @@ function App() {
       }
     }
     setSession(null);
+    setSkipOnboardingWhenNoDevice(false);
     await persistSession(null);
     resetFlow();
   }
@@ -2304,6 +2310,7 @@ function App() {
   }
 
   function resetFlow(): void {
+    setSkipOnboardingWhenNoDevice(false);
     resetSetupFlowState();
     resetShellState();
   }
@@ -2560,6 +2567,7 @@ function App() {
   }
 
   function beginNewDeviceOnboarding(): void {
+    setSkipOnboardingWhenNoDevice(false);
     resetSetupFlowState();
     setSetupFlowKind('first_run');
     setHomeError('');
@@ -2567,6 +2575,7 @@ function App() {
   }
 
   async function beginDeviceReprovision(device: DeviceSummary): Promise<void> {
+    setSkipOnboardingWhenNoDevice(false);
     resetSetupFlowState();
     setSetupFlowKind('reprovision');
     setReprovisionDeviceId(device.device_id);
@@ -4245,6 +4254,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#4f6b5e',
     fontWeight: '700',
+  },
+  authLogo: {
+    fontSize: 42,
+    lineHeight: 48,
+    color: '#224736',
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   title: {
     fontSize: 34,

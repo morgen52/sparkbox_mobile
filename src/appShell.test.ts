@@ -74,6 +74,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: false,
         hasAnyDevice: false,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('onboarding');
   });
@@ -87,6 +88,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: true,
         householdLoaded: false,
         hasAnyDevice: false,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('shell');
   });
@@ -100,6 +102,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: true,
         householdLoaded: true,
         hasAnyDevice: true,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('shell');
   });
@@ -113,6 +116,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: true,
         hasAnyDevice: true,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('shell');
   });
@@ -126,6 +130,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: false,
         hasAnyDevice: false,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('shell');
   });
@@ -139,11 +144,12 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: true,
         hasAnyDevice: true,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('onboarding');
   });
 
-  it('keeps a signed-in empty household in the shell until setup is explicitly requested', () => {
+  it('routes a signed-in household with no devices into onboarding by default', () => {
     expect(
       resolvePhaseOneSurface({
         sessionPresent: true,
@@ -152,6 +158,21 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: true,
         hasAnyDevice: false,
+        skipOnboardingWhenNoDevice: false,
+      }),
+    ).toBe('onboarding');
+  });
+
+  it('allows users to stay in shell after manually skipping onboarding with no devices', () => {
+    expect(
+      resolvePhaseOneSurface({
+        sessionPresent: true,
+        setupFlowRequested: false,
+        onboardingInProgress: false,
+        activationComplete: false,
+        householdLoaded: true,
+        hasAnyDevice: false,
+        skipOnboardingWhenNoDevice: true,
       }),
     ).toBe('shell');
   });
@@ -165,6 +186,7 @@ describe('resolvePhaseOneSurface', () => {
         activationComplete: false,
         householdLoaded: true,
         hasAnyDevice: true,
+        skipOnboardingWhenNoDevice: false,
       }),
     ).toBe('onboarding');
   });

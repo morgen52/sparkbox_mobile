@@ -39,7 +39,6 @@ type SignedInSetupCardProps = {
   householdName: string;
   canReturnToShell: boolean;
   onLogout: () => void;
-  onReturnToShell: () => void;
   onResetFlow: () => void;
 };
 
@@ -67,10 +66,32 @@ export function AuthSetupCard({
   onSubmit,
   renderInvitePreviewSummary,
 }: AuthSetupCardProps) {
+  const modeMeta: Record<AuthMode, { modeLabel: string; modeHint: string }> = {
+    login: {
+      modeLabel: '登录',
+      modeHint: '已经有账号了？直接登录吧！',
+    },
+    register: {
+      modeLabel: '注册',
+      modeHint: '家人没有账号吗？注册一个新账号，创建家庭并邀请家人加入吧！',
+    },
+    join: {
+      modeLabel: '加入家庭',
+      modeHint: '有邀请码吗？使用邀请码加入家人创建的家庭吧！',
+    },
+  };
+
   return (
     <View style={styles.card} onLayout={onLayout}>
       <Text style={styles.cardTitle}>{authCardTitle}</Text>
       <Text style={styles.cardCopy}>{authCardCopy}</Text>
+
+      <View style={styles.claimPreview}>
+        <Text style={styles.claimPreviewLabel}>第一步</Text>
+        <Text style={styles.claimPreviewValue}>账号登录</Text>
+        <Text style={styles.cardCopy}>{modeMeta[authMode].modeHint}</Text>
+      </View>
+
       <View style={styles.authModeRow}>
         {([
           { id: 'login', label: '登录' },
@@ -91,6 +112,8 @@ export function AuthSetupCard({
           );
         })}
       </View>
+
+      <Text style={styles.selectionLabel}>邮箱</Text>
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
@@ -102,16 +125,20 @@ export function AuthSetupCard({
         onChangeText={onChangeEmail}
       />
       {authMode === 'register' || authMode === 'join' ? (
-        <TextInput
-          placeholder="昵称"
-          placeholderTextColor="#7e8a83"
-          style={styles.input}
-          value={displayName}
-          onChangeText={onChangeDisplayName}
-        />
+        <>
+          <Text style={styles.selectionLabel}>昵称</Text>
+          <TextInput
+            placeholder="昵称"
+            placeholderTextColor="#7e8a83"
+            style={styles.input}
+            value={displayName}
+            onChangeText={onChangeDisplayName}
+          />
+        </>
       ) : null}
       {authMode === 'join' ? (
         <>
+          <Text style={styles.selectionLabel}>邀请码</Text>
           <TextInput
             autoCapitalize="characters"
             autoCorrect={false}
@@ -132,7 +159,10 @@ export function AuthSetupCard({
           ) : null}
         </>
       ) : null}
+      <Text style={styles.selectionLabel}>密码</Text>
       <TextInput
+        autoCapitalize="none"
+        autoCorrect={false}
         secureTextEntry
         placeholder="密码"
         placeholderTextColor="#7e8a83"
@@ -144,6 +174,9 @@ export function AuthSetupCard({
       <Pressable style={styles.primaryButton} onPress={onSubmit} disabled={authBusy}>
         {authBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{authSubmitLabel}</Text>}
       </Pressable>
+      <Text style={styles.cardCopy}>
+        Tips：家人有账号吗？有的话直接使用邀请码加入吧！
+      </Text>
     </View>
   );
 }
@@ -154,7 +187,6 @@ export function SignedInSetupCard({
   householdName,
   canReturnToShell,
   onLogout,
-  onReturnToShell,
   onResetFlow,
 }: SignedInSetupCardProps) {
   return (
@@ -167,15 +199,11 @@ export function SignedInSetupCard({
         <Pressable style={styles.primaryButtonSmall} onPress={onLogout}>
           <Text style={styles.primaryButtonText}>退出登录</Text>
         </Pressable>
-        {canReturnToShell ? (
-          <Pressable style={styles.secondaryButtonSmall} onPress={onReturnToShell}>
-            <Text style={styles.secondaryButtonText}>返回家庭首页</Text>
-          </Pressable>
-        ) : (
+        {!canReturnToShell ? (
           <Pressable style={styles.secondaryButtonSmall} onPress={onResetFlow}>
             <Text style={styles.secondaryButtonText}>重新开始</Text>
           </Pressable>
-        )}
+        ) : null}
       </View>
     </View>
   );

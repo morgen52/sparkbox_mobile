@@ -505,6 +505,7 @@ export function resolvePhaseOneSurface({
   activationComplete,
   householdLoaded,
   hasAnyDevice,
+  skipOnboardingWhenNoDevice,
 }: {
   sessionPresent: boolean;
   setupFlowRequested: boolean;
@@ -512,6 +513,7 @@ export function resolvePhaseOneSurface({
   activationComplete: boolean;
   householdLoaded: boolean;
   hasAnyDevice: boolean;
+  skipOnboardingWhenNoDevice: boolean;
 }): PhaseOneSurface {
   if (!sessionPresent) {
     return 'onboarding';
@@ -523,6 +525,9 @@ export function resolvePhaseOneSurface({
     return 'onboarding';
   }
   if (onboardingInProgress) {
+    return 'onboarding';
+  }
+  if (householdLoaded && !hasAnyDevice && !skipOnboardingWhenNoDevice) {
     return 'onboarding';
   }
   if (householdLoaded) {
