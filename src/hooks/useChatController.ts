@@ -98,6 +98,40 @@ export function useChatController(options: UseChatControllerOptions) {
     setChatSessionMaxTokens,
   } = options;
 
+  async function refreshSpaceSessionTotal(
+    spaceId: string,
+    options?: {
+      force?: boolean;
+      knownScope?: ChatSessionScope;
+      knownCount?: number;
+    },
+  ): Promise<void> {
+    if (!spaceId) {
+      return;
+    }
+    const counts: Partial<Record<ChatSessionScope, number>> = {};
+    if (options?.knownScope && typeof options.knownCount === 'number') {
+      counts[options.knownScope] = options.knownCount;
+    }
+    const pendingScopes = (['family', 'private'] as ChatSessionScope[]).filter(
+      (scope) => counts[scope] === undefined,
+    );
+    const loaded = await Promise.all(
+      pendingScopes.map(async (scope) => {
+        const sessions = await fetchChatSessions(scope, spaceId, { force: options?.force === true });
+        return [scope, sessions.length] as const;
+      }),
+    );
+    loaded.forEach(([scope, count]) => {
+      counts[scope] = count;
+    });
+    const totalCount = (counts.family ?? 0) + (counts.private ?? 0);
+    setSpaceSessionCounts((current) => ({
+      ...current,
+      [spaceId]: totalCount,
+    }));
+  }
+
   async function refreshChatSessions(refreshOptions?: { force?: boolean }): Promise<void> {
     if (!session?.token) {
       return;
@@ -114,10 +148,11 @@ export function useChatController(options: UseChatControllerOptions) {
       setChatListLastSyncedAt(cachedEntry?.fetchedAt ?? Date.now());
       setChatSessions(sessions);
       if (activeChatSpaceId) {
-        setSpaceSessionCounts((current) => ({
-          ...current,
-          [activeChatSpaceId]: sessions.length,
-        }));
+        await refreshSpaceSessionTotal(activeChatSpaceId, {
+          force: refreshOptions?.force === true,
+          knownScope: chatScope,
+          knownCount: sessions.length,
+        });
       }
       setActiveChatSessionId((current) => {
         if (current && sessions.some((item) => item.id === current)) {
@@ -174,10 +209,11 @@ export function useChatController(options: UseChatControllerOptions) {
         force: true,
       });
       setChatSessions(sessions);
-      setSpaceSessionCounts((current) => ({
-        ...current,
-        [activeSpaceId]: sessions.length,
-      }));
+      await refreshSpaceSessionTotal(activeSpaceId, {
+        force: true,
+        knownScope: 'private',
+        knownCount: sessions.length,
+      });
     } catch (error) {
       setChatError(error instanceof Error ? error.message : 'Could not open the private chat right now.');
     } finally {
@@ -201,10 +237,11 @@ export function useChatController(options: UseChatControllerOptions) {
         getHouseholdSpaceDetail(session.token, activeSpaceId),
       ]);
       setChatSessions(sessions);
-      setSpaceSessionCounts((current) => ({
-        ...current,
-        [activeSpaceId]: sessions.length,
-      }));
+      await refreshSpaceSessionTotal(activeSpaceId, {
+        force: true,
+        knownScope: opened.scope,
+        knownCount: sessions.length,
+      });
       setActiveChatSession(detail);
       setActiveSpaceDetail(refreshedSpace);
     } catch (error) {

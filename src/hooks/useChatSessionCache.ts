@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   getHouseholdChatSessions,
   type ChatSessionScope,
@@ -24,7 +24,7 @@ export function useChatSessionCache(token?: string): {
 } {
   const chatSessionCacheRef = useRef<Record<string, ChatSessionCacheEntry>>({});
 
-  const readFreshChatSessionCache = (
+  const readFreshChatSessionCache = useCallback((
     scope: ChatSessionScope,
     spaceId: string,
   ): ChatSessionCacheEntry | null => {
@@ -38,9 +38,9 @@ export function useChatSessionCache(token?: string): {
       return null;
     }
     return cached;
-  };
+  }, []);
 
-  const writeChatSessionCache = (
+  const writeChatSessionCache = useCallback((
     scope: ChatSessionScope,
     spaceId: string,
     sessions: HouseholdChatSessionSummary[],
@@ -50,17 +50,17 @@ export function useChatSessionCache(token?: string): {
       sessions,
       fetchedAt: Date.now(),
     };
-  };
+  }, []);
 
-  const clearChatSessionCache = (scope?: ChatSessionScope, spaceId?: string): void => {
+  const clearChatSessionCache = useCallback((scope?: ChatSessionScope, spaceId?: string): void => {
     if (scope && typeof spaceId === 'string') {
       delete chatSessionCacheRef.current[buildChatSessionCacheKey(scope, spaceId)];
       return;
     }
     chatSessionCacheRef.current = {};
-  };
+  }, []);
 
-  const fetchChatSessions = async (
+  const fetchChatSessions = useCallback(async (
     scope: ChatSessionScope,
     spaceId: string,
     options?: { force?: boolean },
@@ -77,7 +77,7 @@ export function useChatSessionCache(token?: string): {
     const sessions = await getHouseholdChatSessions(token, scope, { spaceId });
     writeChatSessionCache(scope, spaceId, sessions);
     return sessions;
-  };
+  }, [readFreshChatSessionCache, token, writeChatSessionCache]);
 
   return {
     readFreshChatSessionCache,

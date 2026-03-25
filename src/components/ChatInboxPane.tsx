@@ -109,10 +109,16 @@ export function ChatInboxPane({
   const activeSpaceTemplate = String(toolsProps?.activeSpaceTemplate || '').trim().toLowerCase();
 
   const activeSpace = spaceChips.find((space) => space.active) ?? null;
+  const privateScopeActive = scopeOptions.some((scope) => scope.id === 'private' && scope.active);
   const [expandedSpaceId, setExpandedSpaceId] = React.useState<string | null>(activeSpace?.id ?? null);
   const [expandedAppLists, setExpandedAppLists] = React.useState<Record<string, boolean>>({});
   const [expandedEnableLists, setExpandedEnableLists] = React.useState<Record<string, boolean>>({});
   const previousActiveSpaceIdRef = React.useRef<string | null>(activeSpace?.id ?? null);
+  const onSelectScopeRef = React.useRef(onSelectScope);
+
+  React.useEffect(() => {
+    onSelectScopeRef.current = onSelectScope;
+  }, [onSelectScope]);
 
   React.useEffect(() => {
     const activeSpaceId = activeSpace?.id ?? null;
@@ -124,11 +130,10 @@ export function ChatInboxPane({
 
   React.useEffect(() => {
     const activeSpaceId = activeSpace?.id ?? null;
-    const privateScopeActive = scopeOptions.some((scope) => scope.id === 'private' && scope.active);
     if (activeSpaceTemplate === 'private' && expandedSpaceId === activeSpaceId && !privateScopeActive) {
-      onSelectScope('private');
+      onSelectScopeRef.current('private');
     }
-  }, [activeSpace?.id, activeSpaceTemplate, expandedSpaceId, onSelectScope, scopeOptions]);
+  }, [activeSpace?.id, activeSpaceTemplate, expandedSpaceId, privateScopeActive]);
 
   function toggleSpace(spaceId: string): void {
     setExpandedSpaceId((current) => (current === spaceId ? null : spaceId));
@@ -151,25 +156,10 @@ export function ChatInboxPane({
 
   return (
     <View style={styles.chatExplorerRail}>
-      <View style={styles.chatInboxHeader}>
-        <View style={styles.chatInboxHeaderTopRow}>
-          <View style={styles.chatInboxHeaderBody}>
-            <Text style={styles.chatInboxHeaderTitle}>聊天目录</Text>
-            <Text style={styles.chatInboxHeaderCopy}>{headerCopy}</Text>
-          </View>
-          {canManage ? (
-            <Pressable style={styles.secondaryButtonSmall} onPress={onOpenSpaceCreator} disabled={spacesBusy}>
-              <Text style={styles.secondaryButtonText}>新建 Space</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
-        {spacesBusy && !hasSpaces ? <ActivityIndicator color="#0b6e4f" /> : null}
-        {chatListRefreshing ? <Text style={styles.selectionLabel}>正在从云端刷新聊天列表...</Text> : null}
-        {chatListSyncCopy ? <Text style={styles.chatInboxStatusCopy}>{chatListSyncCopy}</Text> : null}
-        {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
-        {chatSendPhaseCopy ? <Text style={styles.selectionLabel}>{chatSendPhaseCopy}</Text> : null}
-      </View>
+      {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
+      {spacesBusy && !hasSpaces ? <ActivityIndicator color="#0b6e4f" /> : null}
+      {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
+      {chatSendPhaseCopy ? <Text style={styles.selectionLabel}>{chatSendPhaseCopy}</Text> : null}
 
       {spaceChips.map((space) => {
         const expanded = expandedSpaceId === space.id;
@@ -232,6 +222,8 @@ export function ChatInboxPane({
                         <Text style={styles.chatScopeRefreshIcon}>↻</Text>
                       </Pressable>
                     </View>
+                    {chatListRefreshing ? <Text style={styles.selectionLabel}>正在从云端刷新聊天列表...</Text> : null}
+                    {chatListSyncCopy ? <Text style={styles.chatInboxStatusCopy}>{chatListSyncCopy}</Text> : null}
                     {chatBusy && sessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
                     {waitingForSpaces ? (
                       <ActivityIndicator color="#0b6e4f" />
@@ -324,32 +316,6 @@ export function ChatInboxPane({
                                     disabled={!toolsProps?.canOpenRelay}
                                   >
                                     <Text style={styles.primaryButtonText}>让 Sparkbox 私下转达</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
-                            ) : null}
-
-                            {toolsProps?.privateSideChannelLabel ? (
-                              <View style={styles.chatAppCard}>
-                                <View style={styles.chatAppHeader}>
-                                  <Text style={styles.chatAppTitle}>{toolsProps.privateSideChannelLabel}</Text>
-                                  <Text style={styles.tagMuted}>私密</Text>
-                                </View>
-                                <Text style={styles.chatAppCopy}>
-                                  {isDefaultPrivateSpace
-                                    ? '这是你的默认私密空间，聊天内容仅你与 Sparkbox 可见。'
-                                    : '先和 Sparkbox 私聊整理思路，再决定是否同步到共享聊天。'}
-                                </Text>
-                                <View style={styles.inlineActions}>
-                                  <Pressable
-                                    style={styles.primaryButtonSmall}
-                                    onPress={() =>
-                                      toolsProps?.onOpenPrivateSideChannel && toolsProps.onOpenPrivateSideChannel()
-                                    }
-                                  >
-                                    <Text style={styles.primaryButtonText}>
-                                      {isDefaultPrivateSpace ? '进入默认私聊' : '与 Sparkbox 私聊'}
-                                    </Text>
                                   </Pressable>
                                 </View>
                               </View>
@@ -485,6 +451,12 @@ export function ChatInboxPane({
           </View>
         );
       })}
+
+      {canManage ? (
+        <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={onOpenSpaceCreator} disabled={spacesBusy}>
+          <Text style={styles.primaryButtonText}>新建 Space</Text>
+        </Pressable>
+      ) : null}
 
       {!spaceChips.length && !spacesBusy ? <Text style={styles.cardCopy}>还没有 Space，可先创建一个。</Text> : null}
     </View>

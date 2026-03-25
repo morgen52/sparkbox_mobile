@@ -47,7 +47,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#e3f2ea',
   },
   stepRailItemCurrent: {
-    backgroundColor: '#2d5b46',
+    backgroundColor: '#2f7254',
   },
   stepRailNumber: {
     color: '#61746a',
@@ -75,20 +75,20 @@ export const styles = StyleSheet.create({
   authLogo: {
     fontSize: 42,
     lineHeight: 48,
-    color: '#224736',
+    color: '#2f7254',
     fontWeight: '900',
     letterSpacing: 0.8,
   },
   title: {
     fontSize: 34,
     lineHeight: 40,
-    color: '#224736',
+    color: '#2f7254',
     fontWeight: '800',
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#456253',
+    color: '#2f7254',
   },
   shellTabBar: {
     flexDirection: 'row',
@@ -141,11 +141,11 @@ export const styles = StyleSheet.create({
     borderColor: '#d7dfda',
   },
   scopePillActive: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
+    backgroundColor: '#2f7254',
+    borderColor: '#2f7254',
   },
   scopePillLabel: {
-    color: '#51665b',
+    color: '#2f7254',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -157,7 +157,7 @@ export const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     gap: 14,
-    shadowColor: '#2b312d',
+    shadowColor: '#2f7254',
     shadowOpacity: 0.06,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
@@ -166,12 +166,12 @@ export const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#234936',
+    color: '#2f7254',
   },
   cardCopy: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#4d6357',
+    color: '#2f7254',
   },
   libraryGrid: {
     flexDirection: 'row',
@@ -190,7 +190,7 @@ export const styles = StyleSheet.create({
     gap: 8,
   },
   librarySectionTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -207,7 +207,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 15,
     fontSize: 17,
-    color: '#234936',
+    color: '#2f7254',
     minHeight: 52,
   },
   textArea: {
@@ -258,7 +258,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f6f0df',
   },
   secondaryButtonText: {
-    color: '#254a37',
+    color: '#2f7254',
     fontWeight: '700',
     fontSize: 16,
   },
@@ -273,13 +273,13 @@ export const styles = StyleSheet.create({
     fontSize: 14,
   },
   noticeText: {
-    color: '#0b6e4f',
+    color: '#2f7254',
     lineHeight: 20,
     fontSize: 14,
     fontWeight: '700',
   },
   loadingText: {
-    color: '#456253',
+    color: '#2f7254',
     fontSize: 16,
   },
   row: {
@@ -288,7 +288,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   loadingInline: {
-    color: '#476257',
+    color: '#2f7254',
     fontSize: 14,
   },
   claimPreview: {
@@ -306,7 +306,7 @@ export const styles = StyleSheet.create({
   },
   claimPreviewValue: {
     fontSize: 16,
-    color: '#17352a',
+    color: '#2f7254',
     fontWeight: '700',
   },
   stepSummary: {
@@ -316,7 +316,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   stepSummaryTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 17,
     fontWeight: '800',
   },
@@ -358,7 +358,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   chatInboxHeaderTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 20,
     fontWeight: '800',
   },
@@ -389,11 +389,11 @@ export const styles = StyleSheet.create({
     gap: 4,
   },
   chatInboxSpaceChipActive: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
+    backgroundColor: '#2f7254',
+    borderColor: '#2f7254',
   },
   chatInboxSpaceChipLabel: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 15,
     fontWeight: '800',
   },
@@ -438,7 +438,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chatSessionAvatarBubbleGroup: {
-    backgroundColor: '#17352a',
+    backgroundColor: '#2f7254',
   },
   chatSessionAvatarBubbleShared: {
     backgroundColor: '#eef5ef',
@@ -447,7 +447,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#fff1cf',
   },
   chatSessionAvatarLabel: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -460,7 +460,7 @@ export const styles = StyleSheet.create({
     minWidth: 0,
   },
   chatSessionTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -499,7 +499,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   chatDetailTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 22,
     fontWeight: '800',
   },
@@ -541,7 +541,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   chatStatusNoticeCopy: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -578,7 +578,7 @@ export const styles = StyleSheet.create({
     gap: 4,
   },
   chatTreeFolderTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -647,7 +647,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   chatAppTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 15,
     fontWeight: '800',
     flex: 1,
@@ -659,7 +659,7 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
   },
   chatEmptyStateCopy: {
-    color: '#456556',
+    color: '#2f7254',
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
@@ -724,7 +724,7 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   statusTagOnline: {
-    color: '#0b6e4f',
+    color: '#2f7254',
     backgroundColor: '#e8f5ee',
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -755,7 +755,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   chatBubbleUser: {
-    backgroundColor: '#17352a',
+    backgroundColor: '#2f7254',
   },
   chatBubbleAssistant: {
     backgroundColor: '#eef5ef',
@@ -767,7 +767,7 @@ export const styles = StyleSheet.create({
     opacity: 0.92,
   },
   chatBubbleCopy: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 15,
     lineHeight: 22,
   },
@@ -794,8 +794,8 @@ export const styles = StyleSheet.create({
     backgroundColor: '#fffdf8',
   },
   groupParticipantPillSelf: {
-    backgroundColor: '#17352a',
-    borderColor: '#17352a',
+    backgroundColor: '#2f7254',
+    borderColor: '#2f7254',
   },
   groupParticipantPillOnline: {
     backgroundColor: '#e8f5ee',
@@ -806,7 +806,7 @@ export const styles = StyleSheet.create({
     borderColor: '#eccabc',
   },
   groupParticipantLabel: {
-    color: '#51665b',
+    color: '#2f7254',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -814,7 +814,7 @@ export const styles = StyleSheet.create({
     color: '#ffffff',
   },
   groupParticipantLabelOnline: {
-    color: '#0b6e4f',
+    color: '#2f7254',
   },
   groupParticipantLabelOffline: {
     color: '#7b4630',
@@ -839,7 +839,7 @@ export const styles = StyleSheet.create({
     minWidth: 0,
   },
   networkName: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -857,7 +857,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   tag: {
-    color: '#0b6e4f',
+    color: '#2f7254',
     backgroundColor: '#e8f5ee',
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -902,7 +902,7 @@ export const styles = StyleSheet.create({
   selectionTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#17352a',
+    color: '#2f7254',
   },
   selectionCopy: {
     color: '#556860',
@@ -910,12 +910,12 @@ export const styles = StyleSheet.create({
     lineHeight: 21,
   },
   statusText: {
-    color: '#375346',
+    color: '#2f7254',
     fontSize: 14,
     lineHeight: 20,
   },
   linkText: {
-    color: '#0b6e4f',
+    color: '#2f7254',
     fontWeight: '800',
     fontSize: 13,
   },
@@ -959,7 +959,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   debugTitle: {
-    color: '#17352a',
+    color: '#2f7254',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -1004,17 +1004,17 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   successTitle: {
-    color: '#0b6e4f',
+    color: '#2f7254',
     fontSize: 20,
     fontWeight: '800',
   },
   successCopy: {
-    color: '#355244',
+    color: '#2f7254',
     lineHeight: 21,
   },
   scannerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#081610',
+    backgroundColor: '#2f7254',
   },
   modalSurface: {
     ...StyleSheet.absoluteFillObject,
@@ -1063,3 +1063,4 @@ export const styles = StyleSheet.create({
     lineHeight: 21,
   },
 });
+

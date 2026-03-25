@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import { Buffer } from 'buffer';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -1357,6 +1357,43 @@ function App() {
     setChatAppActionNotice('');
   }, [activeSpaceId]);
 
+  const refreshSpaceSessionTotal = useCallback(
+    async (
+      spaceId: string,
+      options?: {
+        force?: boolean;
+        knownScope?: ChatSessionScope;
+        knownCount?: number;
+      },
+    ): Promise<void> => {
+      if (!spaceId) {
+        return;
+      }
+      const counts: Partial<Record<ChatSessionScope, number>> = {};
+      if (options?.knownScope && typeof options.knownCount === 'number') {
+        counts[options.knownScope] = options.knownCount;
+      }
+      const pendingScopes = (['family', 'private'] as ChatSessionScope[]).filter(
+        (scope) => counts[scope] === undefined,
+      );
+      const loaded = await Promise.all(
+        pendingScopes.map(async (scope) => {
+          const sessions = await fetchChatSessions(scope, spaceId, { force: options?.force === true });
+          return [scope, sessions.length] as const;
+        }),
+      );
+      loaded.forEach(([scope, count]) => {
+        counts[scope] = count;
+      });
+      const totalCount = (counts.family ?? 0) + (counts.private ?? 0);
+      setSpaceSessionCounts((current) => ({
+        ...current,
+        [spaceId]: totalCount,
+      }));
+    },
+    [fetchChatSessions],
+  );
+
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token || spaces.length === 0) {
       return;
@@ -1367,9 +1404,11 @@ function App() {
       try {
         const entries = await Promise.all(
           spaces.map(async (space) => {
-            const mapped = mapSpaceKindToLegacyScope(space.kind);
-            const sessions = await fetchChatSessions(mapped.chatScope, space.id, { force: false });
-            return [space.id, sessions.length] as const;
+            const [familySessions, privateSessions] = await Promise.all([
+              fetchChatSessions('family', space.id, { force: false }),
+              fetchChatSessions('private', space.id, { force: false }),
+            ]);
+            return [space.id, familySessions.length + privateSessions.length] as const;
           }),
         );
         if (cancelled) {
@@ -1390,7 +1429,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [session?.token, shellSurface, shellTab, spaces]);
+  }, [fetchChatSessions, session?.token, shellSurface, shellTab, spaces]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token) {
@@ -1406,10 +1445,11 @@ function App() {
       setChatListLastSyncedAt(cached.fetchedAt);
       setChatSessions(cached.sessions);
       if (activeChatSpaceId) {
-        setSpaceSessionCounts((current) => ({
-          ...current,
-          [activeChatSpaceId]: cached.sessions.length,
-        }));
+        void refreshSpaceSessionTotal(activeChatSpaceId, {
+          force: false,
+          knownScope: chatScope,
+          knownCount: cached.sessions.length,
+        }).catch(() => undefined);
       }
       setActiveChatSessionId((current) => {
         if (current && cached.sessions.some((sessionItem) => sessionItem.id === current)) {
@@ -1435,10 +1475,11 @@ function App() {
         setChatListLastSyncedAt(cachedEntry?.fetchedAt ?? Date.now());
         setChatSessions(sessions);
         if (activeChatSpaceId) {
-          setSpaceSessionCounts((current) => ({
-            ...current,
-            [activeChatSpaceId]: sessions.length,
-          }));
+          void refreshSpaceSessionTotal(activeChatSpaceId, {
+            force: true,
+            knownScope: chatScope,
+            knownCount: sessions.length,
+          }).catch(() => undefined);
         }
         setActiveChatSessionId((current) => {
           if (current && sessions.some((sessionItem) => sessionItem.id === current)) {
@@ -1462,7 +1503,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeChatSpaceId, chatScope, session?.token, shellSurface, shellTab]);
+  }, [activeChatSpaceId, chatScope, refreshSpaceSessionTotal, session?.token, shellSurface, shellTab]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'chats' || !session?.token || !activeChatSessionId) {
@@ -2782,7 +2823,10 @@ function App() {
                   spaceChips: spaces.map((space) => ({
                     id: space.id,
                     name: space.name,
-                    countsCopy: describeSpaceSessionCountCopy(spaceSessionCounts[space.id], space.memberCount),
+                    countsCopy: describeSpaceSessionCountCopy(
+                      spaceSessionCounts[space.id] ?? space.threadCount,
+                      space.memberCount,
+                    ),
                     active: space.id === activeSpaceId,
                   })),
                   onOpenSpaceCreator: openSpaceCreator,
