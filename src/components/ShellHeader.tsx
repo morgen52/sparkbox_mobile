@@ -5,6 +5,8 @@ import type { ShellTab } from '../householdState';
 type ShellHeaderProps = {
   styles: Record<string, any>;
   householdName: string;
+  backToListLabel?: string;
+  onBackToList?: () => void;
   tabs: Array<{
     id: ShellTab;
     label: string;
@@ -16,14 +18,23 @@ type ShellHeaderProps = {
 export function ShellHeader({
   styles,
   householdName,
+  backToListLabel,
+  onBackToList,
   tabs,
   onSelectTab,
 }: ShellHeaderProps) {
   return (
     <>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Sparkbox</Text>
-        <Text style={styles.title}>{householdName}</Text>
+      <View style={styles.heroTopRow}>
+        <View style={styles.heroTextWrap}>
+          <Text style={styles.eyebrow}>Sparkbox</Text>
+          <Text style={styles.title}>{householdName}</Text>
+        </View>
+        {onBackToList ? (
+          <Pressable style={styles.headerBackButton} onPress={onBackToList}>
+            <Text style={styles.headerBackButtonText}>{backToListLabel || '返回空间列表'}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.shellTabBar}>

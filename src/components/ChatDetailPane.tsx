@@ -254,7 +254,7 @@ export function ChatDetailPane({
           onChangeText={onChangeDraft}
           multiline
           numberOfLines={4}
-          editable={canSend || Boolean(chatDraft)}
+          editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && hasActiveChatSession}
         />
         <View style={styles.inlineActions}>
           <Pressable

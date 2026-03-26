@@ -122,7 +122,7 @@ export function OwnerSettingsPane({
 
   return (
     <>
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>设备工具</Text>
         <Text style={styles.cardCopy}>
           当 Sparkbox 需要进一步排查或恢复时，可使用这里的工具。
@@ -191,7 +191,7 @@ export function OwnerSettingsPane({
         ) : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>Sparkbox 的 AI 服务</Text>
         <Text style={styles.cardCopy}>
           为 Sparkbox 维护默认 AI 服务和模型；如登录信息变化，可在这里更新。
@@ -264,7 +264,7 @@ export function OwnerSettingsPane({
         ) : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>添加其他 AI 服务</Text>
         <Text style={styles.cardCopy}>
           当 Sparkbox 需要接入新的 AI 服务或刷新登录信息时，在这里操作。
@@ -321,7 +321,7 @@ export function OwnerSettingsPane({
         {ownerServiceSummary ? <Text style={styles.cardCopy}>{ownerServiceSummary}</Text> : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>重启与恢复</Text>
         <Text style={styles.cardCopy}>
           如果 Sparkbox 状态异常，可在这里查看运行情况并重启关键服务。
@@ -407,7 +407,7 @@ export function OwnerSettingsPane({
         {ownerServiceSummary ? <Text style={styles.cardCopy}>{ownerServiceSummary}</Text> : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>设备健康与重置</Text>
         <Text style={styles.cardCopy}>
           管理员可在这里查看 Sparkbox 健康状态，并将设备重置回配置流程。

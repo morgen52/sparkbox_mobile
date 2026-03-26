@@ -1,6 +1,5 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { ViewedSpaceCard } from './ViewedSpaceCard';
 
 type SettingsSummaryPaneProps = {
   styles: Record<string, any>;
@@ -8,22 +7,11 @@ type SettingsSummaryPaneProps = {
   homeError: string;
   onlineDeviceAvailable: boolean;
   canManage: boolean;
-  activeSpaceName: string;
-  activeSpaceKindLabel: string;
-  activeSpaceTemplateLabel: string;
-  activeSpaceSummaryCopy: string;
-  activeSpaceCountsCopy: string;
-  canManageSharedSpace: boolean;
-  settingsBusy: boolean;
-  spaceMembersEditorBusy: boolean;
   accountDisplayName: string;
   accountRoleLabel: string;
   settingsNotice: string;
   settingsError: string;
-  onOpenChats: () => void;
   onBeginNewDeviceOnboarding: () => void;
-  onManageMembers: () => void;
-  onInviteToSpace: () => void;
   onLogout: () => void;
 };
 
@@ -33,22 +21,11 @@ export function SettingsSummaryPane({
   homeError,
   onlineDeviceAvailable,
   canManage,
-  activeSpaceName,
-  activeSpaceKindLabel,
-  activeSpaceTemplateLabel,
-  activeSpaceSummaryCopy,
-  activeSpaceCountsCopy,
-  canManageSharedSpace,
-  settingsBusy,
-  spaceMembersEditorBusy,
   accountDisplayName,
   accountRoleLabel,
   settingsNotice,
   settingsError,
-  onOpenChats,
   onBeginNewDeviceOnboarding,
-  onManageMembers,
-  onInviteToSpace,
   onLogout,
 }: SettingsSummaryPaneProps) {
   // Keep the top of Settings lightweight: household status, the currently
@@ -56,7 +33,7 @@ export function SettingsSummaryPane({
   // in the dedicated settings panes below.
   return (
     <>
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>家庭概览</Text>
         <Text style={styles.cardCopy}>
           {homeBusy
@@ -68,9 +45,6 @@ export function SettingsSummaryPane({
         {homeError ? <Text style={styles.errorText}>{homeError}</Text> : null}
         {homeBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
         <View style={styles.inlineActions}>
-          <Pressable style={styles.primaryButtonSmall} onPress={onOpenChats}>
-            <Text style={styles.primaryButtonText}>打开群聊</Text>
-          </Pressable>
           {canManage ? (
             <Pressable style={styles.secondaryButtonSmall} onPress={onBeginNewDeviceOnboarding}>
               <Text style={styles.secondaryButtonText}>配置新设备</Text>
@@ -79,21 +53,7 @@ export function SettingsSummaryPane({
         </View>
       </View>
 
-      <ViewedSpaceCard
-        styles={styles}
-        activeSpaceName={activeSpaceName}
-        activeSpaceKindLabel={activeSpaceKindLabel}
-        activeSpaceTemplateLabel={activeSpaceTemplateLabel}
-        summaryCopy={activeSpaceSummaryCopy}
-        countsCopy={activeSpaceCountsCopy}
-        canManageSharedSpace={canManageSharedSpace}
-        settingsBusy={settingsBusy}
-        spaceMembersEditorBusy={spaceMembersEditorBusy}
-        onManageMembers={onManageMembers}
-        onInviteToSpace={onInviteToSpace}
-      />
-
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>你的账号</Text>
         <Text style={styles.cardCopy}>
           {accountDisplayName} · {accountRoleLabel}权限

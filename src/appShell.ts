@@ -3,7 +3,7 @@ import { describeOwnerServiceActionLabel, type ShellTab } from './householdState
 export const PHASE_ONE_TABS: Array<{ key: ShellTab; label: string }> = [
   { key: 'chats', label: '聊天' },
   { key: 'library', label: '资料库' },
-  { key: 'settings', label: '设置' },
+  { key: 'settings', label: '空间设置' },
 ];
 
 export type PhaseOneSurface = 'onboarding' | 'shell';

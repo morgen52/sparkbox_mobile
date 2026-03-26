@@ -1,5 +1,16 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  ActivityIndicator,
+  Animated,
+  LayoutAnimation,
+  PanResponder,
+  Platform,
+  Pressable,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
 
 type SpaceChip = {
   id: string;
@@ -28,6 +39,7 @@ type ChatInboxSession = {
 type ChatInboxPaneProps = {
   styles: Record<string, any>;
   headerCopy: string;
+  singleSpaceMode?: boolean;
   spacesError: string;
   spacesBusy: boolean;
   hasSpaces: boolean;
@@ -52,11 +64,135 @@ type ChatInboxPaneProps = {
   onRefresh: () => void;
   onCreateChat: () => void;
   onOpenSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
 };
+
+type ThreadRow = {
+  id: string;
+  title: string;
+  badge: string;
+  copy: string;
+};
+
+const SWIPE_DELETE_WIDTH = 78;
+
+function SwipeToDeleteSessionRow({
+  styles,
+  session,
+  onOpenSession,
+  onDeleteSession,
+}: {
+  styles: Record<string, any>;
+  session: ChatInboxSession;
+  onOpenSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
+}) {
+  const translateX = React.useRef(new Animated.Value(0)).current;
+  const offsetRef = React.useRef(0);
+
+  const animateTo = React.useCallback(
+    (toValue: number) => {
+      offsetRef.current = toValue;
+      Animated.spring(translateX, {
+        toValue,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 18,
+      }).start();
+    },
+    [translateX],
+  );
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gestureState) =>
+          Math.abs(gestureState.dx) > 6 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderMove: (_event, gestureState) => {
+          const next = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, offsetRef.current + gestureState.dx));
+          translateX.setValue(next);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          const dragDistance = offsetRef.current + gestureState.dx;
+          const shouldOpen = gestureState.vx < -0.2 || dragDistance < -SWIPE_DELETE_WIDTH / 2;
+          animateTo(shouldOpen ? -SWIPE_DELETE_WIDTH : 0);
+        },
+        onPanResponderTerminate: () => {
+          animateTo(0);
+        },
+      }),
+    [animateTo, translateX],
+  );
+
+  return (
+    <View style={styles.chatSessionSwipeContainer}>
+      <Pressable
+        style={styles.chatSessionDeleteAction}
+        onPress={() => {
+          animateTo(0);
+          onDeleteSession(session.id);
+        }}
+      >
+        <MaterialCommunityIcons name="delete-outline" size={24} color="#ffffff" />
+      </Pressable>
+      <Animated.View style={[styles.chatSessionSwipeFront, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
+        <Pressable
+          style={[
+            styles.chatSessionRow,
+            styles.chatSessionRowExplorer,
+            session.active ? styles.chatSessionRowActive : null,
+          ]}
+          onPress={() => {
+            if (offsetRef.current <= -8) {
+              animateTo(0);
+              return;
+            }
+            onOpenSession(session.id);
+          }}
+        >
+          <View style={styles.chatSessionAvatarRail}>
+            <View
+              style={[
+                styles.chatSessionAvatarBubble,
+                session.avatarTone === 'group'
+                  ? styles.chatSessionAvatarBubbleGroup
+                  : session.avatarTone === 'private'
+                    ? styles.chatSessionAvatarBubblePrivate
+                    : styles.chatSessionAvatarBubbleShared,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chatSessionAvatarLabel,
+                  session.avatarTone === 'group' ? styles.chatSessionAvatarLabelOnDark : null,
+                ]}
+              >
+                {session.avatarLabel}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.chatSessionBody}>
+            <Text numberOfLines={1} style={styles.chatSessionTitle}>
+              {session.name}
+            </Text>
+            <Text numberOfLines={2} style={styles.chatSessionPreview}>
+              {session.preview}
+            </Text>
+          </View>
+          <View style={styles.chatSessionMeta}>
+            {session.timestamp ? <Text style={styles.chatSessionTimestamp}>{session.timestamp}</Text> : null}
+            <Text style={session.active ? styles.statusTagOnline : styles.tagMuted}>{session.badge}</Text>
+          </View>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
 
 export function ChatInboxPane({
   styles,
   headerCopy,
+  singleSpaceMode = false,
   spacesError,
   spacesBusy,
   hasSpaces,
@@ -81,7 +217,12 @@ export function ChatInboxPane({
   onRefresh,
   onCreateChat,
   onOpenSession,
+  onDeleteSession,
 }: ChatInboxPaneProps) {
+  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+
   type EnabledFamilyApp = {
     slug: string;
     title: string;
@@ -113,8 +254,10 @@ export function ChatInboxPane({
   const [expandedSpaceId, setExpandedSpaceId] = React.useState<string | null>(activeSpace?.id ?? null);
   const [expandedAppLists, setExpandedAppLists] = React.useState<Record<string, boolean>>({});
   const [expandedEnableLists, setExpandedEnableLists] = React.useState<Record<string, boolean>>({});
+  const [quickStartPanelOpen, setQuickStartPanelOpen] = React.useState(false);
   const previousActiveSpaceIdRef = React.useRef<string | null>(activeSpace?.id ?? null);
   const onSelectScopeRef = React.useRef(onSelectScope);
+  const threadRows = (toolsProps?.threadRows || []) as ThreadRow[];
 
   React.useEffect(() => {
     onSelectScopeRef.current = onSelectScope;
@@ -124,6 +267,7 @@ export function ChatInboxPane({
     const activeSpaceId = activeSpace?.id ?? null;
     if (activeSpaceId && activeSpaceId !== previousActiveSpaceIdRef.current) {
       setExpandedSpaceId(activeSpaceId);
+      setQuickStartPanelOpen(false);
     }
     previousActiveSpaceIdRef.current = activeSpaceId;
   }, [activeSpace?.id]);
@@ -136,11 +280,13 @@ export function ChatInboxPane({
   }, [activeSpace?.id, activeSpaceTemplate, expandedSpaceId, privateScopeActive]);
 
   function toggleSpace(spaceId: string): void {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedSpaceId((current) => (current === spaceId ? null : spaceId));
     onSelectSpace(spaceId);
   }
 
   function toggleAppList(spaceId: string): void {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedAppLists((current) => ({
       ...current,
       [spaceId]: !current[spaceId],
@@ -148,10 +294,16 @@ export function ChatInboxPane({
   }
 
   function toggleEnableList(spaceId: string): void {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedEnableLists((current) => ({
       ...current,
       [spaceId]: !current[spaceId],
     }));
+  }
+
+  function toggleQuickStartPanel(): void {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setQuickStartPanelOpen((current) => !current);
   }
 
   return (
@@ -161,27 +313,75 @@ export function ChatInboxPane({
       {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
       {chatSendPhaseCopy ? <Text style={styles.selectionLabel}>{chatSendPhaseCopy}</Text> : null}
 
-      {spaceChips.map((space) => {
+      {(singleSpaceMode ? spaceChips.filter((space) => space.active) : spaceChips).map((space) => {
         const expanded = expandedSpaceId === space.id;
-        const ready = expanded && space.active;
+        const forcedExpanded = singleSpaceMode ? true : expanded;
         const appListExpanded = expandedAppLists[space.id] === true;
         const isDefaultPrivateSpace = space.active && activeSpaceTemplate === 'private';
+        const showQuickStartButton = space.active && threadRows.length > 0;
         return (
           <View key={space.id} style={[styles.chatTreeFolder, space.active ? styles.chatTreeFolderActive : null]}>
-            <Pressable style={styles.chatTreeFolderHeader} onPress={() => toggleSpace(space.id)}>
+            <Pressable
+              style={styles.chatTreeFolderHeader}
+              onPress={() => {
+                if (!singleSpaceMode) {
+                  toggleSpace(space.id);
+                }
+              }}
+            >
               <View style={styles.chatTreeFolderHeaderBody}>
                 <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
                 <Text style={styles.chatTreeFolderMeta}>{space.countsCopy}</Text>
               </View>
-              <Text style={styles.chatTreeFolderChevron}>{expanded ? '∧' : '∨'}</Text>
+              <View style={styles.chatTreeFolderHeaderActions}>
+                {showQuickStartButton ? (
+                  <Pressable
+                    style={[styles.chatQuickStartButton, chatBusy ? styles.networkRowDisabled : null]}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      toggleQuickStartPanel();
+                    }}
+                    disabled={chatBusy}
+                  >
+                    <View style={styles.chatQuickStartButtonInner}>
+                      <Text style={styles.chatQuickStartButtonText}>快速开始话题</Text>
+                      <Text style={styles.chatQuickStartButtonChevron}>{quickStartPanelOpen ? '∧' : '∨'}</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
+                {!singleSpaceMode ? <Text style={styles.chatTreeFolderChevron}>{expanded ? '∧' : '∨'}</Text> : null}
+              </View>
             </Pressable>
 
-            {expanded ? (
+            {forcedExpanded ? (
               <View style={styles.chatTreeFolderBody}>
                 <View style={styles.chatTreeSectionDividerCompact} />
                 {!space.active ? <Text style={styles.cardCopy}>正在切换到该空间...</Text> : null}
-                {ready ? (
+                {forcedExpanded && space.active ? (
                   <>
+                    {quickStartPanelOpen ? (
+                      <View style={styles.chatQuickStartPopover}>
+                        <Text style={styles.chatQuickStartPopoverTitle}>话题入口</Text>
+                        {threadRows.map((thread) => (
+                          <Pressable
+                            key={thread.id}
+                            style={styles.chatQuickStartRow}
+                            onPress={() => {
+                              setQuickStartPanelOpen(false);
+                              if (toolsProps?.onOpenThread) {
+                                toolsProps.onOpenThread(thread.id);
+                              }
+                            }}
+                          >
+                            <View style={styles.chatQuickStartRowBody}>
+                              <Text style={styles.chatQuickStartRowTitle}>{thread.title}</Text>
+                              <Text style={styles.chatQuickStartRowCopy}>{thread.copy}</Text>
+                            </View>
+                            <Text style={styles.tagMuted}>{thread.badge}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
                     <View style={styles.chatScopeNavRow}>
                       <View style={styles.chatScopeNavTabs}>
                         {isDefaultPrivateSpace ? (
@@ -231,49 +431,13 @@ export function ChatInboxPane({
                       <Text style={styles.chatEmptyStateCopy}>{emptyStateCopy}</Text>
                     ) : (
                       sessions.map((session) => (
-                        <Pressable
+                        <SwipeToDeleteSessionRow
                           key={session.id}
-                          style={[
-                            styles.chatSessionRow,
-                            styles.chatSessionRowExplorer,
-                            session.active ? styles.chatSessionRowActive : null,
-                          ]}
-                          onPress={() => onOpenSession(session.id)}
-                        >
-                          <View style={styles.chatSessionAvatarRail}>
-                            <View
-                              style={[
-                                styles.chatSessionAvatarBubble,
-                                session.avatarTone === 'group'
-                                  ? styles.chatSessionAvatarBubbleGroup
-                                  : session.avatarTone === 'private'
-                                    ? styles.chatSessionAvatarBubblePrivate
-                                    : styles.chatSessionAvatarBubbleShared,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.chatSessionAvatarLabel,
-                                  session.avatarTone === 'group' ? styles.chatSessionAvatarLabelOnDark : null,
-                                ]}
-                              >
-                                {session.avatarLabel}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.chatSessionBody}>
-                            <Text numberOfLines={1} style={styles.chatSessionTitle}>
-                              {session.name}
-                            </Text>
-                            <Text numberOfLines={2} style={styles.chatSessionPreview}>
-                              {session.preview}
-                            </Text>
-                          </View>
-                          <View style={styles.chatSessionMeta}>
-                            {session.timestamp ? <Text style={styles.chatSessionTimestamp}>{session.timestamp}</Text> : null}
-                            <Text style={session.active ? styles.statusTagOnline : styles.tagMuted}>{session.badge}</Text>
-                          </View>
-                        </Pressable>
+                          styles={styles}
+                          session={session}
+                          onOpenSession={onOpenSession}
+                          onDeleteSession={onDeleteSession}
+                        />
                       ))
                     )}
                     <Pressable
@@ -452,7 +616,7 @@ export function ChatInboxPane({
         );
       })}
 
-      {canManage ? (
+      {canManage && !singleSpaceMode ? (
         <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={onOpenSpaceCreator} disabled={spacesBusy}>
           <Text style={styles.primaryButtonText}>新建 Space</Text>
         </Pressable>

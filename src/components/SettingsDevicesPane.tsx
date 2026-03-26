@@ -43,7 +43,7 @@ export function SettingsDevicesPane({
 }: SettingsDevicesPaneProps) {
   return (
     <>
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>设备与网络</Text>
         <Text style={styles.cardCopy}>
           {canReprovisionDevice
@@ -71,7 +71,7 @@ export function SettingsDevicesPane({
       </View>
 
       {canManage ? (
-        <View style={styles.card}>
+        <View style={styles.settingsCard}>
           <Text style={styles.cardTitle}>管理家庭应用</Text>
           <Text style={styles.cardCopy}>
             家庭应用只需在设备安装一次，然后按空间决定是否启用。

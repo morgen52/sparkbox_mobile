@@ -48,7 +48,7 @@ export function HouseholdPeoplePane({
 }: HouseholdPeoplePaneProps) {
   return (
     <>
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>家庭成员</Text>
         <Text style={styles.cardCopy}>{householdMembersCopy}</Text>
         {homeMembers.map((member) => {
@@ -87,7 +87,7 @@ export function HouseholdPeoplePane({
                   </Pressable>
                 </View>
               ) : isSelf ? (
-                <Text style={styles.cardCopy}>这是你。</Text>
+                <Text style={styles.cardCopy}>这是你</Text>
               ) : null}
             </View>
           );
@@ -95,10 +95,10 @@ export function HouseholdPeoplePane({
       </View>
 
       {canManage ? (
-        <View style={styles.card}>
+        <View style={styles.settingsCard}>
           <Text style={styles.cardTitle}>邀请</Text>
           <Text style={styles.cardCopy}>
-            可在这里创建普通加入邀请，或邀请新的管理员。按空间发出的邀请会让对方加入当前家庭，并进入你选择的共享空间。
+            在这里创建普通加入邀请，或邀请新的管理员。在空间的设置界面内发出的邀请会让对方进入对应的共享空间。
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -142,7 +142,7 @@ export function HouseholdPeoplePane({
         </View>
       ) : null}
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>最近活动</Text>
         {recentActivity.length === 0 ? (
           <Text style={styles.cardCopy}>暂无家庭活动。</Text>

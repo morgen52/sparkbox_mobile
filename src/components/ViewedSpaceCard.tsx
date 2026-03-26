@@ -29,7 +29,7 @@ export function ViewedSpaceCard({
   onInviteToSpace,
 }: ViewedSpaceCardProps) {
   return (
-    <View style={styles.card}>
+    <View style={styles.settingsCard}>
       <Text style={styles.cardTitle}>Space you're viewing</Text>
       <Text style={styles.cardCopy}>
         {activeSpaceName

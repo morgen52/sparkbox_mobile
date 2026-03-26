@@ -26,6 +26,7 @@ import { LibraryPane } from './src/components/LibraryPane';
 import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
+import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { SetupSurface } from './src/components/SetupSurface';
 import { ShellModals } from './src/components/ShellModals';
 import { SettingsSummaryPane } from './src/components/SettingsSummaryPane';
@@ -278,6 +279,8 @@ function App() {
   // between tabs, spaces, chats, files, tasks, and owner tooling still lives
   // here so cross-surface resets happen in one place.
   const [shellTab, setShellTab] = useState<ShellTab>('chats');
+  const [spaceHomeMode, setSpaceHomeMode] = useState<'list' | 'inside'>('list');
+  const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings'>('spaces');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
@@ -1214,6 +1217,8 @@ function App() {
       setSpaces([]);
       setSpaceSessionCounts({});
       setActiveSpaceId('');
+      setSpaceHomeMode('list');
+      setSpaceListViewMode('spaces');
       setPreferredActiveSpaceId('');
       setLoadedActiveSpaceStorageKey('');
       setActiveSpaceDetail(null);
@@ -1269,6 +1274,12 @@ function App() {
       cancelled = true;
     };
   }, [activeSpaceStorageKey, completedDeviceId, loadedActiveSpaceStorageKey, onboardingInProgress, session?.token, setupFlowRequested]);
+
+  useEffect(() => {
+    if (spaceHomeMode === 'inside' && !activeSpaceId) {
+      setSpaceHomeMode('list');
+    }
+  }, [activeSpaceId, spaceHomeMode]);
 
   useEffect(() => {
     if (!activeSpaceStorageKey || loadedActiveSpaceStorageKey !== activeSpaceStorageKey || !activeSpaceId) {
@@ -1718,9 +1729,28 @@ function App() {
   async function logout(): Promise<void> {
     await revokeSession(session?.token);
     setSession(null);
+    setSpaceHomeMode('list');
+    setSpaceListViewMode('spaces');
     setSkipOnboardingWhenNoDevice(false);
     await persistSession(null);
     resetFlow();
+  }
+
+  function openSpaceHome(spaceId: string): void {
+    setActiveSpaceId(spaceId);
+    setShellTab('chats');
+    setActiveChatSessionId('');
+    setActiveChatSession(null);
+    setSpaceHomeMode('inside');
+    setSpaceListViewMode('spaces');
+  }
+
+  function returnToSpaceList(): void {
+    setShellTab('chats');
+    setActiveChatSessionId('');
+    setActiveChatSession(null);
+    setSpaceHomeMode('list');
+    setSpaceListViewMode('spaces');
   }
 
   async function generateInvite(
@@ -2701,13 +2731,197 @@ function App() {
   }
 
   if (shellSurface === 'shell' && session) {
+    if (spaceHomeMode === 'list') {
+      return (
+        <SafeAreaView style={styles.screen}>
+          <StatusBar style="dark" />
+          <View style={styles.shellScreen}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroTextWrap}>
+                <Text style={styles.eyebrow}>Sparkbox</Text>
+                <Text style={styles.title}>我的空间</Text>
+                <Text style={styles.subtitle}>{householdName}</Text>
+              </View>
+              <Pressable
+                style={styles.headerBackButton}
+                onPress={() => setSpaceListViewMode((current) => (current === 'spaces' ? 'global-settings' : 'spaces'))}
+              >
+                <Text style={styles.headerBackButtonText}>
+                  {spaceListViewMode === 'spaces' ? '全局设置' : '返回我的空间'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {spaceListViewMode === 'spaces' ? (
+              <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
+                {spaces.map((space) => (
+                  <Pressable key={space.id} style={styles.chatTreeFolder} onPress={() => openSpaceHome(space.id)}>
+                    <View style={styles.chatTreeFolderHeader}>
+                      <View style={styles.chatTreeFolderHeaderBody}>
+                        <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
+                        <Text style={styles.chatTreeFolderMeta}>
+                          {describeSpaceSessionCountCopy(spaceSessionCounts[space.id] ?? space.threadCount, space.memberCount)}
+                        </Text>
+                      </View>
+                      <View style={styles.spaceListCardRightRail}>
+                        <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
+                        <Text style={styles.chatTreeFolderChevron}>›</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+                {canManage ? (
+                  <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={openSpaceCreator} disabled={spacesBusy}>
+                    <Text style={styles.primaryButtonText}>新建 Space</Text>
+                  </Pressable>
+                ) : null}
+                {!spaces.length && !spacesBusy ? <Text style={styles.cardCopy}>还没有 Space，可先创建一个。</Text> : null}
+                {spacesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
+                <Pressable style={styles.secondaryButton} onPress={() => void logout()}>
+                  <Text style={styles.secondaryButtonText}>退出登录</Text>
+                </Pressable>
+              </ScrollView>
+            ) : (
+              <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
+                <SettingsSummaryPane
+                  styles={styles}
+                  homeBusy={homeBusy}
+                  homeError={homeError}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  canManage={canManage}
+                  accountDisplayName={session.user.display_name}
+                  accountRoleLabel={describeHouseholdRole(session.user.role)}
+                  settingsNotice={settingsNotice}
+                  settingsError={settingsError}
+                  onBeginNewDeviceOnboarding={beginNewDeviceOnboarding}
+                  onLogout={() => void logout()}
+                />
+
+                <SettingsDevicesPane
+                  styles={styles}
+                  canManage={canManage}
+                  canReprovisionDevice={canReprovisionDevice}
+                  settingsBusy={settingsBusy}
+                  familyAppsBusy={familyAppsBusy}
+                  activeSpaceName=""
+                  activeSpaceTemplateLabel=""
+                  homeDevices={homeDevices}
+                  recommendedFamilyApps={[]}
+                  installedFamilyApps={installedFamilyApps}
+                  availableFamilyApps={availableFamilyApps}
+                  onBeginDeviceReprovision={(device) => void beginDeviceReprovision(device)}
+                  onInstallSelectedFamilyApp={(slug) => void installSelectedFamilyApp(slug)}
+                  onUninstallInstalledFamilyApp={(slug) => void uninstallInstalledFamilyApp(slug)}
+                />
+
+                <OwnerSettingsPane
+                  styles={styles}
+                  canManage={canManage}
+                  homeDevices={homeDevices}
+                  ownerDeviceId={ownerDeviceId}
+                  ownerConsoleBusy={ownerConsoleBusy}
+                  ownerStatus={ownerStatus}
+                  ownerProviders={ownerProviders}
+                  ownerModels={ownerModels}
+                  ownerProviderConfig={ownerProviderConfig}
+                  ownerInference={ownerInference}
+                  ownerOnboardProvider={ownerOnboardProvider}
+                  ownerOnboardModel={ownerOnboardModel}
+                  ownerOnboardApiKey={ownerOnboardApiKey}
+                  ownerOnboardApiUrl={ownerOnboardApiUrl}
+                  ownerServiceOutput={ownerServiceOutput}
+                  diagnosticsBusy={diagnosticsBusy}
+                  diagnosticsError={diagnosticsError}
+                  diagnosticsPayload={diagnosticsPayload}
+                  diagnosticsDeviceId={diagnosticsDeviceId}
+                  renderOwnerConsoleFeedback={renderOwnerConsoleFeedback}
+                  describeDiagnosticsSource={describeDiagnosticsSource}
+                  onSelectOwnerDevice={setOwnerDeviceId}
+                  onRefreshOwnerConsole={() => void refreshOwnerConsole()}
+                  onReconnectOwnerDevice={() => void reconnectOwnerDevice()}
+                  onChangeDefaultProvider={(provider) =>
+                    setOwnerProviderConfig((current) => ({
+                      ...current,
+                      defaultProvider: provider,
+                    }))
+                  }
+                  onChangeDefaultModel={(value) =>
+                    setOwnerProviderConfig((current) => ({
+                      ...current,
+                      defaultModel: value,
+                    }))
+                  }
+                  onChangeProviderTimeout={(value) =>
+                    setOwnerProviderConfig((current) => ({
+                      ...current,
+                      providerTimeoutSecs: Number.parseInt(value || '0', 10) || 0,
+                    }))
+                  }
+                  onSaveOwnerProviderSettings={() => void saveOwnerProviderSettings()}
+                  onChangeOnboardProvider={setOwnerOnboardProvider}
+                  onChangeOnboardModel={setOwnerOnboardModel}
+                  onChangeOnboardApiKey={setOwnerOnboardApiKey}
+                  onChangeOnboardApiUrl={setOwnerOnboardApiUrl}
+                  onRunOwnerOnboard={() => void runOwnerOnboard()}
+                  onRunOwnerServiceAction={(serviceName, action) =>
+                    void runOwnerServiceAction(serviceName, action)
+                  }
+                  onLoadDiagnostics={(deviceId) => void loadDiagnostics(deviceId)}
+                  onFactoryResetDevice={(device) => void factoryResetDevice(device)}
+                />
+
+                <HouseholdPeoplePane
+                  styles={styles}
+                  canManage={canManage}
+                  settingsBusy={settingsBusy}
+                  currentUserId={session.user.id}
+                  householdMembersCopy={householdMembersCopy}
+                  homeMembers={homeMembers}
+                  pendingInvites={homePendingInvites}
+                  recentActivity={homeRecentActivity}
+                  onChangeMemberRole={(member, nextRole) => void changeMemberRole(member, nextRole)}
+                  onRemoveMember={(member) => void removeMember(member)}
+                  onGenerateInvite={(role) => void generateInvite(role)}
+                  onRevokeInvite={(invite) => void revokeInvite(invite)}
+                />
+              </ScrollView>
+            )}
+
+            <SpaceCreatorModal
+              visible={spaceCreatorOpen}
+              busy={spaceCreatorBusy}
+              error={spaceCreatorError}
+              spaceName={spaceName}
+              selectedTemplateLabel={describeSpaceTemplate(spaceTemplate)}
+              templateOptions={SPACE_TEMPLATE_OPTIONS.map((template) => ({
+                id: template,
+                label: describeSpaceTemplate(template),
+                active: spaceTemplate === template,
+              }))}
+              memberOptions={spaceMemberOptions}
+              selectedMemberIds={spaceMemberIds}
+              styles={styles}
+              onRequestClose={() => setSpaceCreatorOpen(false)}
+              onChangeSpaceName={setSpaceName}
+              onSelectTemplate={(templateId) => setSpaceTemplate(templateId as Exclude<SpaceTemplate, 'private' | 'household'>)}
+              onToggleMember={toggleSpaceMember}
+              onSubmit={() => void submitSpaceCreator()}
+            />
+          </View>
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <View style={styles.shellScreen}>
           <ShellHeader
             styles={styles}
-            householdName={householdName}
+            householdName={activeSpace?.name || householdName}
+            backToListLabel="返回空间列表"
+            onBackToList={returnToSpaceList}
             tabs={PHASE_ONE_TABS.map((tab) => ({
               id: tab.key,
               label: tab.label,
@@ -2731,7 +2945,7 @@ function App() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={false}
-            contentContainerStyle={shellTab === 'chats' ? styles.chatContent : styles.content}
+            contentContainerStyle={shellTab === 'chats' || shellTab === 'settings' ? styles.chatContent : styles.content}
           >
             {shellTab === 'chats' ? (
               <ChatsPane
@@ -2744,6 +2958,7 @@ function App() {
                     activeSpaceKindLabel: activeSpaceKindLabel || '空间',
                     spacesReady: !waitingForSpaces,
                   }),
+                  singleSpaceMode: true,
                   spacesError,
                   spacesBusy,
                   hasSpaces: spaces.length > 0,
@@ -2835,6 +3050,7 @@ function App() {
                   onRefresh: () => void runRefreshChatSessions({ force: true }),
                   onCreateChat: () => openChatSessionEditor(),
                   onOpenSession: setActiveChatSessionId,
+                  onDeleteSession: (sessionId: string) => void runDeleteCurrentChatSession(sessionId),
                 }}
                 toolsProps={{
                   waitingForSpaces,
@@ -3001,16 +3217,12 @@ function App() {
 
             {shellTab === 'settings' ? (
               <>
-                <SettingsSummaryPane
+                <ViewedSpaceCard
                   styles={styles}
-                  homeBusy={homeBusy}
-                  homeError={homeError}
-                  onlineDeviceAvailable={onlineDeviceAvailable}
-                  canManage={canManage}
                   activeSpaceName={activeSpace?.name || ''}
                   activeSpaceKindLabel={activeSpaceKindLabel}
                   activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'Shared home'}
-                  activeSpaceSummaryCopy={
+                  summaryCopy={
                     activeSpace
                       ? describeCurrentSpaceSummaryCopy(
                           activeSpace.name,
@@ -3018,9 +3230,9 @@ function App() {
                           activeSpace.kind,
                           activeSpace.threadCount,
                         )
-                      : ''
+                      : '请先在“我的空间”中选择一个空间。'
                   }
-                  activeSpaceCountsCopy={
+                  countsCopy={
                     activeSpace
                       ? describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)
                       : ''
@@ -3028,12 +3240,6 @@ function App() {
                   canManageSharedSpace={canManage && activeSpace?.kind === 'shared'}
                   settingsBusy={settingsBusy}
                   spaceMembersEditorBusy={spaceMembersEditorBusy}
-                  accountDisplayName={session.user.display_name}
-                  accountRoleLabel={describeHouseholdRole(session.user.role)}
-                  settingsNotice={settingsNotice}
-                  settingsError={settingsError}
-                  onOpenChats={() => setShellTab('chats')}
-                  onBeginNewDeviceOnboarding={beginNewDeviceOnboarding}
                   onManageMembers={openSpaceMembersEditor}
                   onInviteToSpace={() =>
                     void generateInvite('member', {
@@ -3041,96 +3247,18 @@ function App() {
                       targetSpaceName: activeSpace?.name,
                     })
                   }
-                  onLogout={() => void logout()}
                 />
 
-                <SettingsDevicesPane
-                  styles={styles}
-                  canManage={canManage}
-                  canReprovisionDevice={canReprovisionDevice}
-                  settingsBusy={settingsBusy}
-                  familyAppsBusy={familyAppsBusy}
-                  activeSpaceName={activeSpace?.name || ''}
-                  activeSpaceTemplateLabel={activeSpaceTemplateLabel || 'space'}
-                  homeDevices={homeDevices}
-                  recommendedFamilyApps={recommendedFamilyApps}
-                  installedFamilyApps={installedFamilyApps}
-                  availableFamilyApps={availableFamilyApps}
-                  onBeginDeviceReprovision={(device) => void beginDeviceReprovision(device)}
-                  onInstallSelectedFamilyApp={(slug) => void installSelectedFamilyApp(slug)}
-                  onUninstallInstalledFamilyApp={(slug) => void uninstallInstalledFamilyApp(slug)}
-                />
-
-                <OwnerSettingsPane
-                  styles={styles}
-                  canManage={canManage}
-                  homeDevices={homeDevices}
-                  ownerDeviceId={ownerDeviceId}
-                  ownerConsoleBusy={ownerConsoleBusy}
-                  ownerStatus={ownerStatus}
-                  ownerProviders={ownerProviders}
-                  ownerModels={ownerModels}
-                  ownerProviderConfig={ownerProviderConfig}
-                  ownerInference={ownerInference}
-                  ownerOnboardProvider={ownerOnboardProvider}
-                  ownerOnboardModel={ownerOnboardModel}
-                  ownerOnboardApiKey={ownerOnboardApiKey}
-                  ownerOnboardApiUrl={ownerOnboardApiUrl}
-                  ownerServiceOutput={ownerServiceOutput}
-                  diagnosticsBusy={diagnosticsBusy}
-                  diagnosticsError={diagnosticsError}
-                  diagnosticsPayload={diagnosticsPayload}
-                  diagnosticsDeviceId={diagnosticsDeviceId}
-                  renderOwnerConsoleFeedback={renderOwnerConsoleFeedback}
-                  describeDiagnosticsSource={describeDiagnosticsSource}
-                  onSelectOwnerDevice={setOwnerDeviceId}
-                  onRefreshOwnerConsole={() => void refreshOwnerConsole()}
-                  onReconnectOwnerDevice={() => void reconnectOwnerDevice()}
-                  onChangeDefaultProvider={(provider) =>
-                    setOwnerProviderConfig((current) => ({
-                      ...current,
-                      defaultProvider: provider,
-                    }))
-                  }
-                  onChangeDefaultModel={(value) =>
-                    setOwnerProviderConfig((current) => ({
-                      ...current,
-                      defaultModel: value,
-                    }))
-                  }
-                  onChangeProviderTimeout={(value) =>
-                    setOwnerProviderConfig((current) => ({
-                      ...current,
-                      providerTimeoutSecs: Number.parseInt(value || '0', 10) || 0,
-                    }))
-                  }
-                  onSaveOwnerProviderSettings={() => void saveOwnerProviderSettings()}
-                  onChangeOnboardProvider={setOwnerOnboardProvider}
-                  onChangeOnboardModel={setOwnerOnboardModel}
-                  onChangeOnboardApiKey={setOwnerOnboardApiKey}
-                  onChangeOnboardApiUrl={setOwnerOnboardApiUrl}
-                  onRunOwnerOnboard={() => void runOwnerOnboard()}
-                  onRunOwnerServiceAction={(serviceName, action) =>
-                    void runOwnerServiceAction(serviceName, action)
-                  }
-                  onLoadDiagnostics={(deviceId) => void loadDiagnostics(deviceId)}
-                  onFactoryResetDevice={(device) => void factoryResetDevice(device)}
-                />
-
-                <HouseholdPeoplePane
-                  styles={styles}
-                  canManage={canManage}
-                  settingsBusy={settingsBusy}
-                  currentUserId={session.user.id}
-                  householdMembersCopy={householdMembersCopy}
-                  homeMembers={homeMembers}
-                  pendingInvites={homePendingInvites}
-                  recentActivity={homeRecentActivity}
-                  onChangeMemberRole={(member, nextRole) => void changeMemberRole(member, nextRole)}
-                  onRemoveMember={(member) => void removeMember(member)}
-                  onGenerateInvite={(role) => void generateInvite(role)}
-                  onRevokeInvite={(invite) => void revokeInvite(invite)}
-                />
+                {settingsNotice ? (
+                  <View style={styles.settingsCard}>
+                    <Text style={styles.noticeText}>{settingsNotice}</Text>
+                  </View>
+                ) : null}
+                {settingsError ? (
+                  <View style={styles.settingsCard}>
+                    <Text style={styles.errorText}>{settingsError}</Text>
+                  </View>
+                ) : null}
               </>
             ) : null}
           </ScrollView>
