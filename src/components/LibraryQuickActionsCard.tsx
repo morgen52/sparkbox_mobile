@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type LibraryQuickActionsCardProps = {
   styles: Record<string, any>;
@@ -21,7 +22,7 @@ export function LibraryQuickActionsCard({
   onOpenTaskEditor,
 }: LibraryQuickActionsCardProps) {
   return (
-    <View style={styles.card}>
+    <View style={styles.settingsCard}>
       <Text style={styles.selectionLabel}>快捷操作</Text>
       <Text style={styles.cardCopy}>
         常用创建入口都放在这里，方便随时使用。
@@ -29,7 +30,6 @@ export function LibraryQuickActionsCard({
       <View style={styles.inlineActions}>
         {canMutateActiveSpaceFiles ? (
           <Pressable
-            android_ripple={{ color: 'rgba(23,53,42,0.14)' }}
             accessibilityRole="button"
             style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
             onPress={onOpenFileEditor}
@@ -39,7 +39,6 @@ export function LibraryQuickActionsCard({
           </Pressable>
         ) : null}
         <Pressable
-          android_ripple={{ color: 'rgba(255,255,255,0.18)' }}
           accessibilityRole="button"
           style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !canCreateTasks) ? styles.networkRowDisabled : null]}
           onPress={onOpenTaskEditor}

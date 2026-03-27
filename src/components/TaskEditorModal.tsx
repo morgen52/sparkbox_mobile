@@ -59,21 +59,21 @@ export function TaskEditorModal({
     >
       <View style={styles.networkSheetBackdrop}>
         <View style={styles.networkSheetCard}>
-          <Text style={styles.selectionLabel}>{editingTask ? 'Edit task' : 'New task'}</Text>
+          <Text style={styles.selectionLabel}>{editingTask ? '编辑任务' : '新建任务'}</Text>
           <Text style={styles.selectionTitle}>
             {editingTask
               ? editingTask.name
               : activeSpaceName
-                ? `${activeSpaceName} routine`
+                ? `${activeSpaceName} 例行任务`
                 : taskScope === 'family'
-                  ? 'Shared Sparkbox routine'
-                  : 'Private Sparkbox routine'}
+                  ? '共享 Sparkbox 例行任务'
+                  : '私密 Sparkbox 例行任务'}
           </Text>
           <Text style={styles.selectionCopy}>{taskEditorCopy}</Text>
           <TextInput
             autoCapitalize="sentences"
             autoCorrect={false}
-            placeholder="Task name"
+            placeholder="任务名称"
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={taskName}
@@ -82,7 +82,7 @@ export function TaskEditorModal({
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="When should this happen?"
+            placeholder="什么时候执行？"
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={taskCronExpr}
@@ -91,7 +91,7 @@ export function TaskEditorModal({
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder={canManage ? 'What should Sparkbox do?' : 'What should Sparkbox do for you?'}
+            placeholder={canManage ? '让 Sparkbox 做什么？' : '希望 Sparkbox 帮你做什么？'}
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             multiline
@@ -110,21 +110,21 @@ export function TaskEditorModal({
                     onPress={() => onChangeTaskCommandType(kind)}
                   >
                     <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                      {kind === 'zeroclaw' ? 'Sparkbox routine' : 'Custom command'}
+                      {kind === 'zeroclaw' ? 'Sparkbox 例行任务' : '自定义命令'}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
           ) : (
-            <Text style={styles.cardCopy}>Run mode: Sparkbox routine</Text>
+            <Text style={styles.cardCopy}>运行模式：Sparkbox 例行任务</Text>
           )}
           <Pressable
             style={[styles.scopePill, taskEnabled ? styles.scopePillActive : null]}
             onPress={onToggleTaskEnabled}
           >
             <Text style={[styles.scopePillLabel, taskEnabled ? styles.scopePillLabelActive : null]}>
-              {taskEnabled ? 'Enabled immediately' : 'Start paused'}
+              {taskEnabled ? '立即启用' : '先暂停'}
             </Text>
           </Pressable>
           {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
@@ -134,14 +134,14 @@ export function TaskEditorModal({
               onPress={onRequestClose}
               disabled={tasksBusy}
             >
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Text style={styles.secondaryButtonText}>取消</Text>
             </Pressable>
             <Pressable
               style={styles.primaryButtonSmall}
               onPress={onSubmit}
               disabled={tasksBusy}
             >
-              {tasksBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingTask ? 'Save' : 'Create task'}</Text>}
+              {tasksBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingTask ? '保存' : '创建任务'}</Text>}
             </Pressable>
           </View>
         </View>

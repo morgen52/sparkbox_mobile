@@ -2,8 +2,10 @@ import React from 'react';
 import { ChatSessionEditorModal } from './ChatSessionEditorModal';
 import { MemoryEditorModal } from './MemoryEditorModal';
 import { RelayComposerModal } from './RelayComposerModal';
+import { SetupUtilityModals } from './SetupUtilityModals';
 import { SpaceCreatorModal } from './SpaceCreatorModal';
 import { SpaceMembersEditorModal } from './SpaceMembersEditorModal';
+import { TaskEditorModal } from './TaskEditorModal';
 import { TaskHistoryModal } from './TaskHistoryModal';
 
 type ShellModalsProps = {
@@ -56,6 +58,46 @@ type ShellModalsProps = {
   onChangeMemoryContent: (value: string) => void;
   onToggleMemoryPinned: () => void;
   onSubmitMemoryEditor: () => void;
+  fileEditorOpen: boolean;
+  fileEditorMode: 'mkdir' | 'rename' | null;
+  fileTargetEntry: any;
+  fileEditorValue: string;
+  filesError: string;
+  filesBusy: boolean;
+  networkSheetOpen: boolean;
+  manualEntry: boolean;
+  selectedNetwork: any;
+  selectedSsid: string;
+  previousInternetSsid: string | null;
+  wifiPassword: string;
+  canSubmitWifi: boolean;
+  provisionBusy: boolean;
+  onCloseFileEditor: () => void;
+  onChangeFileEditorValue: (value: string) => void;
+  onSubmitFileEditor: () => void;
+  onCloseNetworkSheet: () => void;
+  onChangeSelectedSsid: (value: string) => void;
+  onChangeWifiPassword: (value: string) => void;
+  onSubmitWifi: () => void;
+  taskEditorOpen: boolean;
+  editingTask: any;
+  taskScope: 'family' | 'private';
+  taskEditorCopy: string;
+  canManage: boolean;
+  taskName: string;
+  taskCronExpr: string;
+  taskCommand: string;
+  taskCommandType: 'shell' | 'zeroclaw';
+  taskEnabled: boolean;
+  tasksError: string;
+  tasksBusy: boolean;
+  onCloseTaskEditor: () => void;
+  onChangeTaskName: (value: string) => void;
+  onChangeTaskCronExpr: (value: string) => void;
+  onChangeTaskCommand: (value: string) => void;
+  onChangeTaskCommandType: (value: 'shell' | 'zeroclaw') => void;
+  onToggleTaskEnabled: () => void;
+  onSubmitTaskEditor: () => void;
   taskHistoryOpen: boolean;
   taskHistoryTask: any;
   taskHistoryRuns: any[];
@@ -137,6 +179,55 @@ export function ShellModals(props: ShellModalsProps) {
         onChangeContent={props.onChangeMemoryContent}
         onTogglePinned={props.onToggleMemoryPinned}
         onSubmit={props.onSubmitMemoryEditor}
+      />
+
+      <SetupUtilityModals
+        styles={props.styles}
+        fileEditorOpen={props.fileEditorOpen}
+        fileEditorMode={props.fileEditorMode}
+        fileTargetEntry={props.fileTargetEntry}
+        fileEditorValue={props.fileEditorValue}
+        filesError={props.filesError}
+        filesBusy={props.filesBusy}
+        networkSheetOpen={props.networkSheetOpen}
+        manualEntry={props.manualEntry}
+        selectedNetwork={props.selectedNetwork}
+        selectedSsid={props.selectedSsid}
+        previousInternetSsid={props.previousInternetSsid}
+        wifiPassword={props.wifiPassword}
+        canSubmitWifi={props.canSubmitWifi}
+        provisionBusy={props.provisionBusy}
+        onCloseFileEditor={props.onCloseFileEditor}
+        onChangeFileEditorValue={props.onChangeFileEditorValue}
+        onSubmitFileEditor={props.onSubmitFileEditor}
+        onCloseNetworkSheet={props.onCloseNetworkSheet}
+        onChangeSelectedSsid={props.onChangeSelectedSsid}
+        onChangeWifiPassword={props.onChangeWifiPassword}
+        onSubmitWifi={props.onSubmitWifi}
+      />
+
+      <TaskEditorModal
+        styles={props.styles}
+        visible={props.taskEditorOpen}
+        editingTask={props.editingTask}
+        activeSpaceName={props.activeSpaceName}
+        taskScope={props.taskScope}
+        taskEditorCopy={props.taskEditorCopy}
+        canManage={props.canManage}
+        taskName={props.taskName}
+        taskCronExpr={props.taskCronExpr}
+        taskCommand={props.taskCommand}
+        taskCommandType={props.taskCommandType}
+        taskEnabled={props.taskEnabled}
+        tasksError={props.tasksError}
+        tasksBusy={props.tasksBusy}
+        onRequestClose={props.onCloseTaskEditor}
+        onChangeTaskName={props.onChangeTaskName}
+        onChangeTaskCronExpr={props.onChangeTaskCronExpr}
+        onChangeTaskCommand={props.onChangeTaskCommand}
+        onChangeTaskCommandType={props.onChangeTaskCommandType}
+        onToggleTaskEnabled={props.onToggleTaskEnabled}
+        onSubmit={props.onSubmitTaskEditor}
       />
 
       <TaskHistoryModal

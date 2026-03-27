@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import {
   describeFileTimestamp,
   describeFileUploader,
@@ -24,6 +24,7 @@ import type {
   SpaceMemory,
   SpaceSummary,
 } from '../householdApi';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { describeCaptureSummaryActionLabel, describeSummarySectionCopy } from '../spaceShell';
 
 type SectionCard = {
@@ -161,36 +162,7 @@ export function LibraryPane({
 
   return (
     <>
-      <View style={styles.card}>
-        <Text style={styles.selectionLabel}>快捷操作</Text>
-        <Text style={styles.cardCopy}>
-          常用创建入口都放在这里，方便随时使用。
-        </Text>
-        <View style={styles.inlineActions}>
-          {canMutateActiveSpaceFiles ? (
-            <Pressable
-              android_ripple={{ color: 'rgba(23,53,42,0.14)' }}
-              accessibilityRole="button"
-              style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-              onPress={onOpenFileEditor}
-              disabled={!onlineDeviceAvailable || filesBusy}
-            >
-              <Text style={styles.secondaryButtonText}>新建文件夹</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            android_ripple={{ color: 'rgba(255,255,255,0.18)' }}
-            accessibilityRole="button"
-            style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !canCreateTasks) ? styles.networkRowDisabled : null]}
-            onPress={onOpenTaskEditor}
-            disabled={!onlineDeviceAvailable || !canCreateTasks}
-          >
-            <Text style={styles.primaryButtonText}>新建任务</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>资料库概览</Text>
         <Text style={styles.cardCopy}>
           {activeSpace
@@ -213,7 +185,7 @@ export function LibraryPane({
         </Text>
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>本空间记忆</Text>
         <Text style={styles.cardCopy}>
           记忆是 Sparkbox 需要长期记住的关键信息，适用于{activeSpace?.name || '当前空间'}。
@@ -224,21 +196,21 @@ export function LibraryPane({
           </Text>
         ) : null}
         <View style={styles.inlineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshLibrary()}
             disabled={!activeSpace || libraryBusy}
           >
             <Text style={styles.secondaryButtonText}>刷新</Text>
-          </TouchableOpacity>
+          </Pressable>
           {canMutateActiveSpaceLibrary ? (
-            <TouchableOpacity
+            <Pressable
               style={[styles.primaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
               onPress={onOpenMemoryEditor}
               disabled={!activeSpace || libraryBusy}
             >
               <Text style={styles.primaryButtonText}>新建记忆</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
         {memories.length === 0 && !libraryBusy ? (
@@ -258,45 +230,45 @@ export function LibraryPane({
             </Text>
             {canMutateActiveSpaceLibrary ? (
               <View style={styles.inlineActions}>
-                <TouchableOpacity
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onEditMemory(memory)}
                   disabled={libraryBusy}
                 >
                   <Text style={styles.secondaryButtonText}>编辑</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDeleteMemory(memory)}
                   disabled={libraryBusy}
                 >
                   <Text style={styles.secondaryButtonText}>删除</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             ) : null}
           </View>
         ))}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>本空间摘要</Text>
         <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
         <View style={styles.inlineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshLibrary()}
             disabled={!activeSpace || libraryBusy}
           >
             <Text style={styles.secondaryButtonText}>刷新</Text>
-          </TouchableOpacity>
+          </Pressable>
           {canMutateActiveSpaceLibrary ? (
-            <TouchableOpacity
+            <Pressable
               style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
               onPress={onCaptureSummary}
               disabled={!activeChatSessionId || libraryBusy}
             >
               <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
         <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
@@ -315,27 +287,27 @@ export function LibraryPane({
             </Text>
             {canMutateActiveSpaceLibrary ? (
               <View style={styles.inlineActions}>
-                <TouchableOpacity
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onSaveSummaryAsMemory(summary)}
                   disabled={libraryBusy}
                 >
                   <Text style={styles.secondaryButtonText}>存为记忆</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDeleteSummary(summary)}
                   disabled={libraryBusy}
                 >
                   <Text style={styles.secondaryButtonText}>删除</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             ) : null}
           </View>
         ))}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>本空间照片</Text>
         <Text style={styles.cardCopy}>
           照片会作为这个空间的共享记录保存，而不仅是普通上传文件。
@@ -346,21 +318,21 @@ export function LibraryPane({
           </Text>
         ) : null}
         <View style={styles.inlineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshPhotos()}
             disabled={!onlineDeviceAvailable || filesBusy}
           >
             <Text style={styles.secondaryButtonText}>刷新照片</Text>
-          </TouchableOpacity>
+          </Pressable>
           {canMutateActiveSpaceFiles ? (
-            <TouchableOpacity
+            <Pressable
               style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
               onPress={onUploadPhotos}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
               <Text style={styles.primaryButtonText}>上传照片</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
         {photoEntries.length === 0 && !filesBusy ? (
@@ -377,28 +349,28 @@ export function LibraryPane({
               {typeof entry.size === 'number' ? ` · ${formatByteSize(entry.size)}` : ''}
             </Text>
             <View style={styles.inlineActions}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.secondaryButtonSmall}
                 onPress={() => onDownloadPhoto(entry)}
                 disabled={filesBusy}
               >
                 <Text style={styles.secondaryButtonText}>下载</Text>
-              </TouchableOpacity>
+              </Pressable>
               {canManageFileEntry(entry) ? (
-                <TouchableOpacity
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDeletePhoto(entry)}
                   disabled={filesBusy}
                 >
                   <Text style={styles.secondaryButtonText}>删除</Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : null}
             </View>
           </View>
         ))}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>本空间文件</Text>
         <Text style={styles.cardCopy}>
           {onlineDeviceAvailable
@@ -414,31 +386,31 @@ export function LibraryPane({
         {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
         <Text style={styles.cardCopy}>当前目录：{folderLabel}</Text>
         <View style={styles.inlineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshFiles()}
             disabled={!onlineDeviceAvailable || filesBusy}
           >
             <Text style={styles.secondaryButtonText}>刷新</Text>
-          </TouchableOpacity>
+          </Pressable>
           {canMutateActiveSpaceFiles ? (
-            <TouchableOpacity
+            <Pressable
               style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
               onPress={onUploadFiles}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
               <Text style={styles.primaryButtonText}>上传</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
         {fileListing?.parent ? (
-          <TouchableOpacity style={styles.secondaryButtonSmall} onPress={() => onRefreshFiles(fileListing.parent || '')}>
+          <Pressable style={styles.secondaryButtonSmall} onPress={() => onRefreshFiles(fileListing.parent || '')}>
             <Text style={styles.secondaryButtonText}>返回上级</Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>{describeLibraryFileListTitle(fileSpace)}</Text>
         {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
         {!filesBusy && (fileListing?.entries.length ?? 0) === 0 ? (
@@ -463,37 +435,37 @@ export function LibraryPane({
             ) : null}
             <View style={styles.inlineActions}>
               {entry.isDir ? (
-                <TouchableOpacity
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onRefreshFiles(entry.path)}
                 >
                   <Text style={styles.secondaryButtonText}>打开</Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : (
-                <TouchableOpacity
+                <Pressable
                   style={styles.secondaryButtonSmall}
                   onPress={() => onDownloadFile(entry)}
                   disabled={filesBusy}
                 >
                   <Text style={styles.secondaryButtonText}>下载</Text>
-                </TouchableOpacity>
+                </Pressable>
               )}
               {canManageFileEntry(entry) ? (
                 <>
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.secondaryButtonSmall}
                     onPress={() => onRenameFile(entry)}
                     disabled={filesBusy}
                   >
                     <Text style={styles.secondaryButtonText}>重命名</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Pressable>
+                  <Pressable
                     style={styles.secondaryButtonSmall}
                     onPress={() => onDeleteFile(entry)}
                     disabled={filesBusy}
                   >
                     <Text style={styles.secondaryButtonText}>删除</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </>
               ) : null}
             </View>
@@ -501,7 +473,7 @@ export function LibraryPane({
         ))}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>本空间任务</Text>
         <Text style={styles.cardCopy}>
           {onlineDeviceAvailable
@@ -511,13 +483,13 @@ export function LibraryPane({
         {tasksNotice ? <Text style={styles.noticeText}>{tasksNotice}</Text> : null}
         {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
         <View style={styles.inlineActions}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
             onPress={() => onRefreshTasks()}
             disabled={!onlineDeviceAvailable || tasksBusy}
           >
             <Text style={styles.secondaryButtonText}>刷新</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <Text style={styles.cardCopy}>{taskEditorQuickActionsCopy}</Text>
         {!canManage && taskScope === 'family' ? (
@@ -527,7 +499,7 @@ export function LibraryPane({
         ) : null}
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.settingsCard}>
         <Text style={styles.cardTitle}>{describeLibraryTaskListTitle(taskScope)}</Text>
         {tasksBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
         {!tasksBusy && tasks.length === 0 ? (
@@ -547,46 +519,46 @@ export function LibraryPane({
             </Text>
             {task.lastStatus ? (
               <Text style={styles.cardCopy}>
-                Last run: {task.lastStatus}
+                最近执行：{task.lastStatus}
                 {task.lastRunAt ? ` · ${describeUiDateTime(task.lastRunAt) || task.lastRunAt}` : ''}
               </Text>
             ) : null}
             {task.lastOutput ? (
               <Text numberOfLines={3} style={styles.cardCopy}>
-                Latest note: {task.lastOutput}
+                最近输出：{task.lastOutput}
               </Text>
             ) : null}
             <View style={styles.inlineActions}>
-              <TouchableOpacity
+              <Pressable
                 style={[styles.secondaryButtonSmall, !canTriggerTask(task) ? styles.networkRowDisabled : null]}
                 onPress={() => onRunTask(task)}
                 disabled={!canTriggerTask(task) || tasksBusy}
               >
                 <Text style={styles.secondaryButtonText}>立即执行</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 style={styles.secondaryButtonSmall}
                 onPress={() => onOpenTaskHistory(task)}
                 disabled={tasksBusy}
               >
                 <Text style={styles.secondaryButtonText}>历史记录</Text>
-              </TouchableOpacity>
+              </Pressable>
               {canEditTask(task) ? (
                 <>
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.secondaryButtonSmall}
                     onPress={() => onEditTask(task)}
                     disabled={tasksBusy}
                   >
                     <Text style={styles.secondaryButtonText}>编辑</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Pressable>
+                  <Pressable
                     style={styles.secondaryButtonSmall}
                     onPress={() => onDeleteTask(task)}
                     disabled={tasksBusy}
                   >
                     <Text style={styles.secondaryButtonText}>删除</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </>
               ) : null}
             </View>

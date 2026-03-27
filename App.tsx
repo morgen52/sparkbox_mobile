@@ -3185,7 +3185,7 @@ function App() {
                 homeMembers={homeMembers}
                 currentUserId={session.user.id}
                 summaryEmptyStateCopy={summaryEmptyStateCopy}
-                taskEditorQuickActionsCopy="Use Quick actions above when you want to add a new routine."
+                taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
                 onOpenFileEditor={() => openFileEditor('mkdir')}
                 onOpenTaskEditor={() => openTaskEditor()}
                 onRefreshLibrary={() => void refreshLibrary()}
@@ -3322,6 +3322,46 @@ function App() {
             onChangeMemoryContent={setMemoryContent}
             onToggleMemoryPinned={() => setMemoryPinned((current) => !current)}
             onSubmitMemoryEditor={() => void submitMemoryEditor()}
+            fileEditorOpen={fileEditorOpen}
+            fileEditorMode={fileEditorMode}
+            fileTargetEntry={fileTargetEntry}
+            fileEditorValue={fileEditorValue}
+            filesError={filesError}
+            filesBusy={filesBusy}
+            networkSheetOpen={false}
+            manualEntry={false}
+            selectedNetwork={null}
+            selectedSsid=""
+            previousInternetSsid={null}
+            wifiPassword=""
+            canSubmitWifi={false}
+            provisionBusy={false}
+            onCloseFileEditor={() => setFileEditorOpen(false)}
+            onChangeFileEditorValue={setFileEditorValue}
+            onSubmitFileEditor={() => void submitFileEditor()}
+            onCloseNetworkSheet={() => undefined}
+            onChangeSelectedSsid={() => undefined}
+            onChangeWifiPassword={() => undefined}
+            onSubmitWifi={() => undefined}
+            taskEditorOpen={taskEditorOpen}
+            editingTask={editingTask}
+            taskScope={taskScope}
+            taskEditorCopy={taskEditorCopy}
+            canManage={canManage}
+            taskName={taskName}
+            taskCronExpr={taskCronExpr}
+            taskCommand={taskCommand}
+            taskCommandType={taskCommandType}
+            taskEnabled={taskEnabled}
+            tasksError={tasksError}
+            tasksBusy={tasksBusy}
+            onCloseTaskEditor={() => setTaskEditorOpen(false)}
+            onChangeTaskName={setTaskName}
+            onChangeTaskCronExpr={setTaskCronExpr}
+            onChangeTaskCommand={setTaskCommand}
+            onChangeTaskCommandType={setTaskCommandType}
+            onToggleTaskEnabled={() => setTaskEnabled((current) => !current)}
+            onSubmitTaskEditor={() => void submitTaskEditor()}
             taskHistoryOpen={taskHistoryOpen}
             taskHistoryTask={taskHistoryTask}
             taskHistoryRuns={taskHistoryRuns}
