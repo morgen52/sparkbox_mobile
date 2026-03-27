@@ -11,7 +11,7 @@ import {
 type AnimatedPressableProps = Omit<PressableProps, 'style' | 'children'> & {
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
-  pressFeedback?: 'scale' | 'none';
+  pressFeedback?: 'scale' | 'fade' | 'none';
 };
 
 const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
@@ -32,6 +32,14 @@ export function AnimatedPressable({
     if (pressFeedback === 'none') {
       return;
     }
+    if (pressFeedback === 'fade') {
+      Animated.timing(alpha, {
+        toValue: 0.9,
+        duration: 90,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
     Animated.parallel([
       Animated.timing(scale, {
         toValue: 0.97,
@@ -48,6 +56,14 @@ export function AnimatedPressable({
 
   const animateOut = React.useCallback(() => {
     if (pressFeedback === 'none') {
+      return;
+    }
+    if (pressFeedback === 'fade') {
+      Animated.timing(alpha, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }).start();
       return;
     }
     Animated.parallel([
@@ -88,7 +104,7 @@ export function AnimatedPressable({
         style,
         {
           transform: [{ scale: pressFeedback === 'scale' ? scale : 1 }],
-          opacity: disabled ? 0.55 : pressFeedback === 'scale' ? alpha : 1,
+          opacity: disabled ? 0.55 : pressFeedback === 'none' ? 1 : alpha,
         },
       ]}
       android_ripple={{ color: 'rgba(47,114,84,0.12)' }}

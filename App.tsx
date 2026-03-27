@@ -7,12 +7,12 @@ import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import { Buffer } from 'buffer';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
   LayoutChangeEvent,
-  SafeAreaView,
   ScrollView,
   Text,
   TextInput,

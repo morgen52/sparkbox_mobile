@@ -469,6 +469,22 @@ export const styles = StyleSheet.create({
   chatSessionRowExplorer: {
     borderRadius: 12,
   },
+  chatSessionRowContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    zIndex: 1,
+  },
+  chatSessionPressOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 12,
+    backgroundColor: '#d8e9de',
+    zIndex: 0,
+  },
   chatSessionSwipeContainer: {
     position: 'relative',
     borderRadius: 12,

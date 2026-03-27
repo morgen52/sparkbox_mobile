@@ -5,9 +5,7 @@ import {
   Animated,
   LayoutAnimation,
   PanResponder,
-  Platform,
   Text,
-  UIManager,
   View,
 } from 'react-native';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
@@ -88,7 +86,20 @@ function SwipeToDeleteSessionRow({
   onDeleteSession: (sessionId: string) => void;
 }) {
   const translateX = React.useRef(new Animated.Value(0)).current;
+  const pressOverlayOpacity = React.useRef(new Animated.Value(0)).current;
   const offsetRef = React.useRef(0);
+  const movedRef = React.useRef(false);
+
+  const animatePressOverlay = React.useCallback(
+    (pressed: boolean) => {
+      Animated.timing(pressOverlayOpacity, {
+        toValue: pressed ? 1 : 0,
+        duration: pressed ? 90 : 120,
+        useNativeDriver: true,
+      }).start();
+    },
+    [pressOverlayOpacity],
+  );
 
   const animateTo = React.useCallback(
     (toValue: number) => {
@@ -108,7 +119,14 @@ function SwipeToDeleteSessionRow({
       PanResponder.create({
         onMoveShouldSetPanResponder: (_event, gestureState) =>
           Math.abs(gestureState.dx) > 6 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderGrant: () => {
+          movedRef.current = false;
+          animatePressOverlay(false);
+        },
         onPanResponderMove: (_event, gestureState) => {
+          if (!movedRef.current && (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3)) {
+            movedRef.current = true;
+          }
           const next = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, offsetRef.current + gestureState.dx));
           translateX.setValue(next);
         },
@@ -118,10 +136,12 @@ function SwipeToDeleteSessionRow({
           animateTo(shouldOpen ? -SWIPE_DELETE_WIDTH : 0);
         },
         onPanResponderTerminate: () => {
+          movedRef.current = true;
+          animatePressOverlay(false);
           animateTo(0);
         },
       }),
-    [animateTo, translateX],
+    [animatePressOverlay, animateTo, translateX],
   );
 
   return (
@@ -142,7 +162,14 @@ function SwipeToDeleteSessionRow({
             styles.chatSessionRowExplorer,
             session.active ? styles.chatSessionRowActive : null,
           ]}
+          pressFeedback="none"
+          onPressIn={() => animatePressOverlay(true)}
+          onPressOut={() => animatePressOverlay(false)}
           onPress={() => {
+            if (movedRef.current) {
+              movedRef.current = false;
+              return;
+            }
             if (offsetRef.current <= -8) {
               animateTo(0);
               return;
@@ -150,38 +177,44 @@ function SwipeToDeleteSessionRow({
             onOpenSession(session.id);
           }}
         >
-          <View style={styles.chatSessionAvatarRail}>
-            <View
-              style={[
-                styles.chatSessionAvatarBubble,
-                session.avatarTone === 'group'
-                  ? styles.chatSessionAvatarBubbleGroup
-                  : session.avatarTone === 'private'
-                    ? styles.chatSessionAvatarBubblePrivate
-                    : styles.chatSessionAvatarBubbleShared,
-              ]}
-            >
-              <Text
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.chatSessionPressOverlay, { opacity: pressOverlayOpacity }]}
+          />
+          <View style={styles.chatSessionRowContent}>
+            <View style={styles.chatSessionAvatarRail}>
+              <View
                 style={[
-                  styles.chatSessionAvatarLabel,
-                  session.avatarTone === 'group' ? styles.chatSessionAvatarLabelOnDark : null,
+                  styles.chatSessionAvatarBubble,
+                  session.avatarTone === 'group'
+                    ? styles.chatSessionAvatarBubbleGroup
+                    : session.avatarTone === 'private'
+                      ? styles.chatSessionAvatarBubblePrivate
+                      : styles.chatSessionAvatarBubbleShared,
                 ]}
               >
-                {session.avatarLabel}
+                <Text
+                  style={[
+                    styles.chatSessionAvatarLabel,
+                    session.avatarTone === 'group' ? styles.chatSessionAvatarLabelOnDark : null,
+                  ]}
+                >
+                  {session.avatarLabel}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.chatSessionBody}>
+              <Text numberOfLines={1} style={styles.chatSessionTitle}>
+                {session.name}
+              </Text>
+              <Text numberOfLines={2} style={styles.chatSessionPreview}>
+                {session.preview}
               </Text>
             </View>
-          </View>
-          <View style={styles.chatSessionBody}>
-            <Text numberOfLines={1} style={styles.chatSessionTitle}>
-              {session.name}
-            </Text>
-            <Text numberOfLines={2} style={styles.chatSessionPreview}>
-              {session.preview}
-            </Text>
-          </View>
-          <View style={styles.chatSessionMeta}>
-            {session.timestamp ? <Text style={styles.chatSessionTimestamp}>{session.timestamp}</Text> : null}
-            <Text style={session.active ? styles.statusTagOnline : styles.tagMuted}>{session.badge}</Text>
+            <View style={styles.chatSessionMeta}>
+              {session.timestamp ? <Text style={styles.chatSessionTimestamp}>{session.timestamp}</Text> : null}
+              <Text style={session.active ? styles.statusTagOnline : styles.tagMuted}>{session.badge}</Text>
+            </View>
           </View>
         </Pressable>
       </Animated.View>
@@ -219,10 +252,6 @@ export function ChatInboxPane({
   onOpenSession,
   onDeleteSession,
 }: ChatInboxPaneProps) {
-  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-  }
-
   type EnabledFamilyApp = {
     slug: string;
     title: string;

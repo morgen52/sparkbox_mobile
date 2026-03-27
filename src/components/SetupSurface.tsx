@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '../authFlow';
 import type { ClaimPayload } from '../utils/appRuntime';
 import type { LocalSetupNetwork } from '../localSetupApi';
