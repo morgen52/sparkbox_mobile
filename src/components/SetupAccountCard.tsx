@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, LayoutChangeEvent, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, LayoutChangeEvent, Text, TextInput, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { AuthMode } from '../authFlow';
 
 type InvitePreview = {

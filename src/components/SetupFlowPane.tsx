@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Text, TextInput, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { Session } from '../authFlow';
 import { AuthSetupCard, SignedInSetupCard } from './SetupAccountCard';
 import { describeActivationStatus } from '../appShell';

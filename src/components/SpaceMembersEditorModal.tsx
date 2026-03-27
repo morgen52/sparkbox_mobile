@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SharedSpaceMemberOption = {
   id: string;

@@ -6,11 +6,11 @@ import {
   LayoutAnimation,
   PanResponder,
   Platform,
-  Pressable,
   Text,
   UIManager,
   View,
 } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SpaceChip = {
   id: string;
@@ -255,9 +255,49 @@ export function ChatInboxPane({
   const [expandedAppLists, setExpandedAppLists] = React.useState<Record<string, boolean>>({});
   const [expandedEnableLists, setExpandedEnableLists] = React.useState<Record<string, boolean>>({});
   const [quickStartPanelOpen, setQuickStartPanelOpen] = React.useState(false);
+  const [scopeTabsWidth, setScopeTabsWidth] = React.useState(0);
   const previousActiveSpaceIdRef = React.useRef<string | null>(activeSpace?.id ?? null);
   const onSelectScopeRef = React.useRef(onSelectScope);
   const threadRows = (toolsProps?.threadRows || []) as ThreadRow[];
+  const scopeSliderTranslateX = React.useRef(new Animated.Value(0)).current;
+  const scopeSliderInitializedRef = React.useRef(false);
+  const previousScopeIndexRef = React.useRef(0);
+  const isPrivateScopeOnly = activeSpaceTemplate === 'private';
+  const scopeTabCount = isPrivateScopeOnly ? 1 : Math.max(scopeOptions.length, 1);
+  const activeScopeIndex = React.useMemo(() => {
+    if (isPrivateScopeOnly) {
+      return 0;
+    }
+    const found = scopeOptions.findIndex((scope) => scope.active);
+    return found >= 0 ? found : 0;
+  }, [isPrivateScopeOnly, scopeOptions]);
+
+  React.useEffect(() => {
+    if (scopeTabsWidth <= 0 || scopeTabCount <= 0) {
+      return;
+    }
+    const tabWidth = scopeTabsWidth / scopeTabCount;
+    const nextOffset = tabWidth * activeScopeIndex;
+
+    if (!scopeSliderInitializedRef.current) {
+      scopeSliderTranslateX.setValue(nextOffset);
+      scopeSliderInitializedRef.current = true;
+      previousScopeIndexRef.current = activeScopeIndex;
+      return;
+    }
+
+    if (previousScopeIndexRef.current === activeScopeIndex) {
+      scopeSliderTranslateX.setValue(nextOffset);
+      return;
+    }
+
+    Animated.timing(scopeSliderTranslateX, {
+      toValue: nextOffset,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+    previousScopeIndexRef.current = activeScopeIndex;
+  }, [activeScopeIndex, scopeSliderTranslateX, scopeTabCount, scopeTabsWidth]);
 
   React.useEffect(() => {
     onSelectScopeRef.current = onSelectScope;
@@ -355,7 +395,6 @@ export function ChatInboxPane({
 
             {forcedExpanded ? (
               <View style={styles.chatTreeFolderBody}>
-                <View style={styles.chatTreeSectionDividerCompact} />
                 {!space.active ? <Text style={styles.cardCopy}>正在切换到该空间...</Text> : null}
                 {forcedExpanded && space.active ? (
                   <>
@@ -383,11 +422,32 @@ export function ChatInboxPane({
                       </View>
                     ) : null}
                     <View style={styles.chatScopeNavRow}>
-                      <View style={styles.chatScopeNavTabs}>
+                      <View
+                        style={styles.chatScopeNavTabs}
+                        onLayout={(event) => {
+                          const nextWidth = event.nativeEvent.layout.width;
+                          if (nextWidth > 0 && Math.abs(nextWidth - scopeTabsWidth) > 0.5) {
+                            setScopeTabsWidth(nextWidth);
+                          }
+                        }}
+                      >
+                        {scopeTabsWidth > 0 ? (
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.chatScopeNavSlider,
+                              {
+                                width: scopeTabsWidth / scopeTabCount,
+                                transform: [{ translateX: scopeSliderTranslateX }],
+                              },
+                            ]}
+                          />
+                        ) : null}
                         {isDefaultPrivateSpace ? (
                           <Pressable
-                            style={[styles.chatScopeNavTab, styles.chatScopeNavTabLast, styles.chatScopeNavTabActive]}
+                            style={[styles.chatScopeNavTab, styles.chatScopeNavTabLast]}
                             onPress={() => onSelectScope('private')}
+                            pressFeedback="none"
                           >
                             <Text style={[styles.chatScopeNavTabLabel, styles.chatScopeNavTabLabelActive]}>仅自己</Text>
                           </Pressable>
@@ -398,9 +458,9 @@ export function ChatInboxPane({
                               style={[
                                 styles.chatScopeNavTab,
                                 index === scopeOptions.length - 1 ? styles.chatScopeNavTabLast : null,
-                                scope.active ? styles.chatScopeNavTabActive : null,
                               ]}
                               onPress={() => onSelectScope(scope.id)}
+                              pressFeedback="none"
                             >
                               <Text
                                 style={[

@@ -12,7 +12,6 @@ import {
   Alert,
   BackHandler,
   LayoutChangeEvent,
-  Pressable,
   SafeAreaView,
   ScrollView,
   Text,
@@ -20,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AnimatedPressable as Pressable } from './src/components/AnimatedPressable';
 import { ChatsPane } from './src/components/ChatsPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';

@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SpaceTemplateOption = {
   id: string;

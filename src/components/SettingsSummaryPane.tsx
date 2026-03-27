@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SettingsSummaryPaneProps = {
   styles: Record<string, any>;

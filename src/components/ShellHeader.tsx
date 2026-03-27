@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { ShellTab } from '../householdState';
 
 type ShellHeaderProps = {
@@ -23,6 +24,26 @@ export function ShellHeader({
   tabs,
   onSelectTab,
 }: ShellHeaderProps) {
+  const [tabBarWidth, setTabBarWidth] = React.useState(0);
+  const shellTabSliderTranslateX = React.useRef(new Animated.Value(0)).current;
+  const tabCount = Math.max(tabs.length, 1);
+  const activeTabIndex = React.useMemo(() => {
+    const found = tabs.findIndex((tab) => tab.active);
+    return found >= 0 ? found : 0;
+  }, [tabs]);
+
+  React.useEffect(() => {
+    if (tabBarWidth <= 0) {
+      return;
+    }
+    const tabWidth = tabBarWidth / tabCount;
+    Animated.timing(shellTabSliderTranslateX, {
+      toValue: tabWidth * activeTabIndex,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [activeTabIndex, shellTabSliderTranslateX, tabBarWidth, tabCount]);
+
   return (
     <>
       <View style={styles.heroTopRow}>
@@ -37,16 +58,36 @@ export function ShellHeader({
         ) : null}
       </View>
 
-      <View style={styles.shellTabBar}>
+      <View
+        style={styles.shellTabBar}
+        onLayout={(event) => {
+          const nextWidth = event.nativeEvent.layout.width;
+          if (nextWidth > 0 && Math.abs(nextWidth - tabBarWidth) > 0.5) {
+            setTabBarWidth(nextWidth);
+          }
+        }}
+      >
+        {tabBarWidth > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.shellTabSlider,
+              {
+                width: tabBarWidth / tabCount,
+                transform: [{ translateX: shellTabSliderTranslateX }],
+              },
+            ]}
+          />
+        ) : null}
         {tabs.map((tab, index) => (
           <Pressable
             key={tab.id}
             style={[
               styles.shellTab,
               index === tabs.length - 1 ? styles.shellTabLast : null,
-              tab.active ? styles.shellTabActive : null,
             ]}
             onPress={() => onSelectTab(tab.id)}
+            pressFeedback="none"
           >
             <Text style={[styles.shellTabLabel, tab.active ? styles.shellTabLabelActive : null]}>
               {tab.label}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { DeviceSummary, FamilyAppInstallation } from '../householdApi';
 import { describeDeviceLabel, describeDeviceStatus } from '../householdState';
 import {
