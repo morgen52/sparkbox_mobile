@@ -30,11 +30,11 @@ export function ViewedSpaceCard({
 }: ViewedSpaceCardProps) {
   return (
     <View style={styles.settingsCard}>
-      <Text style={styles.cardTitle}>Space you're viewing</Text>
+      <Text style={styles.cardTitle}>当前查看空间</Text>
       <Text style={styles.cardCopy}>
         {activeSpaceName
           ? summaryCopy
-          : 'Pick a space in Chats so Library and Settings stay on that same space.'}
+          : '先在聊天中选择一个空间，资料库和设置会跟随到同一个空间。'}
       </Text>
       {activeSpaceName ? (
         <View style={styles.deviceRowCard}>
@@ -42,14 +42,14 @@ export function ViewedSpaceCard({
             <Text style={styles.networkName}>{activeSpaceName}</Text>
             <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
           </View>
-          <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || 'Shared home'}</Text>
+          <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || '家庭共享空间'}</Text>
           <Text style={styles.cardCopy}>{countsCopy}</Text>
         </View>
       ) : null}
       {canManageSharedSpace ? (
         <>
           <Text style={styles.cardCopy}>
-            Adjust who belongs in this space here. You stay in this space automatically.
+            在这里调整这个空间的成员。你会自动保留在空间内。
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -57,10 +57,10 @@ export function ViewedSpaceCard({
               onPress={onManageMembers}
               disabled={spaceMembersEditorBusy}
             >
-              <Text style={styles.secondaryButtonText}>Manage members</Text>
+              <Text style={styles.secondaryButtonText}>管理成员</Text>
             </Pressable>
             <Pressable style={styles.secondaryButtonSmall} onPress={onInviteToSpace} disabled={settingsBusy}>
-              <Text style={styles.secondaryButtonText}>Invite to this space</Text>
+              <Text style={styles.secondaryButtonText}>邀请加入此空间</Text>
             </Pressable>
           </View>
         </>

@@ -54,19 +54,19 @@ export function SpaceCreatorModal({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.spaceCreatorSheetContent}
           >
-            <Text style={styles.selectionLabel}>New shared space</Text>
-            <Text style={styles.selectionTitle}>Create a new shared space</Text>
+            <Text style={styles.selectionLabel}>新建共享空间</Text>
+            <Text style={styles.selectionTitle}>创建新的共享空间</Text>
             <Text style={styles.selectionCopy}>
-              Pick what this space is for, give it a clear name, and choose who belongs in it. You are always included.
+              先确定这个空间的用途，再起一个清晰名称，并选择成员。你会默认包含在内。
             </Text>
             <TextInput
-              placeholder="Space name"
+              placeholder="空间名称"
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={spaceName}
               onChangeText={onChangeSpaceName}
             />
-            <Text style={styles.selectionLabel}>Space type</Text>
+            <Text style={styles.selectionLabel}>空间类型</Text>
             <View style={styles.scopeRow}>
               {templateOptions.map((template) => (
                 <Pressable
@@ -80,13 +80,13 @@ export function SpaceCreatorModal({
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.selectionCopy}>Best for: {selectedTemplateLabel}</Text>
-            <Text style={styles.selectionLabel}>Members</Text>
+            <Text style={styles.selectionCopy}>推荐场景：{selectedTemplateLabel}</Text>
+            <Text style={styles.selectionLabel}>成员</Text>
             <Text style={styles.selectionCopy}>
-              Add people now or leave this empty and invite them later.
+              可以现在就添加成员，也可以先留空，稍后再邀请。
             </Text>
             {memberOptions.length === 0 ? (
-              <Text style={styles.cardCopy}>No one else has joined this household yet.</Text>
+              <Text style={styles.cardCopy}>当前还没有其他成员加入这个家庭。</Text>
             ) : (
               <View style={styles.scopeRow}>
                 {memberOptions.map((member) => {
@@ -111,10 +111,10 @@ export function SpaceCreatorModal({
           <View style={styles.spaceCreatorFooter}>
             <View style={styles.inlineActions}>
               <Pressable style={styles.secondaryButtonSmall} onPress={onRequestClose} disabled={busy}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>取消</Text>
               </Pressable>
               <Pressable style={styles.primaryButtonSmall} onPress={onSubmit} disabled={busy}>
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Create space</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>创建空间</Text>}
               </Pressable>
             </View>
           </View>

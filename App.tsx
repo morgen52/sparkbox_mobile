@@ -636,8 +636,8 @@ function App() {
     !spacesError &&
     (!activeSpaceStorageKey || loadedActiveSpaceStorageKey === activeSpaceStorageKey);
   const householdMembersCopy = canManage
-    ? 'Owners can invite people, adjust who can manage Sparkbox, and remove members here. Sparkbox always keeps at least one owner.'
-    : 'See who is in this household here. Ask an owner if someone needs to join, needs owner access, or should be removed.';
+    ? '管理员可在这里邀请成员、调整管理员权限并移除成员。系统会始终保留至少一位管理员。'
+    : '你可以在这里查看家庭成员。如需邀请、调整管理员权限或移除成员，请联系管理员处理。';
   const canMutateActiveSpaceLibrary = canMutateSpaceLibrary({
     spaceKind: activeSpace?.kind,
     currentUserRole: session?.user.role,

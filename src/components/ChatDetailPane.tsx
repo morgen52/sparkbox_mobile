@@ -87,7 +87,11 @@ export function ChatDetailPane({
         <View style={styles.chatDetailHeader}>
           <View style={styles.chatDetailHeaderTopRow}>
             <Pressable
-              style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
+              style={[
+                styles.secondaryButtonSmall,
+                styles.chatDetailGhostButton,
+                !hasActiveChatSession ? styles.networkRowDisabled : null,
+              ]}
               onPress={onBack}
               disabled={!hasActiveChatSession}
             >
@@ -147,14 +151,14 @@ export function ChatDetailPane({
         ) : null}
         {showManageActions ? (
           <View style={styles.inlineActions}>
-            <Pressable style={styles.secondaryButtonSmall} onPress={onEdit}>
+            <Pressable style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]} onPress={onEdit}>
               <Text style={styles.secondaryButtonText}>编辑设置</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButtonSmall} onPress={onClear} disabled={chatBusy}>
+            <Pressable style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]} onPress={onClear} disabled={chatBusy}>
               <Text style={styles.secondaryButtonText}>清空消息</Text>
             </Pressable>
             <Pressable
-              style={styles.secondaryButtonSmall}
+              style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]}
               onPress={() =>
                 Alert.alert('删除这个聊天？', '聊天历史将被清空且不可恢复。', [
                   { text: '取消', style: 'cancel' },

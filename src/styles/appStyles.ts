@@ -301,6 +301,10 @@ export const styles = StyleSheet.create({
     minHeight: 48,
     backgroundColor: '#f6f0df',
   },
+  chatDetailGhostButton: {
+    borderColor: '#2f7254',
+    backgroundColor: 'transparent',
+  },
   secondaryButtonText: {
     color: '#2f7254',
     fontWeight: '700',
