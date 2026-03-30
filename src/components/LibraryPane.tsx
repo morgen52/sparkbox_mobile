@@ -15,6 +15,8 @@ import {
   formatByteSize,
 } from '../appShell';
 import type {
+  ChatSessionScope,
+  HouseholdChatSessionSummary,
   HouseholdFileEntry,
   HouseholdFileListing,
   HouseholdMemberSummary,
@@ -37,7 +39,6 @@ type LibraryPaneProps = {
   activeSpace: HouseholdSpaceSummary | null;
   activeSpaceKindLabel: string;
   activeSpaceDetail: HouseholdSpaceDetail | null;
-  activeChatSessionId: string;
   activeSpaceNameFallback: string;
   fileSpace: 'family' | 'private';
   taskScope: 'family' | 'private';
@@ -50,9 +51,11 @@ type LibraryPaneProps = {
   filesBusy: boolean;
   tasksBusy: boolean;
   libraryError: string;
+  summaryError: string;
   filesError: string;
   tasksError: string;
   libraryNotice: string;
+  summaryNotice: string;
   filesNotice: string;
   tasksNotice: string;
   currentFilePath: string;
@@ -65,6 +68,10 @@ type LibraryPaneProps = {
   homeMembers: HouseholdMemberSummary[];
   currentUserId: string;
   summaryEmptyStateCopy: string;
+  summaryCaptureSessions: HouseholdChatSessionSummary[];
+  summaryCaptureSessionsBusy: boolean;
+  summaryCapturePickerOpen: boolean;
+  selectedSummaryCaptureSessionId: string;
   taskEditorQuickActionsCopy: string;
   onOpenFileEditor: () => void;
   onOpenTaskEditor: () => void;
@@ -72,6 +79,9 @@ type LibraryPaneProps = {
   onOpenMemoryEditor: () => void;
   onEditMemory: (memory: SpaceMemory) => void;
   onDeleteMemory: (memory: SpaceMemory) => void;
+  onRefreshSummary: () => void;
+  onToggleSummaryCapturePicker: () => void;
+  onSelectSummaryCaptureSession: (sessionId: string) => void;
   onCaptureSummary: () => void;
   onSaveSummaryAsMemory: (summary: SpaceSummary) => void;
   onDeleteSummary: (summary: SpaceSummary) => void;
@@ -99,7 +109,6 @@ export function LibraryPane({
   activeSpace,
   activeSpaceKindLabel,
   activeSpaceDetail,
-  activeChatSessionId,
   activeSpaceNameFallback,
   fileSpace,
   taskScope,
@@ -112,9 +121,11 @@ export function LibraryPane({
   filesBusy,
   tasksBusy,
   libraryError,
+  summaryError,
   filesError,
   tasksError,
   libraryNotice,
+  summaryNotice,
   filesNotice,
   tasksNotice,
   currentFilePath,
@@ -127,6 +138,10 @@ export function LibraryPane({
   homeMembers,
   currentUserId,
   summaryEmptyStateCopy,
+  summaryCaptureSessions,
+  summaryCaptureSessionsBusy,
+  summaryCapturePickerOpen,
+  selectedSummaryCaptureSessionId,
   taskEditorQuickActionsCopy,
   onOpenFileEditor,
   onOpenTaskEditor,
@@ -134,6 +149,9 @@ export function LibraryPane({
   onOpenMemoryEditor,
   onEditMemory,
   onDeleteMemory,
+  onRefreshSummary,
+  onToggleSummaryCapturePicker,
+  onSelectSummaryCaptureSession,
   onCaptureSummary,
   onSaveSummaryAsMemory,
   onDeleteSummary,
@@ -159,6 +177,11 @@ export function LibraryPane({
   // photos, and tasks all pivot on the same active-space context and share the
   // same owner/member gating rules.
   const folderLabel = (currentFilePath || activeSpace?.name || activeSpaceNameFallback).replace(/^\/+/, '');
+  const selectedSummarySession = summaryCaptureSessions.find((item) => item.id === selectedSummaryCaptureSessionId) ?? null;
+  const summarySessionScopeLabel: Record<ChatSessionScope, string> = {
+    family: '共享聊天',
+    private: '私密聊天',
+  };
 
   return (
     <>
@@ -251,26 +274,70 @@ export function LibraryPane({
       </View>
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>本空间摘要</Text>
-        <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
-        <View style={styles.inlineActions}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>本空间摘要</Text>
           <Pressable
-            style={[styles.secondaryButtonSmall, !activeSpace ? styles.networkRowDisabled : null]}
-            onPress={() => onRefreshLibrary()}
+            style={[styles.summaryRefreshButton, !activeSpace ? styles.networkRowDisabled : null]}
+            onPress={() => onRefreshSummary()}
             disabled={!activeSpace || libraryBusy}
           >
-            <Text style={styles.secondaryButtonText}>刷新</Text>
+            <Text style={styles.summaryRefreshButtonText}>刷新</Text>
           </Pressable>
-          {canMutateActiveSpaceLibrary ? (
-            <Pressable
-              style={[styles.primaryButtonSmall, !activeChatSessionId ? styles.networkRowDisabled : null]}
-              onPress={onCaptureSummary}
-              disabled={!activeChatSessionId || libraryBusy}
-            >
-              <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
-            </Pressable>
-          ) : null}
         </View>
+        <Text style={styles.cardCopy}>{describeSummarySectionCopy(activeSpaceDetail)}</Text>
+        <Pressable
+          style={[styles.summarySessionPickerButton, summaryCaptureSessionsBusy ? styles.networkRowDisabled : null]}
+          onPress={onToggleSummaryCapturePicker}
+          disabled={summaryCaptureSessionsBusy || summaryCaptureSessions.length === 0}
+        >
+          <View style={styles.summarySessionPickerInner}>
+            <Text style={styles.summarySessionPickerText}>
+              {selectedSummarySession ? `已选聊天：${selectedSummarySession.name}` : '选择用于生成摘要的聊天'}
+            </Text>
+            <Text style={styles.summarySessionPickerChevron}>{summaryCapturePickerOpen ? '˄' : '˅'}</Text>
+          </View>
+        </Pressable>
+        {summaryCapturePickerOpen ? (
+          <View style={styles.summarySessionPickerPopover}>
+            <Text style={styles.summarySessionPickerPopoverTitle}>本空间聊天列表</Text>
+            {summaryCaptureSessions.map((sessionItem) => {
+              const selected = sessionItem.id === selectedSummaryCaptureSessionId;
+              const ownSession = sessionItem.ownerUserId === currentUserId;
+              return (
+                <Pressable
+                  key={sessionItem.id}
+                  style={styles.summarySessionPickerRow}
+                  onPress={() => onSelectSummaryCaptureSession(sessionItem.id)}
+                >
+                  <View style={styles.summarySessionPickerRowBody}>
+                    <Text style={styles.summarySessionPickerRowTitle}>{sessionItem.name}</Text>
+                    <Text style={styles.summarySessionPickerRowCopy}>
+                      {summarySessionScopeLabel[sessionItem.scope]} · {ownSession ? '你创建' : '空间成员创建'}
+                    </Text>
+                  </View>
+                  <Text style={selected ? styles.statusTagOnline : styles.tagMuted}>
+                    {selected ? '已选中' : canMutateActiveSpaceLibrary ? '可生成摘要' : '仅管理员可生成摘要'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            {summaryCaptureSessions.length === 0 ? (
+              <Text style={styles.cardCopy}>当前空间还没有可用聊天。</Text>
+            ) : null}
+          </View>
+        ) : null}
+        {summaryNotice ? <Text style={styles.noticeText}>{summaryNotice}</Text> : null}
+        {summaryError ? <Text style={styles.errorText}>{summaryError}</Text> : null}
+        {summaryCaptureSessionsBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+        {canMutateActiveSpaceLibrary ? (
+          <Pressable
+            style={[styles.primaryButtonSmall, !selectedSummaryCaptureSessionId ? styles.networkRowDisabled : null]}
+            onPress={onCaptureSummary}
+            disabled={!selectedSummaryCaptureSessionId || libraryBusy || summaryCaptureSessionsBusy}
+          >
+            <Text style={styles.primaryButtonText}>{describeCaptureSummaryActionLabel(activeSpaceDetail)}</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.cardCopy}>{summaryEmptyStateCopy}</Text>
         {summaries.length === 0 && !libraryBusy ? (
           <Text style={styles.cardCopy}>暂无摘要。</Text>

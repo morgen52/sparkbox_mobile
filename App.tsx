@@ -395,6 +395,12 @@ function App() {
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryError, setLibraryError] = useState('');
   const [libraryNotice, setLibraryNotice] = useState('');
+  const [summaryError, setSummaryError] = useState('');
+  const [summaryNotice, setSummaryNotice] = useState('');
+  const [summaryCaptureSessions, setSummaryCaptureSessions] = useState<HouseholdChatSessionSummary[]>([]);
+  const [summaryCaptureSessionsBusy, setSummaryCaptureSessionsBusy] = useState(false);
+  const [summaryCapturePickerOpen, setSummaryCapturePickerOpen] = useState(false);
+  const [selectedSummaryCaptureSessionId, setSelectedSummaryCaptureSessionId] = useState('');
   const [memoryEditorOpen, setMemoryEditorOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<SpaceMemory | null>(null);
   const [memoryTitle, setMemoryTitle] = useState('');
@@ -865,6 +871,22 @@ function App() {
     }
   }
 
+  async function refreshSummaryLibrary(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setLibraryBusy(true);
+    setSummaryError('');
+    try {
+      const nextLibrary = await getSpaceLibrary(session.token, activeSpaceId);
+      setSpaceLibrary(nextLibrary);
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : '暂时无法刷新本空间摘要。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
   async function submitMemoryEditor(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
       return;
@@ -934,26 +956,28 @@ function App() {
     ]);
   }
 
-  async function captureActiveSpaceSummary(): Promise<void> {
-    if (!session?.token || !activeSpaceId || !activeChatSessionId || !activeChatSession) {
-      setLibraryError(describeSpaceSummaryCaptureMissingChatCopy(activeSpaceDetail));
+  async function captureActiveSpaceSummary(sessionId?: string): Promise<void> {
+    const targetSessionId = (sessionId || selectedSummaryCaptureSessionId || activeChatSessionId).trim();
+    if (!session?.token || !activeSpaceId || !targetSessionId) {
+      setSummaryError(describeSpaceSummaryCaptureMissingChatCopy(activeSpaceDetail));
       return;
     }
     if (!canMutateActiveSpaceLibrary) {
-      setLibraryError('Only owners can change shared memories and summaries.');
+      setSummaryError('Only owners can change shared memories and summaries.');
       return;
     }
+    const selectedSession = summaryCaptureSessions.find((item) => item.id === targetSessionId);
     setLibraryBusy(true);
-    setLibraryError('');
+    setSummaryError('');
     try {
       await captureSpaceSummaryFromSession(session.token, activeSpaceId, {
-        chatSessionId: activeChatSessionId,
-        title: `${activeChatSession.name} snapshot`,
+        chatSessionId: targetSessionId,
+        title: `${selectedSession?.name || '当前聊天'} snapshot`,
       });
-      setLibraryNotice(`Captured a summary from ${activeChatSession.name}.`);
-      await refreshLibrary();
+      setSummaryNotice(`已从「${selectedSession?.name || '当前聊天'}」生成摘要。`);
+      await refreshSummaryLibrary();
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Could not capture a summary right now.');
+      setSummaryError(error instanceof Error ? error.message : '暂时无法生成摘要。');
     } finally {
       setLibraryBusy(false);
     }
@@ -964,20 +988,20 @@ function App() {
       return;
     }
     if (!canMutateActiveSpaceLibrary) {
-      setLibraryError('Only owners can change shared memories and summaries.');
+      setSummaryError('Only owners can change shared memories and summaries.');
       return;
     }
     setLibraryBusy(true);
-    setLibraryError('');
+    setSummaryError('');
     try {
       await createSpaceMemory(session.token, activeSpaceId, {
         title: summary.title,
         content: summary.content,
       });
-      setLibraryNotice(`Saved ${summary.title} to Memories.`);
-      await refreshLibrary();
+      setSummaryNotice(`已将「${summary.title}」保存为记忆。`);
+      await refreshSummaryLibrary();
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Could not save this summary as a memory.');
+      setSummaryError(error instanceof Error ? error.message : '无法将该摘要保存为记忆。');
     } finally {
       setLibraryBusy(false);
     }
@@ -988,17 +1012,17 @@ function App() {
       return;
     }
     if (!canMutateActiveSpaceLibrary) {
-      setLibraryError('Only owners can change shared memories and summaries.');
+      setSummaryError('Only owners can change shared memories and summaries.');
       return;
     }
     setLibraryBusy(true);
-    setLibraryError('');
+    setSummaryError('');
     try {
       await deleteSpaceSummary(session.token, activeSpaceId, summaryId);
-      setLibraryNotice(`Removed ${title}.`);
-      await refreshLibrary();
+      setSummaryNotice(`已删除摘要「${title}」。`);
+      await refreshSummaryLibrary();
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Could not remove this summary.');
+      setSummaryError(error instanceof Error ? error.message : '无法删除该摘要。');
     } finally {
       setLibraryBusy(false);
     }
@@ -1231,6 +1255,12 @@ function App() {
       setSpaceLibrary({ memories: [], summaries: [] });
       setLibraryError('');
       setLibraryNotice('');
+      setSummaryError('');
+      setSummaryNotice('');
+      setSummaryCaptureSessions([]);
+      setSummaryCaptureSessionsBusy(false);
+      setSummaryCapturePickerOpen(false);
+      setSelectedSummaryCaptureSessionId('');
       setFileListing(null);
       setFilesError('');
       setFilesNotice('');
@@ -1364,6 +1394,10 @@ function App() {
     setMemoryContent('');
     setMemoryPinned(false);
     setLibraryNotice('');
+    setSummaryError('');
+    setSummaryNotice('');
+    setSummaryCapturePickerOpen(false);
+    setSelectedSummaryCaptureSessionId('');
     setChatAppActionError('');
     setChatAppActionNotice('');
   }, [activeSpaceId]);
@@ -1571,6 +1605,9 @@ function App() {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token || !activeSpaceId) {
       setSpaceLibrary({ memories: [], summaries: [] });
       setLibraryBusy(false);
+      setSummaryCaptureSessions([]);
+      setSelectedSummaryCaptureSessionId('');
+      setSummaryCapturePickerOpen(false);
       return;
     }
     // Library data is owned per active space, not per tab instance. Reload when
@@ -1600,6 +1637,71 @@ function App() {
       cancelled = true;
     };
   }, [activeSpaceId, session?.token, shellSurface, shellTab]);
+
+  useEffect(() => {
+    if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token || !activeSpaceId) {
+      setSummaryCaptureSessions([]);
+      setSummaryCaptureSessionsBusy(false);
+      setSelectedSummaryCaptureSessionId('');
+      return;
+    }
+    let cancelled = false;
+    setSummaryCaptureSessionsBusy(true);
+    setSummaryError('');
+    void (async () => {
+      try {
+        const [familyResult, privateResult] = await Promise.allSettled([
+          fetchChatSessions('family', activeSpaceId, { force: true }),
+          fetchChatSessions('private', activeSpaceId, { force: true }),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        const merged = new Map<string, HouseholdChatSessionSummary>();
+        if (familyResult.status === 'fulfilled') {
+          familyResult.value.forEach((sessionItem) => merged.set(sessionItem.id, sessionItem));
+        }
+        if (privateResult.status === 'fulfilled') {
+          privateResult.value.forEach((sessionItem) => merged.set(sessionItem.id, sessionItem));
+        }
+
+        const nextSessions = Array.from(merged.values()).sort((left, right) =>
+          (right.updatedAt || '').localeCompare(left.updatedAt || ''),
+        );
+        setSummaryCaptureSessions(nextSessions);
+        setSelectedSummaryCaptureSessionId((current) => {
+          if (current && nextSessions.some((sessionItem) => sessionItem.id === current)) {
+            return current;
+          }
+          if (activeChatSessionId && nextSessions.some((sessionItem) => sessionItem.id === activeChatSessionId)) {
+            return activeChatSessionId;
+          }
+          return nextSessions[0]?.id ?? '';
+        });
+
+        if (
+          familyResult.status === 'rejected' &&
+          privateResult.status === 'rejected'
+        ) {
+          setSummaryError('无法加载当前空间聊天列表，请稍后重试。');
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setSummaryError(error instanceof Error ? error.message : '无法加载当前空间聊天列表，请稍后重试。');
+      } finally {
+        if (!cancelled) {
+          setSummaryCaptureSessionsBusy(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChatSessionId, activeSpaceId, fetchChatSessions, session?.token, shellSurface, shellTab]);
 
   useEffect(() => {
     if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token) {
@@ -2090,6 +2192,12 @@ function App() {
     setLibraryBusy(false);
     setLibraryError('');
     setLibraryNotice('');
+    setSummaryError('');
+    setSummaryNotice('');
+    setSummaryCaptureSessions([]);
+    setSummaryCaptureSessionsBusy(false);
+    setSummaryCapturePickerOpen(false);
+    setSelectedSummaryCaptureSessionId('');
     setMemoryEditorOpen(false);
     setEditingMemory(null);
     setMemoryTitle('');
@@ -2945,7 +3053,7 @@ function App() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={false}
-            contentContainerStyle={shellTab === 'chats' || shellTab === 'settings' ? styles.chatContent : styles.content}
+            contentContainerStyle={shellTab === 'chats' || shellTab === 'library' || shellTab === 'settings' ? styles.chatContent : styles.content}
           >
             {shellTab === 'chats' ? (
               <ChatsPane
@@ -3157,7 +3265,6 @@ function App() {
                 activeSpace={activeSpace}
                 activeSpaceKindLabel={activeSpaceKindLabel}
                 activeSpaceDetail={activeSpaceDetail}
-                activeChatSessionId={activeChatSessionId}
                 activeSpaceNameFallback={fileSpace === 'family' ? 'Shared space' : 'Private space'}
                 fileSpace={fileSpace}
                 taskScope={taskScope}
@@ -3170,9 +3277,11 @@ function App() {
                 filesBusy={filesBusy}
                 tasksBusy={tasksBusy}
                 libraryError={libraryError}
+                summaryError={summaryError}
                 filesError={filesError}
                 tasksError={tasksError}
                 libraryNotice={libraryNotice}
+                summaryNotice={summaryNotice}
                 filesNotice={filesNotice}
                 tasksNotice={tasksNotice}
                 currentFilePath={currentFilePath}
@@ -3185,6 +3294,10 @@ function App() {
                 homeMembers={homeMembers}
                 currentUserId={session.user.id}
                 summaryEmptyStateCopy={summaryEmptyStateCopy}
+                summaryCaptureSessions={summaryCaptureSessions}
+                summaryCaptureSessionsBusy={summaryCaptureSessionsBusy}
+                summaryCapturePickerOpen={summaryCapturePickerOpen}
+                selectedSummaryCaptureSessionId={selectedSummaryCaptureSessionId}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
                 onOpenFileEditor={() => openFileEditor('mkdir')}
                 onOpenTaskEditor={() => openTaskEditor()}
@@ -3192,7 +3305,13 @@ function App() {
                 onOpenMemoryEditor={() => openMemoryEditor()}
                 onEditMemory={(memory) => openMemoryEditor(memory)}
                 onDeleteMemory={(memory) => confirmRemoveMemory(memory)}
-                onCaptureSummary={() => void captureActiveSpaceSummary()}
+                onRefreshSummary={() => void refreshSummaryLibrary()}
+                onToggleSummaryCapturePicker={() => setSummaryCapturePickerOpen((current) => !current)}
+                onSelectSummaryCaptureSession={(sessionId) => {
+                  setSelectedSummaryCaptureSessionId(sessionId);
+                  setSummaryCapturePickerOpen(false);
+                }}
+                onCaptureSummary={() => void captureActiveSpaceSummary(selectedSummaryCaptureSessionId)}
                 onSaveSummaryAsMemory={(summary) => saveSummaryAsMemory(summary)}
                 onDeleteSummary={(summary) => confirmRemoveSummary(summary)}
                 onRefreshPhotos={() => void refreshFiles()}

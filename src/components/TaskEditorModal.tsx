@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Modal, Pressable, Text, TextInput, View } from 'react-native';
 import type { HouseholdTaskSummary } from '../householdApi';
 
 type TaskEditorModalProps = {
@@ -49,6 +49,44 @@ export function TaskEditorModal({
   onToggleTaskEnabled,
   onSubmit,
 }: TaskEditorModalProps) {
+  const commandSliderX = React.useRef(new Animated.Value(0)).current;
+  const enabledSliderX = React.useRef(new Animated.Value(0)).current;
+  const [commandSegmentWidth, setCommandSegmentWidth] = React.useState(0);
+  const [enabledSegmentWidth, setEnabledSegmentWidth] = React.useState(0);
+
+  const commandOptionWidth = commandSegmentWidth > 0 ? commandSegmentWidth / 2 : 0;
+  const enabledOptionWidth = enabledSegmentWidth > 0 ? enabledSegmentWidth / 2 : 0;
+  const commandIndex = taskCommandType === 'zeroclaw' ? 0 : 1;
+  const enabledIndex = taskEnabled ? 1 : 0;
+
+  React.useEffect(() => {
+    if (commandOptionWidth <= 0) {
+      return;
+    }
+    Animated.timing(commandSliderX, {
+      toValue: commandIndex * commandOptionWidth,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [commandIndex, commandOptionWidth, commandSliderX]);
+
+  React.useEffect(() => {
+    if (enabledOptionWidth <= 0) {
+      return;
+    }
+    Animated.timing(enabledSliderX, {
+      toValue: enabledIndex * enabledOptionWidth,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [enabledIndex, enabledOptionWidth, enabledSliderX]);
+
+  function setTaskEnabled(nextEnabled: boolean): void {
+    if (nextEnabled !== taskEnabled) {
+      onToggleTaskEnabled();
+    }
+  }
+
   return (
     <Modal
       animationType="slide"
@@ -100,33 +138,73 @@ export function TaskEditorModal({
             onChangeText={onChangeTaskCommand}
           />
           {canManage ? (
-            <View style={styles.scopeRow}>
-              {(['zeroclaw', 'shell'] as const).map((kind) => {
-                const active = taskCommandType === kind;
-                return (
-                  <Pressable
-                    key={kind}
-                    style={[styles.scopePill, active ? styles.scopePillActive : null]}
-                    onPress={() => onChangeTaskCommandType(kind)}
-                  >
-                    <Text style={[styles.scopePillLabel, active ? styles.scopePillLabelActive : null]}>
-                      {kind === 'zeroclaw' ? 'Sparkbox 例行任务' : '自定义命令'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View
+              style={styles.segmentedControl}
+              onLayout={(event) => setCommandSegmentWidth(event.nativeEvent.layout.width)}
+            >
+              {commandOptionWidth > 0 ? (
+                <Animated.View
+                  style={[
+                    styles.segmentedSlider,
+                    {
+                      width: commandOptionWidth,
+                      transform: [{ translateX: commandSliderX }],
+                    },
+                  ]}
+                />
+              ) : null}
+              <Pressable
+                style={styles.segmentedOption}
+                onPress={() => onChangeTaskCommandType('zeroclaw')}
+              >
+                <Text style={[styles.segmentedOptionLabel, commandIndex === 0 ? styles.segmentedOptionLabelActive : null]}>
+                  Sparkbox 例行任务
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.segmentedOption}
+                onPress={() => onChangeTaskCommandType('shell')}
+              >
+                <Text style={[styles.segmentedOptionLabel, commandIndex === 1 ? styles.segmentedOptionLabelActive : null]}>
+                  自定义命令
+                </Text>
+              </Pressable>
             </View>
           ) : (
             <Text style={styles.cardCopy}>运行模式：Sparkbox 例行任务</Text>
           )}
-          <Pressable
-            style={[styles.scopePill, taskEnabled ? styles.scopePillActive : null]}
-            onPress={onToggleTaskEnabled}
+          <View
+            style={styles.segmentedControl}
+            onLayout={(event) => setEnabledSegmentWidth(event.nativeEvent.layout.width)}
           >
-            <Text style={[styles.scopePillLabel, taskEnabled ? styles.scopePillLabelActive : null]}>
-              {taskEnabled ? '立即启用' : '先暂停'}
-            </Text>
-          </Pressable>
+            {enabledOptionWidth > 0 ? (
+              <Animated.View
+                style={[
+                  styles.segmentedSlider,
+                  {
+                    width: enabledOptionWidth,
+                    transform: [{ translateX: enabledSliderX }],
+                  },
+                ]}
+              />
+            ) : null}
+            <Pressable
+              style={styles.segmentedOption}
+              onPress={() => setTaskEnabled(false)}
+            >
+              <Text style={[styles.segmentedOptionLabel, enabledIndex === 0 ? styles.segmentedOptionLabelActive : null]}>
+                先暂停
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.segmentedOption}
+              onPress={() => setTaskEnabled(true)}
+            >
+              <Text style={[styles.segmentedOptionLabel, enabledIndex === 1 ? styles.segmentedOptionLabelActive : null]}>
+                立即启用
+              </Text>
+            </Pressable>
+          </View>
           {tasksError ? <Text style={styles.errorText}>{tasksError}</Text> : null}
           <View style={styles.inlineActions}>
             <Pressable
