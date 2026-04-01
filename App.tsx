@@ -408,6 +408,7 @@ function App() {
   const [memoryContent, setMemoryContent] = useState('');
   const [memoryPinned, setMemoryPinned] = useState(false);
   const [fileListing, setFileListing] = useState<HouseholdFileListing | null>(null);
+  const [fileListingCache, setFileListingCache] = useState<Record<string, HouseholdFileListing>>({});
   const [filesBusy, setFilesBusy] = useState(false);
   const [filesError, setFilesError] = useState('');
   const [filesNotice, setFilesNotice] = useState('');
@@ -706,24 +707,24 @@ function App() {
   const activeTaskSpaceId = resolveTaskSpaceId(activeSpace);
   const libraryOverviewSections = [
     {
-      title: 'Memories',
-      copy: activeSpace ? `Things Sparkbox remembers for ${activeSpace.name}.` : 'Things Sparkbox remembers for this space.',
+      title: '文件',
+      copy: '当前空间的文档、上传资料与实用文件。',
     },
     {
-      title: 'Summaries',
-      copy: 'Quick recaps that help you catch up without opening every chat.',
+      title: '任务',
+      copy: '绑定在当前空间的例行任务、提醒与定时执行事项。',
     },
     {
-      title: 'Photos',
-      copy: 'Shared moments and photos saved with this space.',
+      title: '记忆',
+      copy: activeSpace ? `Sparkbox 为 ${activeSpace.name} 长期保留的关键记忆。` : 'Sparkbox 为当前空间长期保留的关键记忆。',
     },
     {
-      title: 'Files',
-      copy: 'Documents, uploads, and practical materials for this space.',
+      title: '照片',
+      copy: '保存在当前空间中的照片与共享时刻。',
     },
     {
-      title: 'Tasks',
-      copy: 'Routines, reminders, and scheduled work attached to this space.',
+      title: '摘要',
+      copy: '快速回顾当前空间聊天，不用逐条翻看也能了解重点。',
     },
   ];
   const availableFamilyApps = familyAppsCatalog.filter(
@@ -831,6 +832,14 @@ function App() {
         path: fromDeviceFilePath(entry.path),
       })),
     };
+  }
+
+  function normalizeDisplayFilePath(path: string | null | undefined): string {
+    return (path || '').replace(/^\/+|\/+$/g, '');
+  }
+
+  function buildFileListingCacheKey(path: string): string {
+    return `${fileSpace}:${activeFileSpaceId || 'private'}:${path || '__root__'}`;
   }
 
   function returnToShell(): void {
@@ -1264,6 +1273,7 @@ function App() {
       setSelectedSummaryCaptureSessionId('');
       setLibraryActiveSection('overview');
       setFileListing(null);
+      setFileListingCache({});
       setFilesError('');
       setFilesNotice('');
       setDiagnosticsPayload(null);
@@ -2255,6 +2265,7 @@ function App() {
     setSpaceTemplate('partner');
     setSpaceMemberIds([]);
     setFileListing(resetState.fileListing);
+    setFileListingCache({});
     setFilesBusy(false);
     setFilesError('');
     setFilesNotice('');
@@ -2595,8 +2606,16 @@ function App() {
     }
   }
 
-  async function refreshFiles(nextPath?: string): Promise<void> {
+  async function refreshFiles(nextPath?: string, options: { force?: boolean } = {}): Promise<void> {
     if (!session?.token) {
+      return;
+    }
+    const targetPath = normalizeDisplayFilePath(nextPath ?? currentFilePath);
+    const cacheKey = buildFileListingCacheKey(targetPath);
+    const cachedListing = fileListingCache[cacheKey];
+    if (!options.force && cachedListing) {
+      setFileListing(cachedListing);
+      setFilesError('');
       return;
     }
     setFilesBusy(true);
@@ -2605,10 +2624,15 @@ function App() {
       const listing = await getHouseholdFiles(
         session.token,
         fileSpace,
-        toDeviceFilePath(nextPath ?? currentFilePath),
+        toDeviceFilePath(targetPath),
         { spaceId: activeFileSpaceId || undefined },
       );
-      setFileListing(mapListingToActiveSpace(listing));
+      const mapped = mapListingToActiveSpace(listing);
+      setFileListing(mapped);
+      setFileListingCache((current) => ({
+        ...current,
+        [cacheKey]: mapped,
+      }));
     } catch (error) {
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load files right now.');
     } finally {
@@ -2652,7 +2676,7 @@ function App() {
         setFilesNotice(`Renamed to ${trimmed}.`);
       }
       setFileEditorOpen(false);
-      await refreshFiles();
+      await refreshFiles(undefined, { force: true });
     } catch (error) {
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not save this change.');
     } finally {
@@ -2671,7 +2695,7 @@ function App() {
         spaceId: activeFileSpaceId || undefined,
       });
       setFilesNotice(`Removed ${entry.name}.`);
-      await refreshFiles();
+      await refreshFiles(undefined, { force: true });
     } catch (error) {
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not remove this file.');
     } finally {
@@ -2713,7 +2737,7 @@ function App() {
         { spaceId: activeFileSpaceId || undefined },
       );
       setFilesNotice(`Uploaded ${response.saved.map((item) => item.name).join(', ')}.`);
-      await refreshFiles();
+      await refreshFiles(undefined, { force: true });
     } catch (error) {
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not upload files.');
     } finally {
@@ -3417,7 +3441,7 @@ function App() {
                 onDownloadPhoto={(entry) => void downloadFileEntry(entry)}
                 onDeletePhoto={(entry) => void deleteFileEntry(entry)}
                 canManageFileEntry={canManageFileEntry}
-                onRefreshFiles={(path) => void refreshFiles(path)}
+                onRefreshFiles={(path, force) => void refreshFiles(path, { force })}
                 onUploadFiles={() => void pickAndUploadFiles()}
                 onDownloadFile={(entry) => void downloadFileEntry(entry)}
                 onRenameFile={(entry) => openFileEditor('rename', entry)}

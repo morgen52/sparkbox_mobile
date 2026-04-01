@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import {
   describeFileTimestamp,
   describeFileUploader,
@@ -93,7 +93,7 @@ type LibraryPaneProps = {
   onDownloadPhoto: (entry: HouseholdFileEntry) => void;
   onDeletePhoto: (entry: HouseholdFileEntry) => void;
   canManageFileEntry: (entry: HouseholdFileEntry) => boolean;
-  onRefreshFiles: (path?: string) => void;
+  onRefreshFiles: (path?: string, force?: boolean) => void;
   onUploadFiles: () => void;
   onDownloadFile: (entry: HouseholdFileEntry) => void;
   onRenameFile: (entry: HouseholdFileEntry) => void;
@@ -187,7 +187,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   };
 
   const normalizedPath = (currentFilePath || '').replace(/^\/+|\/+$/g, '');
-  const folderLabel = (currentFilePath || activeSpace?.name || activeSpaceNameFallback).replace(/^\/+/, '');
   const pathSegments = normalizedPath ? normalizedPath.split('/') : [];
   const orderedEntries = [...(fileListing?.entries ?? [])].sort((left, right) => {
     if (left.isDir !== right.isDir) {
@@ -198,19 +197,19 @@ export function LibraryPane(props: LibraryPaneProps) {
 
   function resolveOverviewSectionKey(title: string): LibrarySectionKey | null {
     const normalized = title.trim().toLowerCase();
-    if (normalized === 'memories') {
+    if (normalized === 'memories' || normalized === '记忆') {
       return 'memories';
     }
-    if (normalized === 'summaries') {
+    if (normalized === 'summaries' || normalized === '摘要') {
       return 'summaries';
     }
-    if (normalized === 'photos') {
+    if (normalized === 'photos' || normalized === '照片') {
       return 'photos';
     }
-    if (normalized === 'files') {
+    if (normalized === 'files' || normalized === '文件') {
       return 'files';
     }
-    if (normalized === 'tasks') {
+    if (normalized === 'tasks' || normalized === '任务') {
       return 'tasks';
     }
     return null;
@@ -265,7 +264,7 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderMemories(): React.ReactNode {
     return (
       <>
-        {renderSectionHeader('Memories', `记忆是 Sparkbox 需要长期记住的关键信息，适用于${activeSpace?.name || '当前空间'}。`)}
+        {renderSectionHeader('记忆', `记忆是 Sparkbox 需要长期记住的关键信息，适用于${activeSpace?.name || '当前空间'}。`)}
         <View style={styles.settingsCard}>
           {!canMutateActiveSpaceLibrary && activeSpace?.kind === 'shared' ? (
             <Text style={styles.cardCopy}>共享空间中的记忆由管理员维护，成员仍可查看全部内容。</Text>
@@ -317,7 +316,7 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderSummaries(): React.ReactNode {
     return (
       <>
-        {renderSectionHeader('Summaries', describeSummarySectionCopy(activeSpaceDetail))}
+        {renderSectionHeader('摘要', describeSummarySectionCopy(activeSpaceDetail))}
         <View style={styles.settingsCard}>
           <View style={styles.inlineActions}>
             <Pressable
@@ -409,7 +408,7 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderPhotos(): React.ReactNode {
     return (
       <>
-        {renderSectionHeader('Photos', '照片会作为这个空间的共享记录保存，而不仅是普通上传文件。')}
+        {renderSectionHeader('照片', '照片会作为这个空间的共享记录保存，而不仅是普通上传文件。')}
         <View style={styles.settingsCard}>
           {!canMutateActiveSpaceFiles && activeSpace?.kind === 'shared' ? (
             <Text style={styles.cardCopy}>共享照片由管理员维护，成员仍可浏览和下载本空间已有照片。</Text>
@@ -461,13 +460,50 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
 
   function renderFiles(): React.ReactNode {
+    function openFileEntryActions(entry: HouseholdFileEntry): void {
+      const buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [];
+
+      if (!entry.isDir) {
+        buttons.push({
+          text: '下载',
+          onPress: () => onDownloadFile(entry),
+        });
+      }
+
+      if (canManageFileEntry(entry)) {
+        buttons.push({
+          text: '重命名',
+          onPress: () => onRenameFile(entry),
+        });
+        buttons.push({
+          text: '删除',
+          style: 'destructive',
+          onPress: () => onDeleteFile(entry),
+        });
+      }
+
+      buttons.push({ text: '取消', style: 'cancel' });
+
+      if (buttons.length <= 1) {
+        Alert.alert('暂无可用操作', '当前账号在此条目下没有可执行的操作。', [{ text: '知道了' }]);
+        return;
+      }
+
+      Alert.alert(entry.name, entry.isDir ? '文件夹操作' : '文件操作', buttons);
+    }
+
     return (
       <>
-        {renderSectionHeader('Files Explorer', `当前目录：${folderLabel || '根目录'}`)}
         <View style={styles.settingsCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>文件资源管理器</Text>
+            <Pressable style={styles.summaryRefreshButton} onPress={() => onChangeActiveSection('overview')}>
+              <Text style={styles.summaryRefreshButtonText}>返回概览</Text>
+            </Pressable>
+          </View>
           <Text style={styles.cardCopy}>
             {onlineDeviceAvailable
-              ? `像资源管理器一样浏览 ${activeSpace ? activeSpace.name : '当前空间'} 的文件夹结构。`
+              ? `浏览 ${activeSpace ? activeSpace.name : '当前空间'} 的文件夹结构。`
               : '请先让 Sparkbox 在线，再浏览或更新此空间文件。'}
           </Text>
           {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
@@ -476,17 +512,10 @@ export function LibraryPane(props: LibraryPaneProps) {
           <View style={styles.inlineActions}>
             <Pressable
               style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-              onPress={() => onRefreshFiles()}
+              onPress={() => onRefreshFiles(undefined, true)}
               disabled={!onlineDeviceAvailable || filesBusy}
             >
               <Text style={styles.secondaryButtonText}>刷新</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.secondaryButtonSmall, !fileListing?.parent ? styles.networkRowDisabled : null]}
-              onPress={() => onRefreshFiles(fileListing?.parent || '')}
-              disabled={!fileListing?.parent || filesBusy}
-            >
-              <Text style={styles.secondaryButtonText}>上级目录</Text>
             </Pressable>
             {canMutateActiveSpaceFiles ? (
               <>
@@ -508,29 +537,32 @@ export function LibraryPane(props: LibraryPaneProps) {
             ) : null}
           </View>
 
-          <View style={styles.libraryPathRow}>
-            <Pressable style={styles.libraryPathChip} onPress={() => onRefreshFiles('')}>
-              <Text style={styles.libraryPathChipText}>根目录</Text>
-            </Pressable>
-            {pathSegments.map((segment, index) => {
-              const nextPath = pathSegments.slice(0, index + 1).join('/');
-              return (
-                <Pressable key={`${segment}-${nextPath}`} style={styles.libraryPathChip} onPress={() => onRefreshFiles(nextPath)}>
-                  <Text style={styles.libraryPathChipText}>{segment}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </View>
 
         <View style={styles.settingsCard}>
-          <Text style={styles.cardTitle}>目录内容</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>目录内容</Text>
+            <Pressable
+              style={[styles.summaryRefreshButton, !fileListing?.parent ? styles.networkRowDisabled : null]}
+              onPress={() => onRefreshFiles(fileListing?.parent || '')}
+              disabled={!fileListing?.parent || filesBusy}
+            >
+              <Text style={styles.summaryRefreshButtonText}>上级目录</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.cardCopy}>当前目录：{pathSegments.length ? `/${pathSegments.join('/')}` : '/'}</Text>
           {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
           {!filesBusy && orderedEntries.length === 0 ? (
             <Text style={styles.cardCopy}>{describeLibraryFileListEmptyState(fileSpace)}</Text>
           ) : null}
           {orderedEntries.map((entry) => (
-            <View key={entry.path} style={styles.libraryExplorerRow}>
+            <Pressable
+              key={entry.path}
+              style={[styles.libraryExplorerRow, entry.isDir ? styles.libraryExplorerRowFolder : null]}
+              onPress={entry.isDir ? () => onRefreshFiles(entry.path) : undefined}
+              disabled={!entry.isDir || filesBusy}
+              pressFeedback={entry.isDir ? 'scale' : 'none'}
+            >
               <View style={styles.libraryExplorerRowMain}>
                 <Text style={styles.libraryExplorerIcon}>{entry.isDir ? '[DIR]' : '[FILE]'}</Text>
                 <View style={styles.libraryExplorerMeta}>
@@ -544,28 +576,15 @@ export function LibraryPane(props: LibraryPaneProps) {
                   ) : null}
                 </View>
               </View>
-              <View style={styles.inlineActions}>
-                {entry.isDir ? (
-                  <Pressable style={styles.secondaryButtonSmall} onPress={() => onRefreshFiles(entry.path)}>
-                    <Text style={styles.secondaryButtonText}>进入</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable style={styles.secondaryButtonSmall} onPress={() => onDownloadFile(entry)} disabled={filesBusy}>
-                    <Text style={styles.secondaryButtonText}>下载</Text>
-                  </Pressable>
-                )}
-                {canManageFileEntry(entry) ? (
-                  <>
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => onRenameFile(entry)} disabled={filesBusy}>
-                      <Text style={styles.secondaryButtonText}>重命名</Text>
-                    </Pressable>
-                    <Pressable style={styles.secondaryButtonSmall} onPress={() => onDeleteFile(entry)} disabled={filesBusy}>
-                      <Text style={styles.secondaryButtonText}>删除</Text>
-                    </Pressable>
-                  </>
-                ) : null}
-              </View>
-            </View>
+              <Pressable
+                style={styles.libraryExplorerMenuButton}
+                onPress={() => openFileEntryActions(entry)}
+                disabled={filesBusy}
+                pressFeedback="fade"
+              >
+                <Text style={styles.libraryExplorerMenuButtonText}>⋯</Text>
+              </Pressable>
+            </Pressable>
           ))}
         </View>
       </>
@@ -575,7 +594,7 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderTasks(): React.ReactNode {
     return (
       <>
-        {renderSectionHeader('Tasks', onlineDeviceAvailable
+        {renderSectionHeader('任务', onlineDeviceAvailable
           ? `任务会绑定在${activeSpace ? activeSpace.name : '当前空间'}，让例行事项和提醒始终归属正确空间。`
           : '请先让 Sparkbox 在线，再加载或更新此空间的例行任务。')}
         <View style={styles.settingsCard}>
