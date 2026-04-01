@@ -14,10 +14,25 @@ def envOrProperty = { String envKey, String propKey = envKey ->
     }
     return null
 }
-def releaseStoreFilePath = envOrProperty('SPARKBOX_UPLOAD_STORE_FILE', 'sparkboxUploadStoreFile')
-def releaseStorePassword = envOrProperty('SPARKBOX_UPLOAD_STORE_PASSWORD', 'sparkboxUploadStorePassword')
-def releaseKeyAlias = envOrProperty('SPARKBOX_UPLOAD_KEY_ALIAS', 'sparkboxUploadKeyAlias')
-def releaseKeyPassword = envOrProperty('SPARKBOX_UPLOAD_KEY_PASSWORD', 'sparkboxUploadKeyPassword')
+def propertyOrNull = { String key ->
+    def value = findProperty(key)
+    if (value != null && value.toString().trim()) {
+        return value.toString().trim()
+    }
+    return null
+}
+def releaseStoreFilePath =
+    envOrProperty('SPARKBOX_UPLOAD_STORE_FILE', 'sparkboxUploadStoreFile')
+    ?: propertyOrNull('android.injected.signing.store.file')
+def releaseStorePassword =
+    envOrProperty('SPARKBOX_UPLOAD_STORE_PASSWORD', 'sparkboxUploadStorePassword')
+    ?: propertyOrNull('android.injected.signing.store.password')
+def releaseKeyAlias =
+    envOrProperty('SPARKBOX_UPLOAD_KEY_ALIAS', 'sparkboxUploadKeyAlias')
+    ?: propertyOrNull('android.injected.signing.key.alias')
+def releaseKeyPassword =
+    envOrProperty('SPARKBOX_UPLOAD_KEY_PASSWORD', 'sparkboxUploadKeyPassword')
+    ?: propertyOrNull('android.injected.signing.key.password')
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCase(java.util.Locale.ROOT) }
 def releaseTaskRequested = requestedTaskNames.any { it.contains('release') || it.contains('bundle') }
 def allowDebugReleaseSigning = (envOrProperty('SPARKBOX_ALLOW_DEBUG_RELEASE_SIGNING', 'sparkboxAllowDebugReleaseSigning') ?: "false").toBoolean()

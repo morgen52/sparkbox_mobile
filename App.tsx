@@ -23,7 +23,7 @@ import { AnimatedPressable as Pressable } from './src/components/AnimatedPressab
 import { ChatsPane } from './src/components/ChatsPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
-import { LibraryQuickActionsCard } from './src/components/LibraryQuickActionsCard';
+import type { LibrarySectionKey } from './src/components/LibraryPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
@@ -401,6 +401,7 @@ function App() {
   const [summaryCaptureSessionsBusy, setSummaryCaptureSessionsBusy] = useState(false);
   const [summaryCapturePickerOpen, setSummaryCapturePickerOpen] = useState(false);
   const [selectedSummaryCaptureSessionId, setSelectedSummaryCaptureSessionId] = useState('');
+  const [libraryActiveSection, setLibraryActiveSection] = useState<LibrarySectionKey>('overview');
   const [memoryEditorOpen, setMemoryEditorOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<SpaceMemory | null>(null);
   const [memoryTitle, setMemoryTitle] = useState('');
@@ -1261,6 +1262,7 @@ function App() {
       setSummaryCaptureSessionsBusy(false);
       setSummaryCapturePickerOpen(false);
       setSelectedSummaryCaptureSessionId('');
+      setLibraryActiveSection('overview');
       setFileListing(null);
       setFilesError('');
       setFilesNotice('');
@@ -1398,6 +1400,7 @@ function App() {
     setSummaryNotice('');
     setSummaryCapturePickerOpen(false);
     setSelectedSummaryCaptureSessionId('');
+    setLibraryActiveSection('overview');
     setChatAppActionError('');
     setChatAppActionNotice('');
   }, [activeSpaceId]);
@@ -2198,6 +2201,7 @@ function App() {
     setSummaryCaptureSessionsBusy(false);
     setSummaryCapturePickerOpen(false);
     setSelectedSummaryCaptureSessionId('');
+    setLibraryActiveSection('overview');
     setMemoryEditorOpen(false);
     setEditingMemory(null);
     setMemoryTitle('');
@@ -2330,15 +2334,98 @@ function App() {
   }
 
   useEffect(() => {
-    if (shellSurface !== 'shell' || shellTab !== 'chats' || !activeChatSessionId) {
-      return;
-    }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      closeActiveChatDetail();
+      if (shellSurface !== 'shell') {
+        if (networkSheetOpen) {
+          setNetworkSheetOpen(false);
+          return true;
+        }
+        if (scannerOpen) {
+          setScannerOpen(false);
+          return true;
+        }
+        // In non-shell flows we still intercept back to prevent accidental app exit.
+        return true;
+      }
+
+      if (spaceHomeMode === 'list') {
+        if (spaceCreatorOpen) {
+          setSpaceCreatorOpen(false);
+          return true;
+        }
+        if (spaceListViewMode === 'global-settings') {
+          setSpaceListViewMode('spaces');
+          return true;
+        }
+        // Space list root: allow Android to exit.
+        return false;
+      }
+
+      if (relayComposerOpen) {
+        setRelayComposerOpen(false);
+        return true;
+      }
+      if (taskHistoryOpen) {
+        setTaskHistoryOpen(false);
+        return true;
+      }
+      if (taskEditorOpen) {
+        setTaskEditorOpen(false);
+        return true;
+      }
+      if (fileEditorOpen) {
+        setFileEditorOpen(false);
+        return true;
+      }
+      if (memoryEditorOpen) {
+        closeMemoryEditor();
+        return true;
+      }
+      if (spaceMembersEditorOpen) {
+        setSpaceMembersEditorOpen(false);
+        return true;
+      }
+      if (chatSessionEditorOpen) {
+        setChatSessionEditorOpen(false);
+        return true;
+      }
+      if (spaceCreatorOpen) {
+        setSpaceCreatorOpen(false);
+        return true;
+      }
+
+      if (shellTab === 'library' && libraryActiveSection !== 'overview') {
+        setLibraryActiveSection('overview');
+        return true;
+      }
+
+      if (shellTab === 'chats' && activeChatSessionId) {
+        closeActiveChatDetail();
+        return true;
+      }
+
+      returnToSpaceList();
       return true;
     });
     return () => subscription.remove();
-  }, [activeChatSessionId, shellSurface, shellTab]);
+  }, [
+    activeChatSessionId,
+    chatSessionEditorOpen,
+    fileEditorOpen,
+    libraryActiveSection,
+    memoryEditorOpen,
+    networkSheetOpen,
+    relayComposerOpen,
+    scannerOpen,
+    shellSurface,
+    shellTab,
+    spaceCreatorOpen,
+    spaceHomeMode,
+    spaceListViewMode,
+    spaceMembersEditorOpen,
+    taskEditorOpen,
+    taskHistoryOpen,
+  ]);
 
   function openTaskEditor(task?: HouseholdTaskSummary): void {
     if (task) {
@@ -3038,18 +3125,6 @@ function App() {
             onSelectTab={handleShellTabSelect}
           />
 
-          {libraryTabActive ? (
-            <LibraryQuickActionsCard
-              styles={styles}
-              canMutateActiveSpaceFiles={canMutateActiveSpaceFiles}
-              onlineDeviceAvailable={onlineDeviceAvailable}
-              filesBusy={filesBusy}
-              canCreateTasks={canCreateTasks}
-              onOpenFileEditor={() => openFileEditor('mkdir')}
-              onOpenTaskEditor={openTaskEditor}
-            />
-          ) : null}
-
           <ScrollView
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={false}
@@ -3298,6 +3373,8 @@ function App() {
                 summaryCaptureSessionsBusy={summaryCaptureSessionsBusy}
                 summaryCapturePickerOpen={summaryCapturePickerOpen}
                 selectedSummaryCaptureSessionId={selectedSummaryCaptureSessionId}
+                activeSection={libraryActiveSection}
+                onChangeActiveSection={setLibraryActiveSection}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
                 onOpenFileEditor={() => openFileEditor('mkdir')}
                 onOpenTaskEditor={() => openTaskEditor()}
