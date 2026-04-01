@@ -2165,6 +2165,27 @@ function App() {
     }
   }
 
+  function requestDeleteSpacePlaceholder(): void {
+    if (!activeSpace) {
+      return;
+    }
+    Alert.alert(
+      '确认删除此空间？',
+      `你即将删除「${activeSpace.name}」。当前 cloud 端尚不支持删除空间，确认后会仅显示占位提示。`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确认删除',
+          style: 'destructive',
+          onPress: () => {
+            setSettingsNotice('');
+            setSettingsError('cloud端当前不支持删除空间。');
+          },
+        },
+      ],
+    );
+  }
+
   function resetShellState(): void {
     // Full shell reset for logout and hard flow transitions. The pane
     // components are intentionally stateless enough that this can remain the
@@ -3455,6 +3476,25 @@ function App() {
                     <Text style={styles.errorText}>{settingsError}</Text>
                   </View>
                 ) : null}
+
+                <View style={styles.settingsCard}>
+                  <Text style={styles.cardTitle}>删除此空间</Text>
+                  <Text style={styles.cardCopy}>
+                    删除空间后，其关联聊天与资料将无法恢复。当前先保留入口，等待 cloud 端支持。
+                  </Text>
+                  <Pressable
+                    style={[
+                      styles.secondaryButtonSmall,
+                      styles.spaceDeleteButton,
+                      !activeSpace ? styles.networkRowDisabled : null,
+                    ]}
+                    onPress={requestDeleteSpacePlaceholder}
+                    disabled={!activeSpace}
+                  >
+                    <Text style={[styles.secondaryButtonText, styles.spaceDeleteButtonText]}>删除此空间</Text>
+                  </Pressable>
+                  <Text style={styles.errorText}>cloud端当前不支持</Text>
+                </View>
               </>
             ) : null}
           </ScrollView>

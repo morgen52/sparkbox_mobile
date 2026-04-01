@@ -494,6 +494,13 @@ export const styles = StyleSheet.create({
     minHeight: 48,
     backgroundColor: '#f6f0df',
   },
+  spaceDeleteButton: {
+    borderColor: '#d57d75',
+    backgroundColor: '#fff1ef',
+  },
+  spaceDeleteButtonText: {
+    color: '#b03d35',
+  },
   chatDetailGhostButton: {
     borderColor: '#2f7254',
     backgroundColor: 'transparent',
