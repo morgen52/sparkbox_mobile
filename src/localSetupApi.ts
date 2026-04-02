@@ -1,3 +1,5 @@
+import { resolveLocalSetupBaseUrl } from './devSetupConfig';
+
 export type LocalSetupNetwork = {
   ssid: string;
   signal_percent?: number;
@@ -37,11 +39,9 @@ export type LocalSetupStatus = {
   };
 };
 
-const LOCAL_SETUP_BASE_URL = 'http://192.168.4.1:8080';
-
 export function buildLocalSetupEndpoint(path: string): string {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `${LOCAL_SETUP_BASE_URL}${cleanPath}`;
+  return `${resolveLocalSetupBaseUrl()}${cleanPath}`;
 }
 
 export async function listLocalSetupNetworks(): Promise<LocalSetupNetworksResponse> {

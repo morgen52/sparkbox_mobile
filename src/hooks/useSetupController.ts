@@ -13,6 +13,7 @@ import {
 import { buildSetupFlowResetState } from '../appShell';
 import { apiJson } from '../utils/cloudJson';
 import { parseClaimPayload, sleep, type ClaimPayload } from '../utils/appRuntime';
+import { isDevOnboardingBypassEnabled } from '../devSetupConfig';
 import {
   CAMERA_PERMISSION_RECOVERY_MESSAGE,
   HOTSPOT_SSID,
@@ -110,6 +111,7 @@ export function useSetupController(options: SetupControllerOptions) {
   const step4Visible = activeStep === 4 || Boolean(portalUrl) || Boolean(completedDeviceId);
   const onboardingInProgress = Boolean(claimPayload) || Boolean(pairingToken) || hotspotStage !== 'idle' || Boolean(completedDeviceId);
   const setupFlowRequested = Boolean(reprovisionDeviceId);
+  const devOnboardingBypassEnabled = isDevOnboardingBypassEnabled();
 
   async function beginHotspotOnboarding(deviceId: string): Promise<void> {
     if (!deviceId) {
@@ -128,6 +130,12 @@ export function useSetupController(options: SetupControllerOptions) {
       setHotspotStage('local_setup');
       setProvisionMessage('Choose the home Wi-Fi that Sparkbox should join.');
     } catch (error) {
+      if (devOnboardingBypassEnabled) {
+        setBleError('');
+        setHotspotStage('local_setup');
+        setProvisionMessage('Development bypass enabled. Continue setup without switching phone Wi-Fi.');
+        return;
+      }
       setBleError(error instanceof Error ? error.message : 'Could not switch to Sparkbox-Setup automatically.');
       setProvisionMessage('Open Wi-Fi settings, join Sparkbox-Setup, and the app will continue automatically.');
       await openInternetPanel().catch(() => undefined);
@@ -137,6 +145,10 @@ export function useSetupController(options: SetupControllerOptions) {
   }
 
   async function returnPhoneToHomeWifi(): Promise<void> {
+    if (devOnboardingBypassEnabled) {
+      await startCloudVerification();
+      return;
+    }
     const targetSsid = homeWifiTarget?.ssid || previousInternetSsid;
     const targetPassword = homeWifiTarget?.password || '';
     verificationStartedRef.current = false;
