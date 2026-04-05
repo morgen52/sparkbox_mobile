@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Text, View } from 'react-native';
 import {
   describeFileTimestamp,
   describeFileUploader,
@@ -194,6 +194,13 @@ export function LibraryPane(props: LibraryPaneProps) {
     }
     return left.name.localeCompare(right.name);
   });
+  const [fileActionsOpen, setFileActionsOpen] = React.useState(false);
+  const [fileActionsEntry, setFileActionsEntry] = React.useState<HouseholdFileEntry | null>(null);
+
+  function closeFileActionsModal(): void {
+    setFileActionsOpen(false);
+    setFileActionsEntry(null);
+  }
 
   function resolveOverviewSectionKey(title: string): LibrarySectionKey | null {
     const normalized = title.trim().toLowerCase();
@@ -461,39 +468,88 @@ export function LibraryPane(props: LibraryPaneProps) {
 
   function renderFiles(): React.ReactNode {
     function openFileEntryActions(entry: HouseholdFileEntry): void {
-      const buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [];
-
-      if (!entry.isDir) {
-        buttons.push({
-          text: '下载',
-          onPress: () => onDownloadFile(entry),
-        });
-      }
-
-      if (canManageFileEntry(entry)) {
-        buttons.push({
-          text: '重命名',
-          onPress: () => onRenameFile(entry),
-        });
-        buttons.push({
-          text: '删除',
-          style: 'destructive',
-          onPress: () => onDeleteFile(entry),
-        });
-      }
-
-      buttons.push({ text: '取消', style: 'cancel' });
-
-      if (buttons.length <= 1) {
-        Alert.alert('暂无可用操作', '当前账号在此条目下没有可执行的操作。', [{ text: '知道了' }]);
-        return;
-      }
-
-      Alert.alert(entry.name, entry.isDir ? '文件夹操作' : '文件操作', buttons);
+      setFileActionsEntry(entry);
+      setFileActionsOpen(true);
     }
 
     return (
       <>
+        <Modal
+          animationType="slide"
+          presentationStyle="overFullScreen"
+          transparent
+          visible={fileActionsOpen}
+          onRequestClose={closeFileActionsModal}
+        >
+          <View style={styles.networkSheetBackdrop}>
+            <View style={styles.networkSheetCard}>
+              <Text style={styles.selectionLabel}>{fileActionsEntry?.isDir ? '文件夹操作' : '文件操作'}</Text>
+              <Text style={styles.selectionTitle}>{fileActionsEntry?.name || '当前条目'}</Text>
+              <Text style={styles.selectionCopy}>选择你要执行的操作。</Text>
+
+              <View style={styles.inlineActions}>
+                {!fileActionsEntry?.isDir ? (
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => {
+                      const entry = fileActionsEntry;
+                      closeFileActionsModal();
+                      if (entry) {
+                        onDownloadFile(entry);
+                      }
+                    }}
+                    disabled={filesBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>下载</Text>
+                  </Pressable>
+                ) : null}
+
+                {fileActionsEntry && canManageFileEntry(fileActionsEntry) ? (
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => {
+                      const entry = fileActionsEntry;
+                      closeFileActionsModal();
+                      if (entry) {
+                        onRenameFile(entry);
+                      }
+                    }}
+                    disabled={filesBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>重命名</Text>
+                  </Pressable>
+                ) : null}
+
+                {fileActionsEntry && canManageFileEntry(fileActionsEntry) ? (
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => {
+                      const entry = fileActionsEntry;
+                      closeFileActionsModal();
+                      if (entry) {
+                        onDeleteFile(entry);
+                      }
+                    }}
+                    disabled={filesBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>删除</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <View style={styles.inlineActions}>
+                <Pressable
+                  style={styles.secondaryButtonSmall}
+                  onPress={closeFileActionsModal}
+                  disabled={filesBusy}
+                >
+                  <Text style={styles.secondaryButtonText}>取消</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <View style={styles.settingsCard}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>文件资源管理器</Text>

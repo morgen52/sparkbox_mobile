@@ -2717,18 +2717,11 @@ function App() {
       if (result.canceled) {
         return;
       }
-      const uploads = await Promise.all(
-        result.assets.map(async (asset) => {
-          const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          return {
-            name: asset.name,
-            mimeType: asset.mimeType || 'application/octet-stream',
-            data: Uint8Array.from(Buffer.from(base64, 'base64')),
-          };
-        }),
-      );
+      const uploads = result.assets.map((asset, index) => ({
+        name: asset.name || `upload-${index + 1}`,
+        mimeType: asset.mimeType || 'application/octet-stream',
+        uri: asset.uri,
+      }));
       const response = await uploadHouseholdFiles(
         session.token,
         fileSpace,
@@ -2739,6 +2732,7 @@ function App() {
       setFilesNotice(`Uploaded ${response.saved.map((item) => item.name).join(', ')}.`);
       await refreshFiles(undefined, { force: true });
     } catch (error) {
+      console.error('Household file upload failed', error);
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not upload files.');
     } finally {
       setFilesBusy(false);

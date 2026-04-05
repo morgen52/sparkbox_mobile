@@ -404,7 +404,8 @@ export type HouseholdFileListing = {
 export type HouseholdUploadInput = {
   name: string;
   mimeType: string;
-  data: Uint8Array;
+  data?: Uint8Array;
+  uri?: string;
 };
 
 export type DeviceDiagnostics = {
@@ -1235,12 +1236,26 @@ export async function uploadHouseholdFiles(
 ): Promise<{ ok: boolean; saved: Array<{ name: string; size: number }> }> {
   const formData = new FormData();
   for (const file of files) {
-    const arrayBuffer = file.data.buffer.slice(
-      file.data.byteOffset,
-      file.data.byteOffset + file.data.byteLength,
-    ) as ArrayBuffer;
-    const blob = new Blob([arrayBuffer], { type: file.mimeType || 'application/octet-stream' });
-    formData.append('files', blob, file.name);
+    const contentType = file.mimeType || 'application/octet-stream';
+    if (file.uri) {
+      // React Native/Expo uploads are most stable when FormData references URI directly.
+      formData.append('files', {
+        uri: file.uri,
+        type: contentType,
+        name: file.name,
+      } as unknown as Blob);
+      continue;
+    }
+    if (file.data) {
+      const arrayBuffer = file.data.buffer.slice(
+        file.data.byteOffset,
+        file.data.byteOffset + file.data.byteLength,
+      ) as ArrayBuffer;
+      const blob = new Blob([arrayBuffer], { type: contentType });
+      formData.append('files', blob, file.name);
+      continue;
+    }
+    throw new Error(`Upload payload missing data for ${file.name}`);
   }
   const params = new URLSearchParams({ space, path });
   if (options.spaceId) {

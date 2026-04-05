@@ -375,6 +375,12 @@ export function describeServiceAvailabilityError(message: string): string {
   if (/^Could not\b/i.test(normalized)) {
     return normalized;
   }
+  if (/^Request failed:\s*\d+$/i.test(normalized)) {
+    return normalized;
+  }
+  if (/^Network request failed$/i.test(normalized)) {
+    return '网络请求失败，请确认手机可以访问本地 cloud 地址。';
+  }
   return GENERIC_SERVICE_AVAILABILITY_ERROR;
 }
 
