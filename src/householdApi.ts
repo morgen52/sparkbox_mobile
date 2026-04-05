@@ -401,6 +401,117 @@ export type HouseholdFileListing = {
   entries: HouseholdFileEntry[];
 };
 
+export type WikiPageSummary = {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  tags: string[];
+  updatedAt: string;
+};
+
+export type WikiIngestInput = {
+  title: string;
+  content: string;
+  sourceType?: string;
+  spaceId?: string | null;
+};
+
+export type WikiIngestResult = {
+  operationId: string;
+  rawSourceId: string;
+  pageId: string;
+  title: string;
+  summary: string;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+  directoryModelBudgetSeconds?: number;
+  directoryProvider?: string;
+  directoryModel?: string;
+  directoryProviderTimeoutSeconds?: number;
+};
+
+export type WikiQueryInput = {
+  question: string;
+  spaceId?: string | null;
+  topK?: number;
+};
+
+export type WikiQueryResult = {
+  operationId: string;
+  answer: string;
+  citations: Array<{
+    pageId: string;
+    title: string;
+    slug: string;
+    snippet: string;
+  }>;
+};
+
+export type WikiLintIssue = {
+  code: string;
+  severity: string;
+  message: string;
+  pageId?: string | null;
+  pageTitle?: string | null;
+};
+
+export type WikiLintResult = {
+  operationId: string;
+  summary: string;
+  issues: WikiLintIssue[];
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+  directoryModelBudgetSeconds?: number;
+  directoryProvider?: string;
+  directoryModel?: string;
+  directoryProviderTimeoutSeconds?: number;
+};
+
+export type WikiUploadIngestResult = {
+  operationId: string;
+  saved: Array<{ name: string; rawPath: string; size: number }>;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+  directoryModelBudgetSeconds?: number;
+  directoryProvider?: string;
+  directoryModel?: string;
+  directoryProviderTimeoutSeconds?: number;
+};
+
+export type WikiDirectoryPayload = {
+  directory: Record<string, unknown>;
+  rawFiles: string[];
+  manualEdits: Array<Record<string, unknown>>;
+};
+
+export type WikiOrganizeStartResult = {
+  jobId: string;
+  status: string;
+  maxRounds: number;
+  startedAt: string;
+};
+
+export type WikiOrganizeStatusResult = {
+  jobId: string;
+  status: string;
+  iterations: number;
+  durationMs: number;
+  processedRecords: number;
+  startedAt: string;
+  finishedAt: string | null;
+  message: string;
+};
+
+export type WikiPreviewResult = {
+  root: string;
+  wikiFiles: Array<{
+    path: string;
+    preview: string;
+    updatedAt: string;
+  }>;
+};
+
 export type HouseholdUploadInput = {
   name: string;
   mimeType: string;
@@ -1303,6 +1414,317 @@ export async function getDeviceDiagnostics(
   return cloudJson<DeviceDiagnostics>(`/api/devices/${encodeURIComponent(deviceId)}/diagnostics`, {
     token,
   });
+}
+
+export async function listWikiPages(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<WikiPageSummary[]> {
+  const params = new URLSearchParams();
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  const query = params.toString();
+  const response = await cloudJson<{ pages: Array<Record<string, unknown>> }>(
+    `/api/wiki/pages${query ? `?${query}` : ''}`,
+    { token },
+  );
+  return response.pages.map((item) => ({
+    id: String(item.id ?? ''),
+    title: String(item.title ?? ''),
+    slug: String(item.slug ?? ''),
+    summary: String(item.summary ?? ''),
+    tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag)) : [],
+    updatedAt: String(item.updated_at ?? ''),
+  }));
+}
+
+export async function ingestWikiRaw(
+  token: string,
+  input: WikiIngestInput,
+): Promise<WikiIngestResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/ingest', {
+    method: 'POST',
+    token,
+    body: {
+      title: input.title,
+      content: input.content,
+      source_type: input.sourceType || 'note',
+      space_id: input.spaceId || undefined,
+    },
+  });
+  return {
+    operationId: String(response.operation_id ?? ''),
+    rawSourceId: String(response.raw_source_id ?? ''),
+    pageId: String(response.page_id ?? ''),
+    title: String(response.title ?? ''),
+    summary: String(response.summary ?? ''),
+    directoryMode: String(response.directory_mode ?? ''),
+    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
+    directoryModelBudgetSeconds: Number(response.directory_model_budget_seconds ?? 0),
+    directoryProvider: String(response.directory_provider ?? ''),
+    directoryModel: String(response.directory_model ?? ''),
+    directoryProviderTimeoutSeconds: Number(response.directory_provider_timeout_seconds ?? 0),
+  };
+}
+
+export async function queryWiki(
+  token: string,
+  input: WikiQueryInput,
+): Promise<WikiQueryResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/query', {
+    method: 'POST',
+    token,
+    body: {
+      question: input.question,
+      space_id: input.spaceId || undefined,
+      top_k: input.topK ?? 4,
+    },
+  });
+  return {
+    operationId: String(response.operation_id ?? ''),
+    answer: String(response.answer ?? ''),
+    citations: Array.isArray(response.citations)
+      ? response.citations.map((citation) => {
+          const item = citation as Record<string, unknown>;
+          return {
+            pageId: String(item.page_id ?? ''),
+            title: String(item.title ?? ''),
+            slug: String(item.slug ?? ''),
+            snippet: String(item.snippet ?? ''),
+          };
+        })
+      : [],
+  };
+}
+
+export async function fileBackWikiAnswer(
+  token: string,
+  input: {
+    title: string;
+    contentMd: string;
+    summary?: string;
+    tags?: string[];
+    spaceId?: string | null;
+  },
+): Promise<{ operationId: string; pageId: string; title: string }> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/file-back', {
+    method: 'POST',
+    token,
+    body: {
+      title: input.title,
+      content_md: input.contentMd,
+      summary: input.summary || '',
+      tags: input.tags || [],
+      space_id: input.spaceId || undefined,
+    },
+  });
+  return {
+    operationId: String(response.operation_id ?? ''),
+    pageId: String(response.page_id ?? ''),
+    title: String(response.title ?? ''),
+  };
+}
+
+export async function lintWiki(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<WikiLintResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/lint', {
+    method: 'POST',
+    token,
+    body: {
+      space_id: options.spaceId || undefined,
+    },
+  });
+  return {
+    operationId: String(response.operation_id ?? ''),
+    summary: String(response.summary ?? ''),
+    issues: Array.isArray(response.issues)
+      ? response.issues.map((issue) => {
+          const item = issue as Record<string, unknown>;
+          return {
+            code: String(item.code ?? ''),
+            severity: String(item.severity ?? ''),
+            message: String(item.message ?? ''),
+            pageId: item.page_id == null ? null : String(item.page_id),
+            pageTitle: item.page_title == null ? null : String(item.page_title),
+          };
+        })
+      : [],
+    directoryMode: String(response.directory_mode ?? ''),
+    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
+    directoryModelBudgetSeconds: Number(response.directory_model_budget_seconds ?? 0),
+    directoryProvider: String(response.directory_provider ?? ''),
+    directoryModel: String(response.directory_model ?? ''),
+    directoryProviderTimeoutSeconds: Number(response.directory_provider_timeout_seconds ?? 0),
+  };
+}
+
+export async function ingestWikiUploads(
+  token: string,
+  files: HouseholdUploadInput[],
+  options: {
+    spaceId?: string | null;
+    sourceType?: 'note' | 'document' | 'image' | string;
+  } = {},
+): Promise<WikiUploadIngestResult> {
+  const params = new URLSearchParams();
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  params.set('source_type', options.sourceType || 'note');
+
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append('files', {
+      uri: file.uri,
+      name: file.name || `upload-${index + 1}`,
+      type: file.mimeType || 'application/octet-stream',
+    } as any);
+  });
+
+  const response = await fetch(`${getCloudApiBase()}/api/wiki/ingest-upload?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (typeof body.detail === 'string' && body.detail.trim()) {
+        detail = body.detail.trim();
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(detail);
+  }
+  const payload = (await response.json()) as Record<string, unknown>;
+  return {
+    operationId: String(payload.operation_id ?? ''),
+    saved: Array.isArray(payload.saved)
+      ? payload.saved.map((item) => {
+          const row = item as Record<string, unknown>;
+          return {
+            name: String(row.name ?? ''),
+            rawPath: String(row.raw_path ?? ''),
+            size: Number(row.size ?? 0),
+          };
+        })
+      : [],
+    directoryMode: String(payload.directory_mode ?? ''),
+    directoryFallbackReason: payload.directory_fallback_reason == null ? null : String(payload.directory_fallback_reason),
+    directoryModelBudgetSeconds: Number(payload.directory_model_budget_seconds ?? 0),
+    directoryProvider: String(payload.directory_provider ?? ''),
+    directoryModel: String(payload.directory_model ?? ''),
+    directoryProviderTimeoutSeconds: Number(payload.directory_provider_timeout_seconds ?? 0),
+  };
+}
+
+export async function getWikiDirectory(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<WikiDirectoryPayload> {
+  const query = options.spaceId ? `?space_id=${encodeURIComponent(options.spaceId)}` : '';
+  const response = await cloudJson<Record<string, unknown>>(`/api/wiki/directory${query}`, { token });
+  return {
+    directory:
+      response.directory && typeof response.directory === 'object'
+        ? (response.directory as Record<string, unknown>)
+        : {},
+    rawFiles: Array.isArray(response.raw_files) ? response.raw_files.map((item) => String(item)) : [],
+    manualEdits: Array.isArray(response.manual_edits)
+      ? response.manual_edits.map((item) => (item && typeof item === 'object' ? (item as Record<string, unknown>) : {}))
+      : [],
+  };
+}
+
+export async function updateWikiDirectory(
+  token: string,
+  directoryJsonText: string,
+  reason = 'manual_edit',
+  options: { spaceId?: string | null } = {},
+): Promise<WikiDirectoryPayload> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/directory', {
+    method: 'PUT',
+    token,
+    body: {
+      directory_json_text: directoryJsonText,
+      reason,
+      space_id: options.spaceId || undefined,
+    },
+  });
+  return {
+    directory:
+      response.directory && typeof response.directory === 'object'
+        ? (response.directory as Record<string, unknown>)
+        : {},
+    rawFiles: [],
+    manualEdits: [],
+  };
+}
+
+export async function startWikiOrganize(
+  token: string,
+  options: { spaceId?: string | null; maxRounds?: number } = {},
+): Promise<WikiOrganizeStartResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/organize', {
+    method: 'POST',
+    token,
+    body: {
+      space_id: options.spaceId || undefined,
+      max_rounds: options.maxRounds ?? 10,
+    },
+  });
+  return {
+    jobId: String(response.job_id ?? ''),
+    status: String(response.status ?? ''),
+    maxRounds: Number(response.max_rounds ?? 10),
+    startedAt: String(response.started_at ?? ''),
+  };
+}
+
+export async function getWikiOrganizeStatus(token: string, jobId: string): Promise<WikiOrganizeStatusResult> {
+  const response = await cloudJson<Record<string, unknown>>(`/api/wiki/organize/status?job_id=${encodeURIComponent(jobId)}`, {
+    token,
+  });
+  return {
+    jobId: String(response.job_id ?? ''),
+    status: String(response.status ?? ''),
+    iterations: Number(response.iterations ?? 0),
+    durationMs: Number(response.duration_ms ?? 0),
+    processedRecords: Number(response.processed_records ?? 0),
+    startedAt: String(response.started_at ?? ''),
+    finishedAt: response.finished_at == null ? null : String(response.finished_at),
+    message: String(response.message ?? ''),
+  };
+}
+
+export async function getWikiPreview(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<WikiPreviewResult> {
+  const query = options.spaceId ? `?space_id=${encodeURIComponent(options.spaceId)}` : '';
+  const response = await cloudJson<Record<string, unknown>>(`/api/wiki/preview${query}`, { token });
+  return {
+    root: String(response.root ?? ''),
+    wikiFiles: Array.isArray(response.wiki_files)
+      ? response.wiki_files.map((item) => {
+          const row = item as Record<string, unknown>;
+          return {
+            path: String(row.path ?? ''),
+            preview: String(row.preview ?? ''),
+            updatedAt: String(row.updated_at ?? ''),
+          };
+        })
+      : [],
+  };
 }
 
 export async function getDeviceConfigStatus(

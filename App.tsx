@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import { Buffer } from 'buffer';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -80,10 +80,17 @@ import {
   deleteHouseholdTask,
   disableSpaceFamilyApp,
   enableSpaceFamilyApp,
+  fileBackWikiAnswer,
+  getWikiOrganizeStatus,
+  getWikiPreview,
+  getWikiDirectory,
   getDeviceConfigStatus,
   getDeviceDiagnostics,
   getDeviceInferenceDetail,
   getFamilyAppCatalog,
+  ingestWikiRaw,
+  ingestWikiUploads,
+  listWikiPages,
   getDeviceOllamaModels,
   getDeviceProviderConfig,
   getDeviceProviders,
@@ -101,6 +108,8 @@ import {
   onboardDeviceProvider,
   openSpaceSideChannel,
   openSpaceThreadSession,
+  queryWiki,
+    startWikiOrganize,
   relayHouseholdSpaceMessage,
   reconnectDevice,
   renameHouseholdPath,
@@ -121,9 +130,11 @@ import {
   updateHouseholdSpaceMembers,
   updateSpaceMemory,
   updateDeviceProviderConfig,
+  updateWikiDirectory,
   updateHouseholdMemberRole,
   updateHouseholdTask,
   uploadHouseholdFiles,
+  lintWiki,
   type DeviceConfigStatus,
   type DeviceDiagnostics,
   type DeviceInferenceDetail,
@@ -140,6 +151,9 @@ import {
   type HouseholdSpaceDetail,
   type HouseholdSpaceSummary,
   type SpaceTemplate,
+  type WikiQueryResult,
+  type WikiDirectoryPayload,
+  type WikiOrganizeStatusResult,
 } from './src/householdApi';
 import {
   canChangeMemberRole,
@@ -460,6 +474,47 @@ function App() {
   const [ownerOnboardApiKey, setOwnerOnboardApiKey] = useState('');
   const [ownerOnboardApiUrl, setOwnerOnboardApiUrl] = useState('');
   const [ownerServiceOutput, setOwnerServiceOutput] = useState('');
+  const [wikiSourceTitle, setWikiSourceTitle] = useState('');
+  const [wikiSourceContent, setWikiSourceContent] = useState('');
+  const [wikiQuestion, setWikiQuestion] = useState('');
+  const [wikiFileBackTitle, setWikiFileBackTitle] = useState('');
+  const [wikiAnswer, setWikiAnswer] = useState('');
+  const [wikiLintSummary, setWikiLintSummary] = useState('');
+  const [wikiPages, setWikiPages] = useState<Array<{ id: string; title: string; summary: string; tags: string[] }>>([]);
+  const [wikiLastQuery, setWikiLastQuery] = useState<WikiQueryResult | null>(null);
+  const [wikiLastIngest, setWikiLastIngest] = useState<{
+    operationId: string;
+    pageId: string;
+    title: string;
+    summary: string;
+    sourceType: string;
+    directoryMode?: string;
+    directoryFallbackReason?: string | null;
+    directoryModelBudgetSeconds?: number;
+    directoryProvider?: string;
+    directoryModel?: string;
+    directoryProviderTimeoutSeconds?: number;
+  } | null>(null);
+  const [wikiLastQueryMeta, setWikiLastQueryMeta] = useState<{ operationId: string; answer: string; citationTitles: string[] } | null>(null);
+  const [wikiLastFileBack, setWikiLastFileBack] = useState<{ operationId: string; pageId: string; title: string } | null>(null);
+  const [wikiLastLint, setWikiLastLint] = useState<{
+    operationId: string;
+    summary: string;
+    issueCount: number;
+    directoryMode?: string;
+    directoryFallbackReason?: string | null;
+    directoryModelBudgetSeconds?: number;
+    directoryProvider?: string;
+    directoryModel?: string;
+    directoryProviderTimeoutSeconds?: number;
+  } | null>(null);
+  const [wikiDirectoryText, setWikiDirectoryText] = useState('');
+  const [wikiDirectoryLastUpdatedAt, setWikiDirectoryLastUpdatedAt] = useState('');
+  const [wikiManualEditCount, setWikiManualEditCount] = useState(0);
+  const [wikiRawFileCount, setWikiRawFileCount] = useState(0);
+  const [wikiUploadSourceType, setWikiUploadSourceType] = useState<'note' | 'document' | 'image'>('note');
+  const [wikiOrganizeStatus, setWikiOrganizeStatus] = useState<WikiOrganizeStatusResult | null>(null);
+  const [wikiPreviewFiles, setWikiPreviewFiles] = useState<Array<{ path: string; preview: string; updatedAt: string }>>([]);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsNotice, setSettingsNotice] = useState('');
@@ -603,6 +658,7 @@ function App() {
   const canReprovisionDevice = canReprovisionDeviceFromSettings(session?.user.role ?? '');
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
+  const activeWikiSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
   const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
   const currentFilePath = fileListing?.path ?? '';
   const photoEntries = (fileListing?.entries ?? []).filter((entry) => !entry.isDir && /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(entry.name));
@@ -836,6 +892,245 @@ function App() {
 
   function normalizeDisplayFilePath(path: string | null | undefined): string {
     return (path || '').replace(/^\/+|\/+$/g, '');
+  }
+
+  function parseWikiDirectoryObject(rawText: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(rawText) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    } catch {
+      // ignore parse failure and return defaults
+    }
+    return {};
+  }
+
+  function sanitizeWikiFileName(fileName: string): string {
+    const trimmed = (fileName || '').trim().replace(/[\\/]+/g, '');
+    const normalized = trimmed.replace(/[^a-zA-Z0-9._\-\u4e00-\u9fff]+/g, '_');
+    return normalized.slice(0, 160);
+  }
+
+  const wikiDirectoryView = useMemo(() => {
+    const directory = parseWikiDirectoryObject(wikiDirectoryText);
+    const recordsRaw = Array.isArray(directory.records) ? directory.records : [];
+    const structureRaw = Array.isArray(directory.structure) ? directory.structure : [];
+
+    const records = recordsRaw
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+        const row = item as Record<string, unknown>;
+        const rawPath = String(row.raw_path || '').trim();
+        if (!rawPath) {
+          return null;
+        }
+        const tags = Array.isArray(row.tags) ? row.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
+        return {
+          rawPath,
+          title: String(row.title || '').trim() || rawPath.split('/').pop() || rawPath,
+          kind: String(row.kind || 'note').trim().toLowerCase() || 'note',
+          tags,
+        };
+      })
+      .filter((item): item is { rawPath: string; title: string; kind: string; tags: string[] } => Boolean(item));
+
+    const structureNodes = structureRaw
+      .map((node) => {
+        if (!node || typeof node !== 'object') {
+          return null;
+        }
+        const row = node as Record<string, unknown>;
+        const name = String(row.name || '').trim() || 'unnamed';
+        const items = Array.isArray(row.items) ? row.items.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+        return { name, items };
+      })
+      .filter((node): node is { name: string; items: string[] } => Boolean(node));
+
+    return { directory, records, structureNodes };
+  }, [wikiDirectoryText]);
+
+  async function saveWikiDirectoryObject(nextDirectory: Record<string, unknown>, reason: string, notice: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const payload = await updateWikiDirectory(
+      session.token,
+      JSON.stringify(nextDirectory, null, 2),
+      reason,
+      { spaceId: activeWikiSpaceId || undefined },
+    );
+    setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
+    setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
+    setLibraryNotice(notice);
+    await refreshWikiDirectory();
+  }
+
+  async function renameWikiRawRecord(rawPath: string, newName: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const source = (rawPath || '').trim();
+    const sanitized = sanitizeWikiFileName(newName);
+    if (!source || !sanitized) {
+      setLibraryError('请输入有效的新文件名。');
+      return;
+    }
+    const sourceParts = source.split('/').filter(Boolean);
+    const currentName = sourceParts[sourceParts.length - 1] || source;
+    const sourceDir = sourceParts.slice(0, -1).join('/');
+
+    let finalName = sanitized;
+    if (!finalName.includes('.') && currentName.includes('.')) {
+      const suffix = currentName.slice(currentName.lastIndexOf('.'));
+      finalName = `${finalName}${suffix}`;
+    }
+    const destination = sourceDir ? `${sourceDir}/${finalName}` : finalName;
+    if (destination === source) {
+      setLibraryNotice('文件名未变化。');
+      return;
+    }
+
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      await renameHouseholdPath(
+        session.token,
+        fileSpace,
+        toDeviceFilePath(`.wiki/raw/${source}`),
+        toDeviceFilePath(`.wiki/raw/${destination}`),
+        { spaceId: activeFileSpaceId || undefined },
+      );
+
+      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
+      const records = Array.isArray(nextDirectory.records)
+        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) => {
+            if (String(item.raw_path || '') === source) {
+              return {
+                ...item,
+                raw_path: destination,
+                title: String(item.title || '').trim() || finalName.replace(/\.[^.]+$/, ''),
+              };
+            }
+            return item;
+          })
+        : [];
+      nextDirectory.records = records;
+
+      if (Array.isArray(nextDirectory.structure)) {
+        nextDirectory.structure = (nextDirectory.structure as Array<Record<string, unknown>>).map((node) => {
+          const items = Array.isArray(node.items)
+            ? node.items.map((entry) => (String(entry || '') === source ? destination : String(entry || '')))
+            : [];
+          return { ...node, items };
+        });
+      }
+
+      await saveWikiDirectoryObject(nextDirectory, 'raw_file_rename', `已重命名 raw 文件：${source} -> ${destination}`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '重命名 raw 文件失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function deleteWikiRawRecord(rawPath: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const target = (rawPath || '').trim();
+    if (!target) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      await deleteHouseholdPath(
+        session.token,
+        fileSpace,
+        toDeviceFilePath(`.wiki/raw/${target}`),
+        { spaceId: activeFileSpaceId || undefined },
+      );
+
+      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
+      const records = Array.isArray(nextDirectory.records)
+        ? (nextDirectory.records as Array<Record<string, unknown>>).filter((item) => String(item.raw_path || '') !== target)
+        : [];
+      nextDirectory.records = records;
+
+      if (Array.isArray(nextDirectory.structure)) {
+        nextDirectory.structure = (nextDirectory.structure as Array<Record<string, unknown>>).map((node) => {
+          const items = Array.isArray(node.items)
+            ? node.items.map((entry) => String(entry || '')).filter((entry) => entry !== target)
+            : [];
+          return { ...node, items };
+        });
+      }
+
+      await saveWikiDirectoryObject(nextDirectory, 'raw_file_delete', `已删除 raw 文件：${target}`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '删除 raw 文件失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function retitleWikiRecord(rawPath: string, title: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const target = (rawPath || '').trim();
+    const nextTitle = (title || '').trim();
+    if (!target || !nextTitle) {
+      setLibraryError('标题不能为空。');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
+      nextDirectory.records = Array.isArray(nextDirectory.records)
+        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) =>
+            String(item.raw_path || '') === target ? { ...item, title: nextTitle } : item,
+          )
+        : [];
+      await saveWikiDirectoryObject(nextDirectory, 'record_title_update', `已更新标题：${nextTitle}`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '更新标题失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function reclassifyWikiRecord(rawPath: string, kind: 'note' | 'document' | 'image'): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const target = (rawPath || '').trim();
+    if (!target) {
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
+      nextDirectory.records = Array.isArray(nextDirectory.records)
+        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) =>
+            String(item.raw_path || '') === target ? { ...item, kind } : item,
+          )
+        : [];
+      await saveWikiDirectoryObject(nextDirectory, 'record_kind_update', `已更新类型：${target} -> ${kind}`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '更新类型失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
   }
 
   function buildFileListingCacheKey(path: string): string {
@@ -1287,6 +1582,25 @@ function App() {
       setOwnerModels([]);
       setOwnerInference(null);
       setOwnerServiceOutput('');
+      setWikiSourceTitle('');
+      setWikiSourceContent('');
+      setWikiQuestion('');
+      setWikiFileBackTitle('');
+      setWikiAnswer('');
+      setWikiLintSummary('');
+      setWikiPages([]);
+      setWikiLastQuery(null);
+      setWikiLastIngest(null);
+      setWikiLastQueryMeta(null);
+      setWikiLastFileBack(null);
+      setWikiLastLint(null);
+      setWikiDirectoryText('');
+      setWikiDirectoryLastUpdatedAt('');
+      setWikiManualEditCount(0);
+      setWikiRawFileCount(0);
+      setWikiUploadSourceType('note');
+      setWikiOrganizeStatus(null);
+      setWikiPreviewFiles([]);
       setHomeLoaded(false);
       setHomeError('');
       return;
@@ -1411,6 +1725,24 @@ function App() {
     setSummaryCapturePickerOpen(false);
     setSelectedSummaryCaptureSessionId('');
     setLibraryActiveSection('overview');
+    setWikiSourceTitle('');
+    setWikiSourceContent('');
+    setWikiQuestion('');
+    setWikiFileBackTitle('');
+    setWikiAnswer('');
+    setWikiLintSummary('');
+    setWikiPages([]);
+    setWikiLastQuery(null);
+    setWikiLastIngest(null);
+    setWikiLastQueryMeta(null);
+    setWikiLastFileBack(null);
+    setWikiLastLint(null);
+    setWikiDirectoryText('');
+    setWikiDirectoryLastUpdatedAt('');
+    setWikiManualEditCount(0);
+    setWikiRawFileCount(0);
+    setWikiOrganizeStatus(null);
+    setWikiPreviewFiles([]);
     setChatAppActionError('');
     setChatAppActionNotice('');
   }, [activeSpaceId]);
@@ -1757,6 +2089,13 @@ function App() {
     }
     void refreshFiles();
   }, [session?.token, shellSurface, shellTab, fileSpace, activeFileSpaceId, activeFileLegacyPrefix]);
+
+  useEffect(() => {
+    if (shellSurface !== 'shell' || shellTab !== 'library' || !session?.token || !activeSpaceId) {
+      return;
+    }
+    void refreshWikiDirectory();
+  }, [session?.token, shellSurface, shellTab, activeSpaceId]);
 
   useEffect(() => {
     if (!canManage || homeDevices.length === 0) {
@@ -2928,6 +3267,457 @@ function App() {
     }
   }
 
+  async function runWikiIngest(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    if (!activeSpaceId) {
+      setLibraryError('请先进入一个空间，再导入 Wiki 内容。');
+      setLibraryNotice('');
+      return;
+    }
+    const title = wikiSourceTitle.trim();
+    const content = wikiSourceContent.trim();
+    if (!title || !content) {
+      setLibraryError('请先填写 Raw 标题和 Raw 内容。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await ingestWikiRaw(session.token, {
+        title,
+        content,
+        sourceType: 'note',
+        spaceId: activeWikiSpaceId || undefined,
+      });
+      setLibraryNotice(`已导入并编译页面：${result.title}`);
+      setWikiFileBackTitle(`${result.title}-回填`);
+      setWikiLintSummary('');
+      setWikiLastIngest({
+        operationId: result.operationId,
+        pageId: result.pageId,
+        title: result.title,
+        summary: result.summary,
+        sourceType: 'note',
+        directoryMode: result.directoryMode,
+        directoryFallbackReason: result.directoryFallbackReason,
+        directoryModelBudgetSeconds: result.directoryModelBudgetSeconds,
+        directoryProvider: result.directoryProvider,
+        directoryModel: result.directoryModel,
+        directoryProviderTimeoutSeconds: result.directoryProviderTimeoutSeconds,
+      });
+      if (result.directoryMode === 'deterministic') {
+        setLibraryNotice(`已导入并编译页面：${result.title}（directory 回退：${result.directoryFallbackReason || 'model_unavailable'}）`);
+      }
+      const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
+      const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
+      setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
+      setWikiManualEditCount(directoryPayload.manualEdits.length);
+      setWikiRawFileCount(directoryPayload.rawFiles.length);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Wiki 导入失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function runWikiQuery(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    if (!activeSpaceId) {
+      setLibraryError('请先进入一个空间，再执行 Wiki 查询。');
+      setLibraryNotice('');
+      return;
+    }
+    const question = wikiQuestion.trim();
+    if (!question) {
+      setLibraryError('请先输入 Wiki 查询问题。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await queryWiki(session.token, {
+        question,
+        spaceId: activeWikiSpaceId || undefined,
+      });
+      setWikiLastQuery(result);
+      setWikiFileBackTitle(`查询归档-${new Date().toISOString().slice(0, 10)}`);
+      const citations = result.citations.map((item) => item.title).filter(Boolean).slice(0, 3);
+      setWikiAnswer(result.answer);
+      setWikiLastQueryMeta({
+        operationId: result.operationId,
+        answer: result.answer,
+        citationTitles: citations,
+      });
+      setLibraryNotice(
+        citations.length
+          ? `查询完成，引用页面：${citations.join('、')}`
+          : '查询完成。',
+      );
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Wiki 查询失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function runWikiLint(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    if (!activeSpaceId) {
+      setLibraryError('请先进入一个空间，再执行 Wiki 自检。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await lintWiki(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiLintSummary(result.summary);
+      setWikiLastLint({
+        operationId: result.operationId,
+        summary: result.summary,
+        issueCount: result.issues.length,
+        directoryMode: result.directoryMode,
+        directoryFallbackReason: result.directoryFallbackReason,
+        directoryModelBudgetSeconds: result.directoryModelBudgetSeconds,
+        directoryProvider: result.directoryProvider,
+        directoryModel: result.directoryModel,
+        directoryProviderTimeoutSeconds: result.directoryProviderTimeoutSeconds,
+      });
+      if (result.directoryMode === 'deterministic') {
+        setLibraryNotice(
+          `自检完成，但 directory 走了回退路径：${result.directoryFallbackReason || 'model_unavailable'}。` +
+            (result.issues.length ? ` 另发现 ${result.issues.length} 个可改进项。` : ''),
+        );
+      } else {
+        setLibraryNotice(result.issues.length ? `发现 ${result.issues.length} 个可改进项。` : '未发现明显问题。');
+      }
+      const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
+      setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
+      setWikiManualEditCount(directoryPayload.manualEdits.length);
+      setWikiRawFileCount(directoryPayload.rawFiles.length);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Wiki 自检失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function refreshWikiPages(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    if (!activeSpaceId) {
+      setLibraryError('请先进入一个空间，再刷新 Wiki 页面。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
+      setLibraryNotice(`已刷新 ${pages.length} 个本空间 Wiki 页面。`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '读取本地 Wiki 页面失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function runWikiFileBack(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    if (!activeSpaceId) {
+      setLibraryError('请先进入一个空间，再执行回填。');
+      setLibraryNotice('');
+      return;
+    }
+    const title = wikiFileBackTitle.trim();
+    const answer = (wikiLastQuery?.answer || wikiAnswer || '').trim();
+    if (!title) {
+      setLibraryError('请先填写回填标题。');
+      setLibraryNotice('');
+      return;
+    }
+    if (!answer) {
+      setLibraryError('当前没有可回填的查询结果。');
+      setLibraryNotice('');
+      return;
+    }
+
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await fileBackWikiAnswer(session.token, {
+        title,
+        contentMd: answer,
+        summary: answer.slice(0, 200),
+        tags: ['query', 'file-back'],
+        spaceId: activeWikiSpaceId || undefined,
+      });
+      setLibraryNotice(`已回填到本空间 Wiki：${result.title}`);
+      setWikiLastFileBack({
+        operationId: result.operationId,
+        pageId: result.pageId,
+        title: result.title,
+      });
+      const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
+      const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
+      setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
+      setWikiManualEditCount(directoryPayload.manualEdits.length);
+      setWikiRawFileCount(directoryPayload.rawFiles.length);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : 'Wiki 回填失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function openWikiRawRoot(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间。');
+      setLibraryNotice('');
+      return;
+    }
+
+    const targetPath = '.wiki/raw';
+    setFilesBusy(true);
+    setFilesError('');
+    try {
+      await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath('.wiki'), {
+        spaceId: activeFileSpaceId || undefined,
+      }).catch(() => null);
+      await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(targetPath), {
+        spaceId: activeFileSpaceId || undefined,
+      }).catch(() => null);
+      setLibraryNotice(`已打开 Raw 目录：${targetPath}`);
+      setLibraryError('');
+      setLibraryActiveSection('files');
+      await refreshFiles(targetPath, { force: true });
+    } catch (error) {
+      setFilesError(error instanceof Error ? error.message : '无法打开 Raw 目录。');
+    } finally {
+      setFilesBusy(false);
+    }
+  }
+
+  async function refreshWikiDirectory(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再读取目录。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const payload: WikiDirectoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
+      setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
+      setWikiManualEditCount(payload.manualEdits.length);
+      setWikiRawFileCount(payload.rawFiles.length);
+      setLibraryNotice(`目录已刷新，raw 文件 ${payload.rawFiles.length} 个。`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '读取 directory.json 失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function startPersonalWikiOrganize(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再执行个人Wiki整理。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const started = await startWikiOrganize(session.token, { spaceId: activeWikiSpaceId || undefined, maxRounds: 10 });
+      setWikiOrganizeStatus({
+        jobId: started.jobId,
+        status: started.status,
+        iterations: 0,
+        durationMs: 0,
+        processedRecords: 0,
+        startedAt: started.startedAt,
+        finishedAt: null,
+        message: 'organize running',
+      });
+      setLibraryNotice('个人Wiki整理已启动，正在后台运行。');
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '启动个人Wiki整理失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function refreshPersonalWikiOrganizeStatus(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    const jobId = wikiOrganizeStatus?.jobId;
+    if (!jobId) {
+      setLibraryError('当前没有可查询的整理任务。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      const next = await getWikiOrganizeStatus(session.token, jobId);
+      setWikiOrganizeStatus(next);
+      if (next.status === 'completed') {
+        setLibraryNotice(`整理完成：${next.iterations} 轮，耗时 ${Math.round(next.durationMs / 1000)} 秒。`);
+        await refreshWikiDirectory();
+      } else if (next.status === 'failed') {
+        setLibraryError(next.message || '整理任务失败。');
+      } else {
+        setLibraryNotice('整理任务仍在后台运行。');
+      }
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '读取整理任务状态失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function refreshWikiPreviewData(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再读取 Wiki 预览。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    try {
+      const preview = await getWikiPreview(session.token, { spaceId: activeWikiSpaceId || undefined });
+      setWikiPreviewFiles(preview.wikiFiles);
+      setLibraryNotice(`已刷新 Wiki 预览，共 ${preview.wikiFiles.length} 个文件。`);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '读取 Wiki 预览失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session?.token) {
+      return;
+    }
+    if (!wikiOrganizeStatus?.jobId || wikiOrganizeStatus.status !== 'running') {
+      return;
+    }
+    const timer = setInterval(() => {
+      void refreshPersonalWikiOrganizeStatus();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [session?.token, wikiOrganizeStatus?.jobId, wikiOrganizeStatus?.status]);
+
+  async function saveWikiDirectoryManualEdit(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再保存目录。');
+      setLibraryNotice('');
+      return;
+    }
+    const text = wikiDirectoryText.trim();
+    if (!text) {
+      setLibraryError('请输入目录 JSON 内容。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const payload = await updateWikiDirectory(session.token, text, 'user_manual_structure_update', {
+        spaceId: activeWikiSpaceId || undefined,
+      });
+      setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
+      setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
+      setLibraryNotice('目录已保存，并完成一致性校验。');
+      await refreshWikiDirectory();
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '保存 directory.json 失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function pickAndIngestWikiRawFiles(forcedSourceType?: 'note' | 'document' | 'image'): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再上传导入。');
+      setLibraryNotice('');
+      return;
+    }
+    const ingestSourceType = forcedSourceType || wikiUploadSourceType;
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) {
+        return;
+      }
+      const uploads = result.assets.map((asset, index) => ({
+        name: asset.name || `upload-${index + 1}`,
+        mimeType: asset.mimeType || 'application/octet-stream',
+        uri: asset.uri,
+      }));
+      const ingested = await ingestWikiUploads(session.token, uploads, {
+        spaceId: activeWikiSpaceId || undefined,
+        sourceType: ingestSourceType,
+      });
+      setLibraryNotice(`上传即导入完成：${ingested.saved.length} 个文件。`);
+      setWikiLastIngest({
+        operationId: ingested.operationId,
+        pageId: '',
+        title: `批量上传 ${ingested.saved.length} 个文件`,
+        summary: ingested.saved.map((item) => item.name).slice(0, 4).join('、'),
+        sourceType: ingestSourceType,
+        directoryMode: ingested.directoryMode,
+        directoryFallbackReason: ingested.directoryFallbackReason,
+        directoryModelBudgetSeconds: ingested.directoryModelBudgetSeconds,
+        directoryProvider: ingested.directoryProvider,
+        directoryModel: ingested.directoryModel,
+        directoryProviderTimeoutSeconds: ingested.directoryProviderTimeoutSeconds,
+      });
+      if (ingested.directoryMode === 'deterministic') {
+        setLibraryNotice(
+          `上传即导入完成：${ingested.saved.length} 个文件（directory 回退：${ingested.directoryFallbackReason || 'model_unavailable'}）`,
+        );
+      }
+      await Promise.all([refreshWikiPages(), refreshWikiDirectory()]);
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '上传导入失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
   const canSubmitWifi = Boolean(selectedSsid.trim()) && !provisionBusy;
   const libraryTabActive = shellTab === 'library';
 
@@ -3413,7 +4203,61 @@ function App() {
                 summaryCapturePickerOpen={summaryCapturePickerOpen}
                 selectedSummaryCaptureSessionId={selectedSummaryCaptureSessionId}
                 activeSection={libraryActiveSection}
+                wikiBusy={libraryBusy}
+                wikiError={libraryError}
+                wikiNotice={libraryNotice}
+                wikiSourceTitle={wikiSourceTitle}
+                wikiSourceContent={wikiSourceContent}
+                wikiQuestion={wikiQuestion}
+                wikiFileBackTitle={wikiFileBackTitle}
+                wikiAnswer={wikiLastQuery?.answer || wikiAnswer}
+                wikiLintSummary={wikiLintSummary}
+                wikiPages={wikiPages}
+                wikiLastIngest={wikiLastIngest}
+                wikiLastQuery={wikiLastQueryMeta}
+                wikiLastFileBack={wikiLastFileBack}
+                wikiLastLint={wikiLastLint}
+                wikiDirectoryRecords={wikiDirectoryView.records}
+                wikiDirectoryStructureNodes={wikiDirectoryView.structureNodes}
+                wikiDirectoryText={wikiDirectoryText}
+                wikiDirectoryLastUpdatedAt={wikiDirectoryLastUpdatedAt}
+                wikiManualEditCount={wikiManualEditCount}
+                wikiRawFileCount={wikiRawFileCount}
+                wikiUploadSourceType={wikiUploadSourceType}
+                wikiOrganizeStatus={
+                  wikiOrganizeStatus
+                    ? {
+                        jobId: wikiOrganizeStatus.jobId,
+                        status: wikiOrganizeStatus.status,
+                        iterations: wikiOrganizeStatus.iterations,
+                        durationMs: wikiOrganizeStatus.durationMs,
+                        processedRecords: wikiOrganizeStatus.processedRecords,
+                        message: wikiOrganizeStatus.message,
+                      }
+                    : null
+                }
+                wikiPreviewFiles={wikiPreviewFiles}
                 onChangeActiveSection={setLibraryActiveSection}
+                onChangeWikiSourceTitle={setWikiSourceTitle}
+                onChangeWikiSourceContent={setWikiSourceContent}
+                onChangeWikiQuestion={setWikiQuestion}
+                onChangeWikiFileBackTitle={setWikiFileBackTitle}
+                onRunWikiIngest={() => void runWikiIngest()}
+                onRunWikiQuery={() => void runWikiQuery()}
+                onRunWikiLint={() => void runWikiLint()}
+                onRunWikiFileBack={() => void runWikiFileBack()}
+                onRefreshWikiPages={() => void refreshWikiPages()}
+                onPickAndIngestWikiUploads={() => void pickAndIngestWikiRawFiles()}
+                onRefreshWikiDirectory={() => void refreshWikiDirectory()}
+                onOpenWikiFilesSection={() => setLibraryActiveSection('files')}
+                onRenameWikiRawRecord={(rawPath, newName) => void renameWikiRawRecord(rawPath, newName)}
+                onDeleteWikiRawRecord={(rawPath) => void deleteWikiRawRecord(rawPath)}
+                onRetitleWikiRecord={(rawPath, title) => void retitleWikiRecord(rawPath, title)}
+                onReclassifyWikiRecord={(rawPath, kind) => void reclassifyWikiRecord(rawPath, kind)}
+                onChangeWikiUploadSourceType={setWikiUploadSourceType}
+                onStartWikiOrganize={() => void startPersonalWikiOrganize()}
+                onRefreshWikiOrganizeStatus={() => void refreshPersonalWikiOrganizeStatus()}
+                onRefreshWikiPreview={() => void refreshWikiPreviewData()}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
                 onOpenFileEditor={() => openFileEditor('mkdir')}
                 onOpenTaskEditor={() => openTaskEditor()}
