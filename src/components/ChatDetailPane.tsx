@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, View } from 'react-native';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
 
@@ -45,6 +45,15 @@ type ChatDetailPaneProps = {
   composerTitle: string;
   composerPlaceholder: string;
   chatDraft: string;
+  chatAttachmentItems: Array<{ index: number; name: string; path: string }>;
+  attachmentPickerOpen: boolean;
+  attachmentPickerPath: string;
+  attachmentPickerBusy: boolean;
+  attachmentPickerError: string;
+  attachmentPickerEntries: Array<{ path: string; name: string; isDir: boolean; selected: boolean }>;
+  saveDocModalOpen: boolean;
+  saveDocTitle: string;
+  saveDocItems: Array<{ id: string; checked: boolean; sender: string; role: string; content: string }>;
   canSend: boolean;
   onBack: () => void;
   onEdit: () => void;
@@ -52,6 +61,16 @@ type ChatDetailPaneProps = {
   onDelete: () => void;
   onRetry: (content?: string) => void;
   onChangeDraft: (value: string) => void;
+  onOpenAttachmentPicker: () => void;
+  onCloseAttachmentPicker: () => void;
+  onAttachmentPickerOpenPath: (path: string) => void;
+  onAttachmentPickerToggleFile: (path: string, name: string) => void;
+  onRemoveAttachment: (index: number) => void;
+  onOpenSaveDocModal: () => void;
+  onCloseSaveDocModal: () => void;
+  onChangeSaveDocTitle: (value: string) => void;
+  onToggleSaveDocItem: (id: string) => void;
+  onConfirmSaveDoc: () => void;
   onSend: () => void;
 };
 
@@ -72,6 +91,15 @@ export function ChatDetailPane({
   composerTitle,
   composerPlaceholder,
   chatDraft,
+  chatAttachmentItems,
+  attachmentPickerOpen,
+  attachmentPickerPath,
+  attachmentPickerBusy,
+  attachmentPickerError,
+  attachmentPickerEntries,
+  saveDocModalOpen,
+  saveDocTitle,
+  saveDocItems,
   canSend,
   onBack,
   onEdit,
@@ -79,6 +107,16 @@ export function ChatDetailPane({
   onDelete,
   onRetry,
   onChangeDraft,
+  onOpenAttachmentPicker,
+  onCloseAttachmentPicker,
+  onAttachmentPickerOpenPath,
+  onAttachmentPickerToggleFile,
+  onRemoveAttachment,
+  onOpenSaveDocModal,
+  onCloseSaveDocModal,
+  onChangeSaveDocTitle,
+  onToggleSaveDocItem,
+  onConfirmSaveDoc,
   onSend,
 }: ChatDetailPaneProps) {
   return (
@@ -261,7 +299,35 @@ export function ChatDetailPane({
           numberOfLines={4}
           editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && hasActiveChatSession}
         />
+
+        {chatAttachmentItems.length ? (
+          <View style={styles.chatAttachmentBadgeRow}>
+            {chatAttachmentItems.map((item) => (
+              <View key={`chat-attachment-${item.index}-${item.path}`} style={styles.chatAttachmentBadge}>
+                <Text style={styles.chatAttachmentBadgeText}>[{item.index}] {item.name}</Text>
+                <Pressable onPress={() => onRemoveAttachment(item.index)}>
+                  <Text style={styles.chatAttachmentBadgeRemove}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.inlineActions}>
+          <Pressable
+            style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
+            onPress={onOpenAttachmentPicker}
+            disabled={!hasActiveChatSession || chatBusy}
+          >
+            <Text style={styles.secondaryButtonText}>＋ 文件</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.secondaryButtonSmall, !hasMessages ? styles.networkRowDisabled : null]}
+            onPress={onOpenSaveDocModal}
+            disabled={!hasMessages || chatBusy}
+          >
+            <Text style={styles.secondaryButtonText}>保存为文档</Text>
+          </Pressable>
           <Pressable
             style={[styles.primaryButtonSmall, !canSend ? styles.networkRowDisabled : null]}
             onPress={onSend}
@@ -271,6 +337,82 @@ export function ChatDetailPane({
           </Pressable>
         </View>
       </View>
+
+      <Modal visible={attachmentPickerOpen} transparent animationType="slide" onRequestClose={onCloseAttachmentPicker}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>选择文件资源</Text>
+            <Text style={styles.cardCopy}>当前路径：{attachmentPickerPath || 'root'}</Text>
+            {attachmentPickerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+            {attachmentPickerError ? <Text style={styles.errorText}>{attachmentPickerError}</Text> : null}
+            <ScrollView style={styles.chatAttachmentPickerList}>
+              {attachmentPickerEntries.map((entry) => (
+                <Pressable
+                  key={`attachment-entry-${entry.path}`}
+                  style={styles.chatAttachmentPickerItem}
+                  onPress={() => {
+                    if (entry.isDir) {
+                      onAttachmentPickerOpenPath(entry.path);
+                    } else {
+                      onAttachmentPickerToggleFile(entry.path, entry.name);
+                    }
+                  }}
+                >
+                  <Text style={styles.chatAttachmentPickerItemTitle}>
+                    {entry.isDir ? 'DIR' : entry.selected ? '✔' : 'FILE'} · {entry.name}
+                  </Text>
+                  <Text style={styles.chatAttachmentPickerItemCopy}>{entry.path}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <View style={styles.inlineActions}>
+              <Pressable style={styles.secondaryButtonSmall} onPress={() => onAttachmentPickerOpenPath('')}>
+                <Text style={styles.secondaryButtonText}>回到根目录</Text>
+              </Pressable>
+              <Pressable style={styles.primaryButtonSmall} onPress={onCloseAttachmentPicker}>
+                <Text style={styles.primaryButtonText}>完成</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={saveDocModalOpen} transparent animationType="slide" onRequestClose={onCloseSaveDocModal}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>保存聊天为文档</Text>
+            <TextInput
+              placeholder="文档标题"
+              placeholderTextColor="#7e8a83"
+              style={styles.input}
+              value={saveDocTitle}
+              onChangeText={onChangeSaveDocTitle}
+            />
+            <ScrollView style={styles.chatAttachmentPickerList}>
+              {saveDocItems.map((item) => (
+                <Pressable
+                  key={`save-doc-item-${item.id}`}
+                  style={styles.chatAttachmentPickerItem}
+                  onPress={() => onToggleSaveDocItem(item.id)}
+                >
+                  <Text style={styles.chatAttachmentPickerItemTitle}>
+                    {item.checked ? '✔' : '○'} {item.sender || '-'} ({item.role})
+                  </Text>
+                  <Text style={styles.chatAttachmentPickerItemCopy} numberOfLines={3}>{decodeChatMessageContent(item.content)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <View style={styles.inlineActions}>
+              <Pressable style={styles.secondaryButtonSmall} onPress={onCloseSaveDocModal}>
+                <Text style={styles.secondaryButtonText}>取消</Text>
+              </Pressable>
+              <Pressable style={styles.primaryButtonSmall} onPress={onConfirmSaveDoc}>
+                <Text style={styles.primaryButtonText}>保存到 raw</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }

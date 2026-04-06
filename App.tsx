@@ -80,6 +80,7 @@ import {
   deleteHouseholdTask,
   disableSpaceFamilyApp,
   enableSpaceFamilyApp,
+  fileBackChatTranscript,
   fileBackWikiAnswer,
   getWikiOrganizeStatus,
   getWikiPreview,
@@ -398,6 +399,15 @@ function App() {
   const [chatPendingNoteIndex, setChatPendingNoteIndex] = useState(0);
   const [chatError, setChatError] = useState('');
   const [chatDraft, setChatDraft] = useState('');
+  const [chatAttachmentPickerOpen, setChatAttachmentPickerOpen] = useState(false);
+  const [chatAttachmentPickerPath, setChatAttachmentPickerPath] = useState('');
+  const [chatAttachmentPickerListing, setChatAttachmentPickerListing] = useState<HouseholdFileListing | null>(null);
+  const [chatAttachmentPickerBusy, setChatAttachmentPickerBusy] = useState(false);
+  const [chatAttachmentPickerError, setChatAttachmentPickerError] = useState('');
+  const [chatAttachedFiles, setChatAttachedFiles] = useState<Record<string, { path: string; name: string }>>({});
+  const [chatSaveDocModalOpen, setChatSaveDocModalOpen] = useState(false);
+  const [chatSaveDocTitle, setChatSaveDocTitle] = useState('');
+  const [chatSaveDocSelection, setChatSaveDocSelection] = useState<Record<string, boolean>>({});
   const [chatSessionEditorOpen, setChatSessionEditorOpen] = useState(false);
   const [editingChatSession, setEditingChatSession] = useState<HouseholdChatSessionSummary | null>(null);
   const [chatSessionName, setChatSessionName] = useState('');
@@ -495,8 +505,25 @@ function App() {
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
   } | null>(null);
-  const [wikiLastQueryMeta, setWikiLastQueryMeta] = useState<{ operationId: string; answer: string; citationTitles: string[] } | null>(null);
-  const [wikiLastFileBack, setWikiLastFileBack] = useState<{ operationId: string; pageId: string; title: string } | null>(null);
+  const [wikiLastQueryMeta, setWikiLastQueryMeta] = useState<{
+    operationId: string;
+    answer: string;
+    citationTitles: string[];
+    queryMode?: string;
+    queryFallbackReason?: string | null;
+    queryProvider?: string;
+    queryModel?: string;
+    queryIterations?: number;
+    queryToolCalls?: number;
+  } | null>(null);
+  const [wikiLastFileBack, setWikiLastFileBack] = useState<{
+    operationId: string;
+    pageId: string;
+    title: string;
+    rawPath?: string;
+    directoryMode?: string;
+    directoryFallbackReason?: string | null;
+  } | null>(null);
   const [wikiLastLint, setWikiLastLint] = useState<{
     operationId: string;
     summary: string;
@@ -659,11 +686,26 @@ function App() {
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
   const activeWikiSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
+  const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
+  const chatAttachmentItems = useMemo(() => {
+    const items = Object.values(chatAttachedFiles).sort((a, b) => a.path.localeCompare(b.path));
+    return items.map((item, index) => ({ index: index + 1, name: item.name, path: item.path }));
+  }, [chatAttachedFiles]);
+  const chatSaveDocItems = useMemo(
+    () =>
+      activeChatMessages.map((message, index) => ({
+        id: String(index),
+        checked: chatSaveDocSelection[String(index)] === true,
+        sender: message.role === 'user' ? message.senderDisplayName || '你' : 'Sparkbox',
+        role: message.role,
+        content: message.content,
+      })),
+    [activeChatMessages, chatSaveDocSelection],
+  );
   const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
   const currentFilePath = fileListing?.path ?? '';
   const photoEntries = (fileListing?.entries ?? []).filter((entry) => !entry.isDir && /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(entry.name));
   const canCreateTasks = canManage || taskScope === 'private';
-  const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
   const activeChatTimelineMessages: ChatTimelineMessage[] = chatPendingMessage
     ? [...activeChatMessages, chatPendingMessage]
     : activeChatMessages;
@@ -2683,12 +2725,138 @@ function App() {
   }
 
   async function submitChatMessage(overrideContent?: string): Promise<void> {
+    const content = (overrideContent ?? chatDraft).trim();
+    if (!content) {
+      return;
+    }
+    const attached = chatAttachmentItems;
+    const promptWithAttachmentContext =
+      overrideContent || attached.length === 0
+        ? content
+        : [
+            '[ATTACHED_FILES]',
+            ...attached.map((item) => `[${item.index}] ${item.name} | path=${item.path}`),
+            '[USER_MESSAGE]',
+            content,
+          ].join('\n');
+
     await runSubmitChatMessage({
       activeChatSessionId,
       chatDraft,
       activeChatSession,
-      overrideContent,
+      overrideContent: promptWithAttachmentContext,
     });
+    if (!overrideContent && attached.length) {
+      setChatAttachedFiles({});
+    }
+  }
+
+  async function refreshChatAttachmentPicker(path: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatAttachmentPickerBusy(true);
+    setChatAttachmentPickerError('');
+    try {
+      const listing = await getHouseholdFiles(
+        session.token,
+        fileSpace,
+        toDeviceFilePath(path),
+        { spaceId: activeFileSpaceId || undefined },
+      );
+      const mapped = mapListingToActiveSpace(listing);
+      setChatAttachmentPickerListing(mapped);
+      setChatAttachmentPickerPath(normalizeDisplayFilePath(mapped.path));
+    } catch (error) {
+      setChatAttachmentPickerError(error instanceof Error ? error.message : '读取文件失败。');
+    } finally {
+      setChatAttachmentPickerBusy(false);
+    }
+  }
+
+  function toggleChatAttachment(path: string, name: string): void {
+    setChatAttachedFiles((current) => {
+      if (current[path]) {
+        const next = { ...current };
+        delete next[path];
+        return next;
+      }
+      return {
+        ...current,
+        [path]: { path, name },
+      };
+    });
+  }
+
+  function removeChatAttachmentByIndex(index: number): void {
+    const target = chatAttachmentItems.find((item) => item.index === index);
+    if (!target) {
+      return;
+    }
+    setChatAttachedFiles((current) => {
+      const next = { ...current };
+      delete next[target.path];
+      return next;
+    });
+  }
+
+  function openChatAttachmentPicker(): void {
+    setChatAttachmentPickerOpen(true);
+    void refreshChatAttachmentPicker(chatAttachmentPickerPath || '');
+  }
+
+  function openChatSaveDocModal(): void {
+    if (!activeChatMessages.length) {
+      return;
+    }
+    const defaultSelection: Record<string, boolean> = {};
+    activeChatMessages.forEach((_, index) => {
+      defaultSelection[String(index)] = true;
+    });
+    setChatSaveDocSelection(defaultSelection);
+    setChatSaveDocTitle(`聊天记录-${new Date().toISOString().slice(0, 10)}`);
+    setChatSaveDocModalOpen(true);
+  }
+
+  async function saveSelectedChatAsDocument(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    const title = chatSaveDocTitle.trim();
+    if (!title) {
+      setChatError('请先填写文档标题。');
+      return;
+    }
+    const entries = activeChatMessages
+      .map((message, index) => ({ message, index }))
+      .filter(({ index }) => chatSaveDocSelection[String(index)] === true)
+      .map(({ message }) => ({
+        role: message.role,
+        sender: message.role === 'user' ? message.senderDisplayName || '你' : 'Sparkbox',
+        content: message.content,
+        createdAt: message.createdAt || undefined,
+      }));
+
+    if (!entries.length) {
+      setChatError('请至少选择一条聊天内容。');
+      return;
+    }
+    setChatBusy(true);
+    setChatError('');
+    try {
+      const saved = await fileBackChatTranscript(session.token, {
+        title,
+        entries,
+        spaceId: activeWikiSpaceId || undefined,
+      });
+      setChatSaveDocModalOpen(false);
+      Alert.alert('已保存', `已保存到 raw：${saved.rawPath}`);
+      await refreshWikiDirectory();
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : '保存聊天文档失败。');
+    } finally {
+      setChatBusy(false);
+    }
   }
 
   async function clearCurrentChatSession(): Promise<void> {
@@ -3357,12 +3525,21 @@ function App() {
         operationId: result.operationId,
         answer: result.answer,
         citationTitles: citations,
+        queryMode: result.queryMode,
+        queryFallbackReason: result.queryFallbackReason,
+        queryProvider: result.queryProvider,
+        queryModel: result.queryModel,
+        queryIterations: result.queryIterations,
+        queryToolCalls: result.queryToolCalls,
       });
       setLibraryNotice(
         citations.length
           ? `查询完成，引用页面：${citations.join('、')}`
           : '查询完成。',
       );
+      if (result.queryMode && result.queryMode !== 'model') {
+        setLibraryNotice(`查询完成（回退模式：${result.queryMode}${result.queryFallbackReason ? `，原因 ${result.queryFallbackReason}` : ''}）。`);
+      }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : 'Wiki 查询失败。');
     } finally {
@@ -3477,6 +3654,9 @@ function App() {
         operationId: result.operationId,
         pageId: result.pageId,
         title: result.title,
+        rawPath: result.rawPath,
+        directoryMode: result.directoryMode,
+        directoryFallbackReason: result.directoryFallbackReason,
       });
       const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
@@ -3485,6 +3665,9 @@ function App() {
       setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
       setWikiManualEditCount(directoryPayload.manualEdits.length);
       setWikiRawFileCount(directoryPayload.rawFiles.length);
+      if (result.rawPath) {
+        setLibraryNotice(`已回填到 raw：${result.rawPath}，并标记为未整理。`);
+      }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : 'Wiki 回填失败。');
     } finally {
@@ -4146,6 +4329,20 @@ function App() {
                           sharedChatIsVisible,
                         ),
                   chatDraft,
+                  chatAttachmentItems,
+                  attachmentPickerOpen: chatAttachmentPickerOpen,
+                  attachmentPickerPath: chatAttachmentPickerPath,
+                  attachmentPickerBusy: chatAttachmentPickerBusy,
+                  attachmentPickerError: chatAttachmentPickerError,
+                  attachmentPickerEntries: (chatAttachmentPickerListing?.entries || []).map((entry) => ({
+                    path: entry.path,
+                    name: entry.name,
+                    isDir: entry.isDir,
+                    selected: Boolean(chatAttachedFiles[entry.path]),
+                  })),
+                  saveDocModalOpen: chatSaveDocModalOpen,
+                  saveDocTitle: chatSaveDocTitle,
+                  saveDocItems: chatSaveDocItems,
                   canSend:
                     !waitingForSpaces &&
                     onlineDeviceAvailable &&
@@ -4158,6 +4355,17 @@ function App() {
                   onDelete: () => void deleteCurrentChatSession(),
                   onRetry: (content: string) => void submitChatMessage(content),
                   onChangeDraft: setChatDraft,
+                  onOpenAttachmentPicker: openChatAttachmentPicker,
+                  onCloseAttachmentPicker: () => setChatAttachmentPickerOpen(false),
+                  onAttachmentPickerOpenPath: (path: string) => void refreshChatAttachmentPicker(path),
+                  onAttachmentPickerToggleFile: (path: string, name: string) => toggleChatAttachment(path, name),
+                  onRemoveAttachment: (index: number) => removeChatAttachmentByIndex(index),
+                  onOpenSaveDocModal: openChatSaveDocModal,
+                  onCloseSaveDocModal: () => setChatSaveDocModalOpen(false),
+                  onChangeSaveDocTitle: setChatSaveDocTitle,
+                  onToggleSaveDocItem: (id: string) =>
+                    setChatSaveDocSelection((current) => ({ ...current, [id]: !current[id] })),
+                  onConfirmSaveDoc: () => void saveSelectedChatAsDocument(),
                   onSend: () => void submitChatMessage(),
                 }}
               />

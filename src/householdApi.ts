@@ -323,6 +323,12 @@ export type HouseholdChatStreamTokenEvent = {
   content: string;
 };
 
+export type HouseholdChatStreamInfoEvent = {
+  type: 'info';
+  content: string;
+  round?: number;
+};
+
 export type HouseholdChatStreamDoneEvent = {
   type: 'done';
   deviceId: string;
@@ -335,6 +341,7 @@ export type HouseholdChatStreamDoneEvent = {
 export type HouseholdChatSessionStreamHandlers = {
   onPending?: (event: HouseholdChatStreamPendingEvent) => void;
   onToken?: (event: HouseholdChatStreamTokenEvent) => void;
+  onInfo?: (event: HouseholdChatStreamInfoEvent) => void;
   onDone?: (event: HouseholdChatStreamDoneEvent) => void;
 };
 
@@ -435,11 +442,19 @@ export type WikiQueryInput = {
   question: string;
   spaceId?: string | null;
   topK?: number;
+  maxRounds?: number;
 };
 
 export type WikiQueryResult = {
   operationId: string;
   answer: string;
+  queryMode?: string;
+  queryFallbackReason?: string | null;
+  queryProvider?: string;
+  queryModel?: string;
+  queryProviderTimeoutSeconds?: number;
+  queryIterations?: number;
+  queryToolCalls?: number;
   citations: Array<{
     pageId: string;
     title: string;
@@ -510,6 +525,22 @@ export type WikiPreviewResult = {
     preview: string;
     updatedAt: string;
   }>;
+};
+
+export type WikiChatTranscriptEntryInput = {
+  role: string;
+  sender: string;
+  content: string;
+  createdAt?: string | null;
+};
+
+export type WikiChatTranscriptResult = {
+  operationId: string;
+  rawSourceId: string;
+  rawPath: string;
+  title: string;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
 };
 
 export type HouseholdUploadInput = {
@@ -1100,6 +1131,10 @@ export async function streamHouseholdChatSessionMessage(
           handlers.onToken?.(event);
           continue;
         }
+        if (event.type === 'info') {
+          handlers.onInfo?.(event);
+          continue;
+        }
         doneEvent = event;
         handlers.onDone?.(event);
       }
@@ -1479,11 +1514,19 @@ export async function queryWiki(
       question: input.question,
       space_id: input.spaceId || undefined,
       top_k: input.topK ?? 4,
+      max_rounds: input.maxRounds ?? 6,
     },
   });
   return {
     operationId: String(response.operation_id ?? ''),
     answer: String(response.answer ?? ''),
+    queryMode: String(response.query_mode ?? ''),
+    queryFallbackReason: response.query_fallback_reason == null ? null : String(response.query_fallback_reason),
+    queryProvider: String(response.query_provider ?? ''),
+    queryModel: String(response.query_model ?? ''),
+    queryProviderTimeoutSeconds: Number(response.query_provider_timeout_seconds ?? 0),
+    queryIterations: Number(response.query_iterations ?? 0),
+    queryToolCalls: Number(response.query_tool_calls ?? 0),
     citations: Array.isArray(response.citations)
       ? response.citations.map((citation) => {
           const item = citation as Record<string, unknown>;
@@ -1507,7 +1550,15 @@ export async function fileBackWikiAnswer(
     tags?: string[];
     spaceId?: string | null;
   },
-): Promise<{ operationId: string; pageId: string; title: string }> {
+): Promise<{
+  operationId: string;
+  pageId: string;
+  title: string;
+  rawSourceId?: string;
+  rawPath?: string;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+}> {
   const response = await cloudJson<Record<string, unknown>>('/api/wiki/file-back', {
     method: 'POST',
     token,
@@ -1523,6 +1574,42 @@ export async function fileBackWikiAnswer(
     operationId: String(response.operation_id ?? ''),
     pageId: String(response.page_id ?? ''),
     title: String(response.title ?? ''),
+    rawSourceId: String(response.raw_source_id ?? ''),
+    rawPath: String(response.raw_path ?? ''),
+    directoryMode: String(response.directory_mode ?? ''),
+    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
+  };
+}
+
+export async function fileBackChatTranscript(
+  token: string,
+  input: {
+    title: string;
+    entries: WikiChatTranscriptEntryInput[];
+    spaceId?: string | null;
+  },
+): Promise<WikiChatTranscriptResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/chat-transcript', {
+    method: 'POST',
+    token,
+    body: {
+      title: input.title,
+      entries: input.entries.map((entry) => ({
+        role: entry.role,
+        sender: entry.sender,
+        content: entry.content,
+        created_at: entry.createdAt || undefined,
+      })),
+      space_id: input.spaceId || undefined,
+    },
+  });
+  return {
+    operationId: String(response.operation_id ?? ''),
+    rawSourceId: String(response.raw_source_id ?? ''),
+    rawPath: String(response.raw_path ?? ''),
+    title: String(response.title ?? ''),
+    directoryMode: String(response.directory_mode ?? ''),
+    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
   };
 }
 
@@ -2079,13 +2166,13 @@ function extractSseEvents(
   rawBuffer: string,
   force: boolean,
 ): {
-  events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent>;
+  events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamInfoEvent | HouseholdChatStreamDoneEvent>;
   rest: string;
 } {
   const normalized = rawBuffer.replace(/\r\n/g, '\n');
   const segments = normalized.split('\n\n');
   const rest = force ? '' : segments.pop() ?? '';
-  const events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent> = [];
+  const events: Array<HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamInfoEvent | HouseholdChatStreamDoneEvent> = [];
 
   for (const segment of segments) {
     const parsed = parseSseSegment(segment);
@@ -2099,7 +2186,7 @@ function extractSseEvents(
 
 function parseSseSegment(
   segment: string,
-): HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamDoneEvent | null {
+): HouseholdChatStreamPendingEvent | HouseholdChatStreamTokenEvent | HouseholdChatStreamInfoEvent | HouseholdChatStreamDoneEvent | null {
   if (!segment.trim()) {
     return null;
   }
@@ -2135,6 +2222,13 @@ function parseSseSegment(
     return {
       type: 'token',
       content: String(payload.content ?? ''),
+    };
+  }
+  if (type === 'info') {
+    return {
+      type: 'info',
+      content: String(payload.content ?? ''),
+      round: Number(payload.round ?? 0),
     };
   }
   if (type === 'done') {

@@ -429,6 +429,21 @@ export function useChatController(options: UseChatControllerOptions) {
             retryContent: content,
           });
         },
+        onInfo: (event) => {
+          setChatSendPhase('streaming');
+          setChatPendingMessage((current) => {
+            const existing = current?.content?.trim() || '';
+            const nextLine = event.content?.trim() || '';
+            const combined = existing ? `${existing}\n\n${nextLine}` : nextLine;
+            return {
+              role: 'assistant',
+              content: combined,
+              senderDisplayName: null,
+              pending: true,
+              retryContent: content,
+            };
+          });
+        },
       });
       if (response.error) {
         keepPendingBubble = true;

@@ -112,8 +112,25 @@ type LibraryPaneProps = {
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
   } | null;
-  wikiLastQuery: { operationId: string; answer: string; citationTitles: string[] } | null;
-  wikiLastFileBack: { operationId: string; pageId: string; title: string } | null;
+  wikiLastQuery: {
+    operationId: string;
+    answer: string;
+    citationTitles: string[];
+    queryMode?: string;
+    queryFallbackReason?: string | null;
+    queryProvider?: string;
+    queryModel?: string;
+    queryIterations?: number;
+    queryToolCalls?: number;
+  } | null;
+  wikiLastFileBack: {
+    operationId: string;
+    pageId: string;
+    title: string;
+    rawPath?: string;
+    directoryMode?: string;
+    directoryFallbackReason?: string | null;
+  } | null;
   wikiLastLint: {
     operationId: string;
     summary: string;
@@ -847,6 +864,38 @@ export function LibraryPane(props: LibraryPaneProps) {
           </Pressable>
           {wikiAnswer ? <Text style={styles.cardCopy}>查询结果：{wikiAnswer}</Text> : null}
           {wikiLastQuery ? <Text style={styles.cardCopy}>引用页面：{wikiLastQuery.citationTitles.join('、') || '无'}</Text> : null}
+          {wikiLastQuery?.queryMode ? <Text style={styles.cardCopy}>查询模式：{wikiLastQuery.queryMode}</Text> : null}
+          {(wikiLastQuery?.queryProvider || wikiLastQuery?.queryModel) ? (
+            <Text style={styles.cardCopy}>
+              provider/model：{wikiLastQuery?.queryProvider || '-'} / {wikiLastQuery?.queryModel || '-'}
+            </Text>
+          ) : null}
+          {wikiLastQuery?.queryIterations ? (
+            <Text style={styles.cardCopy}>
+              迭代轮数：{wikiLastQuery.queryIterations} · 工具调用：{wikiLastQuery.queryToolCalls || 0}
+            </Text>
+          ) : null}
+          {wikiLastQuery?.queryFallbackReason ? (
+            <Text style={styles.errorText}>回退原因：{wikiLastQuery.queryFallbackReason}</Text>
+          ) : null}
+
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="回填标题（例如：本次查询结论）"
+            placeholderTextColor="#7e8a83"
+            style={styles.input}
+            value={wikiFileBackTitle}
+            onChangeText={onChangeWikiFileBackTitle}
+          />
+          <Pressable style={styles.secondaryButtonSmall} onPress={onRunWikiFileBack} disabled={!activeSpace || wikiBusy}>
+            <Text style={styles.secondaryButtonText}>回填为 raw 文档（未整理）</Text>
+          </Pressable>
+          {wikiLastFileBack ? (
+            <Text style={styles.cardCopy}>
+              最近回填：{wikiLastFileBack.title} · {wikiLastFileBack.rawPath || wikiLastFileBack.pageId}
+            </Text>
+          ) : null}
           {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         </View>
       </>
