@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, View } from 'react-native';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 type ChatTimelineMessage = {
   content: string;
@@ -223,9 +224,13 @@ export function ChatDetailPane({
                     </Text>
                   ) : null}
                 </View>
-                <Text style={styles.chatStatusNoticeCopy}>
-                  {decodeChatMessageContent(group.message.content)}
-                </Text>
+                <View style={{ marginTop: 6 }}>
+                  <MarkdownRenderer
+                    markdown={decodeChatMessageContent(group.message.content)}
+                    styles={styles}
+                    tone="chatAssistant"
+                  />
+                </View>
                 <Text style={styles.cardCopy}>{group.statusCopy}</Text>
                 {group.message.failed && group.message.errorMessage ? (
                   <Text style={styles.errorText}>{group.message.errorMessage}</Text>
@@ -271,14 +276,11 @@ export function ChatDetailPane({
                         </Text>
                       </View>
                     ) : null}
-                    <Text
-                      style={[
-                        styles.chatBubbleCopy,
-                        group.role === 'user' ? styles.chatBubbleCopyUser : null,
-                      ]}
-                    >
-                      {decodeChatMessageContent(message.content)}
-                    </Text>
+                    <MarkdownRenderer
+                      markdown={decodeChatMessageContent(message.content)}
+                      styles={styles}
+                      tone={group.role === 'user' ? 'chatUser' : 'chatAssistant'}
+                    />
                   </View>
                 ))}
               </View>

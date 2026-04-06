@@ -2103,6 +2103,23 @@ export async function updateHouseholdSpaceMembers(
   return normalizeSpaceDetail(response);
 }
 
+export async function deleteHouseholdSpace(
+  token: string,
+  spaceId: string,
+): Promise<{ ok: boolean; spaceId: string }> {
+  const response = await cloudJson<{ ok: boolean; space_id: string }>(
+    `/api/spaces/${encodeURIComponent(spaceId)}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
+  return {
+    ok: response.ok,
+    spaceId: response.space_id,
+  };
+}
+
 export async function updateHouseholdMemberRole(
   token: string,
   memberId: string,

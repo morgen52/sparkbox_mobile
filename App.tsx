@@ -5,14 +5,17 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Buffer } from 'buffer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   BackHandler,
   LayoutChangeEvent,
+  PanResponder,
   ScrollView,
   Text,
   TextInput,
@@ -74,6 +77,7 @@ import {
   createHouseholdInvitation,
   createSpaceMemory,
   deleteHouseholdChatSession,
+  deleteHouseholdSpace,
   deleteSpaceMemory,
   deleteSpaceSummary,
   deleteHouseholdPath,
@@ -269,6 +273,129 @@ const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'househol
   'child',
   'household_ops',
 ];
+const SWIPE_SPACE_DELETE_WIDTH = 78;
+
+function SwipeToDeleteSpaceRow({
+  space,
+  onOpenSpace,
+  onDeleteSpace,
+}: {
+  space: HouseholdSpaceSummary;
+  onOpenSpace: (spaceId: string) => void;
+  onDeleteSpace: (space: HouseholdSpaceSummary) => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const pressOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const offsetRef = useRef(0);
+  const movedRef = useRef(false);
+
+  const animatePressOverlay = useCallback(
+    (pressed: boolean) => {
+      Animated.timing(pressOverlayOpacity, {
+        toValue: pressed ? 1 : 0,
+        duration: pressed ? 90 : 120,
+        useNativeDriver: true,
+      }).start();
+    },
+    [pressOverlayOpacity],
+  );
+
+  const animateTo = useCallback(
+    (toValue: number) => {
+      offsetRef.current = toValue;
+      Animated.spring(translateX, {
+        toValue,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 18,
+      }).start();
+    },
+    [translateX],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gestureState) =>
+          Math.abs(gestureState.dx) > 6 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderGrant: () => {
+          movedRef.current = false;
+          animatePressOverlay(false);
+        },
+        onPanResponderMove: (_event, gestureState) => {
+          if (!movedRef.current && (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3)) {
+            movedRef.current = true;
+          }
+          const next = Math.max(-SWIPE_SPACE_DELETE_WIDTH, Math.min(0, offsetRef.current + gestureState.dx));
+          translateX.setValue(next);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          const dragDistance = offsetRef.current + gestureState.dx;
+          const shouldOpen = gestureState.vx < -0.2 || dragDistance < -SWIPE_SPACE_DELETE_WIDTH / 2;
+          animateTo(shouldOpen ? -SWIPE_SPACE_DELETE_WIDTH : 0);
+        },
+        onPanResponderTerminate: () => {
+          movedRef.current = true;
+          animatePressOverlay(false);
+          animateTo(0);
+        },
+      }),
+    [animatePressOverlay, animateTo, translateX],
+  );
+
+  return (
+    <View style={styles.spaceSwipeContainer}>
+      <Pressable
+        style={styles.spaceDeleteAction}
+        onPress={() => {
+          animateTo(0);
+          onDeleteSpace(space);
+        }}
+      >
+        <MaterialCommunityIcons name="delete-outline" size={24} color="#ffffff" />
+      </Pressable>
+      <Animated.View
+        style={[styles.chatSessionSwipeFront, { transform: [{ translateX }] }]}
+        {...panResponder.panHandlers}
+      >
+        <Pressable
+          style={styles.chatTreeFolder}
+          pressFeedback="none"
+          onPressIn={() => animatePressOverlay(true)}
+          onPressOut={() => animatePressOverlay(false)}
+          onPress={() => {
+            if (movedRef.current) {
+              movedRef.current = false;
+              return;
+            }
+            if (offsetRef.current <= -8) {
+              animateTo(0);
+              return;
+            }
+            onOpenSpace(space.id);
+          }}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.spaceRowPressOverlay, { opacity: pressOverlayOpacity }]}
+          />
+          <View style={styles.chatTreeFolderHeader}>
+            <View style={styles.chatTreeFolderHeaderBody}>
+              <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
+              <Text style={styles.chatTreeFolderMeta}>
+                {describeSpaceSessionCountCopy(space.threadCount, space.memberCount)}
+              </Text>
+            </View>
+            <View style={styles.spaceListCardRightRail}>
+              <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
+              <Text style={styles.chatTreeFolderChevron}>›</Text>
+            </View>
+          </View>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
 
 function App() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -678,7 +805,20 @@ function App() {
   const canManage = canManageHousehold(session?.user.role ?? '');
   const canReprovisionDevice = canReprovisionDeviceFromSettings(session?.user.role ?? '');
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
+  const isSystemManagedSpace = useCallback(
+    (space: HouseholdSpaceSummary | null | undefined): boolean => {
+      if (!space) {
+        return false;
+      }
+      if (space.kind === 'private') {
+        return true;
+      }
+      return space.template === 'household' || space.template === 'private';
+    },
+    [],
+  );
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
+  const canDeleteActiveSpace = canManage && activeSpace?.kind === 'shared' && !isSystemManagedSpace(activeSpace);
   const activeWikiSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
   const activeWikiPreviewCacheKey = activeSpace ? `${activeSpace.kind}:${activeSpace.id}` : '';
   const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
@@ -2549,21 +2689,63 @@ function App() {
     }
   }
 
-  function requestDeleteSpacePlaceholder(): void {
-    if (!activeSpace) {
-      return;
-    }
+  function requestDeleteChatSession(sessionId: string): void {
+    const targetSession = chatSessions.find((sessionItem) => sessionItem.id === sessionId);
     Alert.alert(
-      '确认删除此空间？',
-      `你即将删除「${activeSpace.name}」。当前 cloud 端尚不支持删除空间，确认后会仅显示占位提示。`,
+      '确认删除会话？',
+      `删除「${targetSession?.name || '这个会话'}」后将无法恢复。`,
       [
         { text: '取消', style: 'cancel' },
         {
           text: '确认删除',
           style: 'destructive',
           onPress: () => {
-            setSettingsNotice('');
-            setSettingsError('cloud端当前不支持删除空间。');
+            void runDeleteCurrentChatSession(sessionId);
+          },
+        },
+      ],
+    );
+  }
+
+  function requestDeleteSpace(targetSpace: HouseholdSpaceSummary): void {
+    if (!session?.token || !canManage) {
+      return;
+    }
+    if (targetSpace.kind !== 'shared' || isSystemManagedSpace(targetSpace)) {
+      setSettingsError('系统内置空间不支持删除。');
+      return;
+    }
+
+    Alert.alert(
+      '确认删除此空间？',
+      `你即将删除「${targetSpace.name}」。该空间下聊天、文件和任务会同步清理，且无法恢复。`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确认删除',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSettingsBusy(true);
+              setSettingsNotice('');
+              setSettingsError('');
+              try {
+                await deleteHouseholdSpace(session.token, targetSpace.id);
+                setSettingsNotice('');
+                if (activeSpaceId === targetSpace.id || spaceHomeMode !== 'list') {
+                  returnToSpaceList();
+                }
+                await Promise.all([
+                  refreshHouseholdSummary({ silent: true }),
+                  refreshSpaces({ silent: true }),
+                ]);
+                await runRefreshChatSessions({ force: true });
+              } catch (error) {
+                setSettingsError(error instanceof Error ? error.message : '删除空间失败。');
+              } finally {
+                setSettingsBusy(false);
+              }
+            })();
           },
         },
       ],
@@ -2857,7 +3039,10 @@ function App() {
   }
 
   async function deleteCurrentChatSession(): Promise<void> {
-    await runDeleteCurrentChatSession(activeChatSessionId);
+    if (!activeChatSessionId) {
+      return;
+    }
+    requestDeleteChatSession(activeChatSessionId);
   }
 
   function closeActiveChatDetail(): void {
@@ -4033,20 +4218,37 @@ function App() {
             {spaceListViewMode === 'spaces' ? (
               <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
                 {spaces.map((space) => (
-                  <Pressable key={space.id} style={styles.chatTreeFolder} onPress={() => openSpaceHome(space.id)}>
-                    <View style={styles.chatTreeFolderHeader}>
-                      <View style={styles.chatTreeFolderHeaderBody}>
-                        <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
-                        <Text style={styles.chatTreeFolderMeta}>
-                          {describeSpaceSessionCountCopy(spaceSessionCounts[space.id] ?? space.threadCount, space.memberCount)}
-                        </Text>
+                  canManage && space.kind === 'shared' && !isSystemManagedSpace(space) ? (
+                    <SwipeToDeleteSpaceRow
+                      key={space.id}
+                      space={{
+                        ...space,
+                        threadCount: spaceSessionCounts[space.id] ?? space.threadCount,
+                      }}
+                      onOpenSpace={openSpaceHome}
+                      onDeleteSpace={requestDeleteSpace}
+                    />
+                  ) : (
+                    <Pressable
+                      key={space.id}
+                      style={styles.chatTreeFolder}
+                      pressFeedback="none"
+                      onPress={() => openSpaceHome(space.id)}
+                    >
+                      <View style={styles.chatTreeFolderHeader}>
+                        <View style={styles.chatTreeFolderHeaderBody}>
+                          <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
+                          <Text style={styles.chatTreeFolderMeta}>
+                            {describeSpaceSessionCountCopy(spaceSessionCounts[space.id] ?? space.threadCount, space.memberCount)}
+                          </Text>
+                        </View>
+                        <View style={styles.spaceListCardRightRail}>
+                          <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
+                          <Text style={styles.chatTreeFolderChevron}>›</Text>
+                        </View>
                       </View>
-                      <View style={styles.spaceListCardRightRail}>
-                        <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
-                        <Text style={styles.chatTreeFolderChevron}>›</Text>
-                      </View>
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  )
                 ))}
                 {canManage ? (
                   <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={openSpaceCreator} disabled={spacesBusy}>
@@ -4316,7 +4518,7 @@ function App() {
                   onRefresh: () => void runRefreshChatSessions({ force: true }),
                   onCreateChat: () => openChatSessionEditor(),
                   onOpenSession: setActiveChatSessionId,
-                  onDeleteSession: (sessionId: string) => void runDeleteCurrentChatSession(sessionId),
+                  onDeleteSession: (sessionId: string) => requestDeleteChatSession(sessionId),
                 }}
                 toolsProps={{
                   waitingForSpaces,
@@ -4621,20 +4823,23 @@ function App() {
                 <View style={styles.settingsCard}>
                   <Text style={styles.cardTitle}>删除此空间</Text>
                   <Text style={styles.cardCopy}>
-                    删除空间后，其关联聊天与资料将无法恢复。当前先保留入口，等待 cloud 端支持。
+                    删除空间后，其关联聊天、资料和任务将无法恢复。系统内置私人空间与家庭空间不可删除。
                   </Text>
                   <Pressable
                     style={[
                       styles.secondaryButtonSmall,
                       styles.spaceDeleteButton,
-                      !activeSpace ? styles.networkRowDisabled : null,
+                      !canDeleteActiveSpace || settingsBusy ? styles.networkRowDisabled : null,
                     ]}
-                    onPress={requestDeleteSpacePlaceholder}
-                    disabled={!activeSpace}
+                    onPress={() => {
+                      if (activeSpace) {
+                        requestDeleteSpace(activeSpace);
+                      }
+                    }}
+                    disabled={!canDeleteActiveSpace || settingsBusy}
                   >
                     <Text style={[styles.secondaryButtonText, styles.spaceDeleteButtonText]}>删除此空间</Text>
                   </Pressable>
-                  <Text style={styles.errorText}>cloud端当前不支持</Text>
                 </View>
               </>
             ) : null}
