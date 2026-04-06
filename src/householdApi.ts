@@ -408,6 +408,29 @@ export type HouseholdFileListing = {
   entries: HouseholdFileEntry[];
 };
 
+export type WikiTempListing = {
+  path: string;
+  entries: HouseholdFileEntry[];
+};
+
+export type WikiTempFileReadResult = {
+  path: string;
+  content: string;
+  updatedAt: string;
+};
+
+export type WikiTempPromoteResult = {
+  ok: boolean;
+  tempPath: string;
+  rawPath: string;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+  directoryModelBudgetSeconds?: number;
+  directoryProvider?: string;
+  directoryModel?: string;
+  directoryProviderTimeoutSeconds?: number;
+};
+
 export type WikiPageSummary = {
   id: string;
   title: string;
@@ -436,31 +459,6 @@ export type WikiIngestResult = {
   directoryProvider?: string;
   directoryModel?: string;
   directoryProviderTimeoutSeconds?: number;
-};
-
-export type WikiQueryInput = {
-  question: string;
-  spaceId?: string | null;
-  topK?: number;
-  maxRounds?: number;
-};
-
-export type WikiQueryResult = {
-  operationId: string;
-  answer: string;
-  queryMode?: string;
-  queryFallbackReason?: string | null;
-  queryProvider?: string;
-  queryModel?: string;
-  queryProviderTimeoutSeconds?: number;
-  queryIterations?: number;
-  queryToolCalls?: number;
-  citations: Array<{
-    pageId: string;
-    title: string;
-    slug: string;
-    snippet: string;
-  }>;
 };
 
 export type WikiLintIssue = {
@@ -1519,84 +1517,6 @@ export async function ingestWikiRaw(
   };
 }
 
-export async function queryWiki(
-  token: string,
-  input: WikiQueryInput,
-): Promise<WikiQueryResult> {
-  const response = await cloudJson<Record<string, unknown>>('/api/wiki/query', {
-    method: 'POST',
-    token,
-    body: {
-      question: input.question,
-      space_id: input.spaceId || undefined,
-      top_k: input.topK ?? 4,
-      max_rounds: input.maxRounds ?? 6,
-    },
-  });
-  return {
-    operationId: String(response.operation_id ?? ''),
-    answer: String(response.answer ?? ''),
-    queryMode: String(response.query_mode ?? ''),
-    queryFallbackReason: response.query_fallback_reason == null ? null : String(response.query_fallback_reason),
-    queryProvider: String(response.query_provider ?? ''),
-    queryModel: String(response.query_model ?? ''),
-    queryProviderTimeoutSeconds: Number(response.query_provider_timeout_seconds ?? 0),
-    queryIterations: Number(response.query_iterations ?? 0),
-    queryToolCalls: Number(response.query_tool_calls ?? 0),
-    citations: Array.isArray(response.citations)
-      ? response.citations.map((citation) => {
-          const item = citation as Record<string, unknown>;
-          return {
-            pageId: String(item.page_id ?? ''),
-            title: String(item.title ?? ''),
-            slug: String(item.slug ?? ''),
-            snippet: String(item.snippet ?? ''),
-          };
-        })
-      : [],
-  };
-}
-
-export async function fileBackWikiAnswer(
-  token: string,
-  input: {
-    title: string;
-    contentMd: string;
-    summary?: string;
-    tags?: string[];
-    spaceId?: string | null;
-  },
-): Promise<{
-  operationId: string;
-  pageId: string;
-  title: string;
-  rawSourceId?: string;
-  rawPath?: string;
-  directoryMode?: string;
-  directoryFallbackReason?: string | null;
-}> {
-  const response = await cloudJson<Record<string, unknown>>('/api/wiki/file-back', {
-    method: 'POST',
-    token,
-    body: {
-      title: input.title,
-      content_md: input.contentMd,
-      summary: input.summary || '',
-      tags: input.tags || [],
-      space_id: input.spaceId || undefined,
-    },
-  });
-  return {
-    operationId: String(response.operation_id ?? ''),
-    pageId: String(response.page_id ?? ''),
-    title: String(response.title ?? ''),
-    rawSourceId: String(response.raw_source_id ?? ''),
-    rawPath: String(response.raw_path ?? ''),
-    directoryMode: String(response.directory_mode ?? ''),
-    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
-  };
-}
-
 export async function fileBackChatTranscript(
   token: string,
   input: {
@@ -1880,6 +1800,88 @@ export async function getWikiPreview(
           };
         })
       : [],
+  };
+}
+
+export async function getWikiTempFiles(
+  token: string,
+  options: { spaceId?: string | null; path?: string } = {},
+): Promise<WikiTempListing> {
+  const params = new URLSearchParams();
+  if (options.path) {
+    params.set('path', options.path);
+  }
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  const query = params.toString();
+  const response = await cloudJson<Record<string, unknown>>(`/api/wiki/temp${query ? `?${query}` : ''}`, {
+    token,
+  });
+  return {
+    path: String(response.path ?? ''),
+    entries: Array.isArray(response.entries)
+      ? response.entries.map((item) => normalizeFileEntry(item as Record<string, unknown>))
+      : [],
+  };
+}
+
+export async function readWikiTempFile(
+  token: string,
+  options: { spaceId?: string | null; path: string },
+): Promise<WikiTempFileReadResult> {
+  const params = new URLSearchParams({ path: options.path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  const response = await cloudJson<Record<string, unknown>>(`/api/wiki/temp/read?${params.toString()}`, {
+    token,
+  });
+  return {
+    path: String(response.path ?? ''),
+    content: String(response.content ?? ''),
+    updatedAt: String(response.updated_at ?? ''),
+  };
+}
+
+export async function deleteWikiTempPath(
+  token: string,
+  options: { spaceId?: string | null; path: string },
+): Promise<{ ok: boolean }> {
+  const params = new URLSearchParams({ path: options.path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  return cloudJson<{ ok: boolean }>(`/api/wiki/temp?${params.toString()}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function promoteWikiTempFile(
+  token: string,
+  input: { path: string; title?: string; spaceId?: string | null },
+): Promise<WikiTempPromoteResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/temp/promote', {
+    method: 'POST',
+    token,
+    body: {
+      path: input.path,
+      title: input.title || undefined,
+      space_id: input.spaceId || undefined,
+    },
+  });
+  return {
+    ok: Boolean(response.ok),
+    tempPath: String(response.temp_path ?? ''),
+    rawPath: String(response.raw_path ?? ''),
+    directoryMode: response.directory_mode == null ? undefined : String(response.directory_mode),
+    directoryFallbackReason:
+      response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
+    directoryModelBudgetSeconds: Number(response.directory_model_budget_seconds ?? 0),
+    directoryProvider: response.directory_provider == null ? undefined : String(response.directory_provider),
+    directoryModel: response.directory_model == null ? undefined : String(response.directory_model),
+    directoryProviderTimeoutSeconds: Number(response.directory_provider_timeout_seconds ?? 0),
   };
 }
 

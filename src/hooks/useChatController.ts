@@ -430,19 +430,10 @@ export function useChatController(options: UseChatControllerOptions) {
           });
         },
         onInfo: (event) => {
-          setChatSendPhase('streaming');
-          setChatPendingMessage((current) => {
-            const existing = current?.content?.trim() || '';
-            const nextLine = event.content?.trim() || '';
-            const combined = existing ? `${existing}\n\n${nextLine}` : nextLine;
-            return {
-              role: 'assistant',
-              content: combined,
-              senderDisplayName: null,
-              pending: true,
-              retryContent: content,
-            };
-          });
+          // Keep iterative tool notes off the chat bubble; only final done.message is shown.
+          if (event.content?.trim()) {
+            setChatSendPhase('sending');
+          }
         },
       });
       if (response.error) {

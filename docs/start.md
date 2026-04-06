@@ -312,12 +312,12 @@ cd d:\gitRepo\sparkbox_jetson
 资料库已切换为按空间的 LLM Wiki 范式，不再在“全局设置”里测试。
 
 - 入口：先进入某个 Space，再打开“资料库”
-- 操作：导入（Ingest）/ 查询（Query）/ 回填（File Back）/ 自检（Lint）/ 刷新页面列表
+- 操作：导入（Ingest）/ 个人Wiki整理（Organize）/ 自检（Lint）/ 刷新页面列表 / Wiki预览
 - 隔离：所有 Wiki 请求都会带当前 `space_id`，不同空间的 Wiki 页面互相隔离
 - 存储：Wiki 内容落在 Jetson 本地（通过 cloud 转发到 Jetson device-agent），不在 cloud 侧持久化
 
 建议测试顺序：
 
-1. 进入 A 空间，导入一条 Raw，查询并回填。
+1. 进入 A 空间，导入一条 Raw，并执行一次个人Wiki整理。
 2. 切换到 B 空间，刷新页面列表，确认看不到 A 空间页面。
 3. 回到 A 空间，确认页面仍存在。

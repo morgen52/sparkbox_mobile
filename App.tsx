@@ -78,6 +78,7 @@ import {
   createSpaceMemory,
   deleteHouseholdChatSession,
   deleteHouseholdSpace,
+  deleteWikiTempPath,
   deleteSpaceMemory,
   deleteSpaceSummary,
   deleteHouseholdPath,
@@ -85,9 +86,9 @@ import {
   disableSpaceFamilyApp,
   enableSpaceFamilyApp,
   fileBackChatTranscript,
-  fileBackWikiAnswer,
   getWikiOrganizeStatus,
   getWikiPreview,
+  getWikiTempFiles,
   getWikiDirectory,
   getDeviceConfigStatus,
   getDeviceDiagnostics,
@@ -113,12 +114,13 @@ import {
   onboardDeviceProvider,
   openSpaceSideChannel,
   openSpaceThreadSession,
-  queryWiki,
+  promoteWikiTempFile,
   runWikiDirectoryConsistencyCheck,
   startWikiOrganize,
   startWikiQualityOptimize,
   relayHouseholdSpaceMessage,
   reconnectDevice,
+  readWikiTempFile,
   renameHouseholdPath,
   resetDeviceToSetupMode,
   type HouseholdTaskScope,
@@ -157,7 +159,6 @@ import {
   type HouseholdSpaceDetail,
   type HouseholdSpaceSummary,
   type SpaceTemplate,
-  type WikiQueryResult,
   type WikiDirectoryConsistencyResult,
   type WikiDirectoryPayload,
   type WikiOrganizeStatusResult,
@@ -274,6 +275,8 @@ const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'househol
   'household_ops',
 ];
 const SWIPE_SPACE_DELETE_WIDTH = 78;
+const CHAT_ATTACHMENT_WIKI_ROOT = '.wiki';
+const CHAT_ATTACHMENT_VISIBLE_ROOT_DIRS = new Set(['add_record', 'raw', 'temp', 'wiki']);
 
 function SwipeToDeleteSpaceRow({
   space,
@@ -533,6 +536,14 @@ function App() {
   const [chatAttachmentPickerListing, setChatAttachmentPickerListing] = useState<HouseholdFileListing | null>(null);
   const [chatAttachmentPickerBusy, setChatAttachmentPickerBusy] = useState(false);
   const [chatAttachmentPickerError, setChatAttachmentPickerError] = useState('');
+  const [chatTempManagerOpen, setChatTempManagerOpen] = useState(false);
+  const [chatTempManagerPath, setChatTempManagerPath] = useState('');
+  const [chatTempManagerListing, setChatTempManagerListing] = useState<HouseholdFileListing | null>(null);
+  const [chatTempManagerBusy, setChatTempManagerBusy] = useState(false);
+  const [chatTempManagerError, setChatTempManagerError] = useState('');
+  const [chatTempViewerOpen, setChatTempViewerOpen] = useState(false);
+  const [chatTempViewerTitle, setChatTempViewerTitle] = useState('');
+  const [chatTempViewerContent, setChatTempViewerContent] = useState('');
   const [chatAttachedFiles, setChatAttachedFiles] = useState<Record<string, { path: string; name: string }>>({});
   const [chatSaveDocModalOpen, setChatSaveDocModalOpen] = useState(false);
   const [chatSaveDocTitle, setChatSaveDocTitle] = useState('');
@@ -615,11 +626,7 @@ function App() {
   const [ownerServiceOutput, setOwnerServiceOutput] = useState('');
   const [wikiSourceTitle, setWikiSourceTitle] = useState('');
   const [wikiSourceContent, setWikiSourceContent] = useState('');
-  const [wikiQuestion, setWikiQuestion] = useState('');
-  const [wikiFileBackTitle, setWikiFileBackTitle] = useState('');
-  const [wikiAnswer, setWikiAnswer] = useState('');
   const [wikiPages, setWikiPages] = useState<Array<{ id: string; title: string; summary: string; tags: string[] }>>([]);
-  const [wikiLastQuery, setWikiLastQuery] = useState<WikiQueryResult | null>(null);
   const [wikiLastIngest, setWikiLastIngest] = useState<{
     operationId: string;
     pageId: string;
@@ -632,25 +639,6 @@ function App() {
     directoryProvider?: string;
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
-  } | null>(null);
-  const [wikiLastQueryMeta, setWikiLastQueryMeta] = useState<{
-    operationId: string;
-    answer: string;
-    citationTitles: string[];
-    queryMode?: string;
-    queryFallbackReason?: string | null;
-    queryProvider?: string;
-    queryModel?: string;
-    queryIterations?: number;
-    queryToolCalls?: number;
-  } | null>(null);
-  const [wikiLastFileBack, setWikiLastFileBack] = useState<{
-    operationId: string;
-    pageId: string;
-    title: string;
-    rawPath?: string;
-    directoryMode?: string;
-    directoryFallbackReason?: string | null;
   } | null>(null);
   const [wikiDirectoryText, setWikiDirectoryText] = useState('');
   const [wikiDirectoryLastUpdatedAt, setWikiDirectoryLastUpdatedAt] = useState('');
@@ -1068,7 +1056,38 @@ function App() {
   }
 
   function normalizeDisplayFilePath(path: string | null | undefined): string {
-    return (path || '').replace(/^\/+|\/+$/g, '');
+    return (path || '')
+      .replace(/\\+/g, '/')
+      .replace(/^\/+|\/+$/g, '');
+  }
+
+  function toChatAttachmentDevicePath(displayPath: string): string {
+    const normalized = normalizeDisplayFilePath(displayPath);
+    if (!normalized) {
+      return CHAT_ATTACHMENT_WIKI_ROOT;
+    }
+    if (normalized === CHAT_ATTACHMENT_WIKI_ROOT) {
+      return CHAT_ATTACHMENT_WIKI_ROOT;
+    }
+    if (normalized.startsWith(`${CHAT_ATTACHMENT_WIKI_ROOT}/`)) {
+      return normalized;
+    }
+    return normalized ? `${CHAT_ATTACHMENT_WIKI_ROOT}/${normalized}` : CHAT_ATTACHMENT_WIKI_ROOT;
+  }
+
+  function fromChatAttachmentDevicePath(devicePath: string | null | undefined): string {
+    const normalized = normalizeDisplayFilePath(devicePath);
+    if (!normalized || normalized === CHAT_ATTACHMENT_WIKI_ROOT) {
+      return '';
+    }
+    let trimmed = normalized;
+    while (trimmed.startsWith(`${CHAT_ATTACHMENT_WIKI_ROOT}/`)) {
+      trimmed = trimmed.slice(CHAT_ATTACHMENT_WIKI_ROOT.length + 1);
+    }
+    if (trimmed === CHAT_ATTACHMENT_WIKI_ROOT) {
+      return '';
+    }
+    return trimmed;
   }
 
   function parseWikiDirectoryObject(rawText: string): Record<string, unknown> {
@@ -1761,14 +1780,8 @@ function App() {
       setOwnerServiceOutput('');
       setWikiSourceTitle('');
       setWikiSourceContent('');
-      setWikiQuestion('');
-      setWikiFileBackTitle('');
-      setWikiAnswer('');
       setWikiPages([]);
-      setWikiLastQuery(null);
       setWikiLastIngest(null);
-      setWikiLastQueryMeta(null);
-      setWikiLastFileBack(null);
       setWikiDirectoryText('');
       setWikiDirectoryLastUpdatedAt('');
       setWikiManualEditCount(0);
@@ -1904,14 +1917,8 @@ function App() {
     setLibraryActiveSection('overview');
     setWikiSourceTitle('');
     setWikiSourceContent('');
-    setWikiQuestion('');
-    setWikiFileBackTitle('');
-    setWikiAnswer('');
     setWikiPages([]);
-    setWikiLastQuery(null);
     setWikiLastIngest(null);
-    setWikiLastQueryMeta(null);
-    setWikiLastFileBack(null);
     setWikiDirectoryText('');
     setWikiDirectoryLastUpdatedAt('');
     setWikiManualEditCount(0);
@@ -2930,18 +2937,54 @@ function App() {
     if (!session?.token || !activeSpaceId) {
       return;
     }
+    const chatAttachmentSpace: HouseholdFileSpace = activeSpace?.kind === 'shared' ? 'family' : 'private';
+    const chatAttachmentSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : undefined;
     setChatAttachmentPickerBusy(true);
     setChatAttachmentPickerError('');
     try {
-      const listing = await getHouseholdFiles(
-        session.token,
-        fileSpace,
-        toDeviceFilePath(path),
-        { spaceId: activeFileSpaceId || undefined },
-      );
+      let listing: HouseholdFileListing;
+      try {
+        listing = await getHouseholdFiles(
+          session.token,
+          chatAttachmentSpace,
+          toChatAttachmentDevicePath(path),
+          { spaceId: chatAttachmentSpaceId },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message.toLowerCase() : '';
+        if (!message.includes('path does not exist')) {
+          throw error;
+        }
+        // Bootstrap .wiki when this space has never initialized wiki files yet.
+        await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
+        listing = await getHouseholdFiles(
+          session.token,
+          chatAttachmentSpace,
+          toChatAttachmentDevicePath(path),
+          { spaceId: chatAttachmentSpaceId },
+        );
+      }
       const mapped = mapListingToActiveSpace(listing);
-      setChatAttachmentPickerListing(mapped);
-      setChatAttachmentPickerPath(normalizeDisplayFilePath(mapped.path));
+      const relativePath = fromChatAttachmentDevicePath(mapped.path);
+      const relativeEntries = mapped.entries
+        .map((entry) => ({
+          ...entry,
+          path: fromChatAttachmentDevicePath(entry.path),
+        }))
+        .filter((entry) => {
+          if (relativePath) {
+            return true;
+          }
+          return entry.isDir && CHAT_ATTACHMENT_VISIBLE_ROOT_DIRS.has(entry.name);
+        });
+      const relativeListing: HouseholdFileListing = {
+        ...mapped,
+        path: relativePath,
+        parent: relativePath ? relativePath.split('/').slice(0, -1).join('/') || '' : '',
+        entries: relativeEntries,
+      };
+      setChatAttachmentPickerListing(relativeListing);
+      setChatAttachmentPickerPath(relativePath);
     } catch (error) {
       setChatAttachmentPickerError(error instanceof Error ? error.message : '读取文件失败。');
     } finally {
@@ -2977,7 +3020,108 @@ function App() {
 
   function openChatAttachmentPicker(): void {
     setChatAttachmentPickerOpen(true);
-    void refreshChatAttachmentPicker(chatAttachmentPickerPath || '');
+    setChatAttachmentPickerPath('');
+    void refreshChatAttachmentPicker('');
+  }
+
+  async function refreshChatTempManager(path: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatTempManagerBusy(true);
+    setChatTempManagerError('');
+    try {
+      const listing = await getWikiTempFiles(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
+        path: toDeviceFilePath(path),
+      });
+      const normalizedPath = normalizeDisplayFilePath(listing.path);
+      const mapped: HouseholdFileListing = {
+        space: fileSpace,
+        path: normalizedPath,
+        root: 'temp',
+        parent: normalizedPath ? normalizedPath.split('/').slice(0, -1).join('/') || null : null,
+        entries: listing.entries.map((entry) => ({
+          ...entry,
+          path: normalizeDisplayFilePath(entry.path),
+        })),
+      };
+      setChatTempManagerListing(mapped);
+      setChatTempManagerPath(normalizedPath);
+    } catch (error) {
+      setChatTempManagerError(error instanceof Error ? error.message : '读取临时目录失败。');
+    } finally {
+      setChatTempManagerBusy(false);
+    }
+  }
+
+  function openChatTempManager(): void {
+    setChatTempManagerOpen(true);
+    void refreshChatTempManager(chatTempManagerPath || '');
+  }
+
+  async function viewChatTempFile(path: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatTempManagerBusy(true);
+    setChatTempManagerError('');
+    try {
+      const payload = await readWikiTempFile(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
+        path: toDeviceFilePath(path),
+      });
+      setChatTempViewerTitle(payload.path.split('/').pop() || payload.path || '临时文档');
+      setChatTempViewerContent(payload.content);
+      setChatTempViewerOpen(true);
+    } catch (error) {
+      setChatTempManagerError(error instanceof Error ? error.message : '读取临时文档失败。');
+    } finally {
+      setChatTempManagerBusy(false);
+    }
+  }
+
+  async function deleteChatTempEntry(path: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatTempManagerBusy(true);
+    setChatTempManagerError('');
+    try {
+      await deleteWikiTempPath(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
+        path: toDeviceFilePath(path),
+      });
+      await refreshChatTempManager(chatTempManagerPath || '');
+    } catch (error) {
+      setChatTempManagerError(error instanceof Error ? error.message : '删除临时文件失败。');
+    } finally {
+      setChatTempManagerBusy(false);
+    }
+  }
+
+  async function promoteChatTempEntry(path: string, name: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      return;
+    }
+    setChatTempManagerBusy(true);
+    setChatTempManagerError('');
+    try {
+      const suggestedTitle = (name || '').replace(/\.[^.]+$/, '').trim() || 'Temp Note';
+      const result = await promoteWikiTempFile(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
+        path: toDeviceFilePath(path),
+        title: suggestedTitle,
+      });
+      setChatTempManagerOpen(false);
+      Alert.alert('已转为正式资源', `已写入 raw：${result.rawPath}`);
+      await refreshChatTempManager(chatTempManagerPath || '');
+      await refreshWikiDirectory();
+    } catch (error) {
+      setChatTempManagerError(error instanceof Error ? error.message : '转为正式资源失败。');
+    } finally {
+      setChatTempManagerBusy(false);
+    }
   }
 
   function openChatSaveDocModal(): void {
@@ -3640,7 +3784,6 @@ function App() {
         spaceId: activeWikiSpaceId || undefined,
       });
       setLibraryNotice(`已导入并编译页面：${result.title}`);
-      setWikiFileBackTitle(`${result.title}-回填`);
       setWikiLastIngest({
         operationId: result.operationId,
         pageId: result.pageId,
@@ -3666,59 +3809,6 @@ function App() {
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : 'Wiki 导入失败。');
-    } finally {
-      setLibraryBusy(false);
-    }
-  }
-
-  async function runWikiQuery(): Promise<void> {
-    if (!session?.token) {
-      return;
-    }
-    if (!activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行 Wiki 查询。');
-      setLibraryNotice('');
-      return;
-    }
-    const question = wikiQuestion.trim();
-    if (!question) {
-      setLibraryError('请先输入 Wiki 查询问题。');
-      setLibraryNotice('');
-      return;
-    }
-    setLibraryBusy(true);
-    setLibraryError('');
-    setLibraryNotice('');
-    try {
-      const result = await queryWiki(session.token, {
-        question,
-        spaceId: activeWikiSpaceId || undefined,
-      });
-      setWikiLastQuery(result);
-      setWikiFileBackTitle(`查询归档-${new Date().toISOString().slice(0, 10)}`);
-      const citations = result.citations.map((item) => item.title).filter(Boolean).slice(0, 3);
-      setWikiAnswer(result.answer);
-      setWikiLastQueryMeta({
-        operationId: result.operationId,
-        answer: result.answer,
-        citationTitles: citations,
-        queryMode: result.queryMode,
-        queryFallbackReason: result.queryFallbackReason,
-        queryProvider: result.queryProvider,
-        queryModel: result.queryModel,
-        queryIterations: result.queryIterations,
-        queryToolCalls: result.queryToolCalls,
-      });
-      setLibraryNotice(
-        citations.length
-          ? `查询完成，引用页面：${citations.join('、')}`
-          : '查询完成。',
-      );
-      if (result.queryMode && result.queryMode !== 'model') {
-        setLibraryNotice(`查询完成（回退模式：${result.queryMode}${result.queryFallbackReason ? `，原因 ${result.queryFallbackReason}` : ''}）。`);
-      }
-    } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Wiki 查询失败。');
     } finally {
       setLibraryBusy(false);
     }
@@ -3780,65 +3870,6 @@ function App() {
       setLibraryNotice(`已刷新 ${pages.length} 个本空间 Wiki 页面。`);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : '读取本地 Wiki 页面失败。');
-    } finally {
-      setLibraryBusy(false);
-    }
-  }
-
-  async function runWikiFileBack(): Promise<void> {
-    if (!session?.token) {
-      return;
-    }
-    if (!activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行回填。');
-      setLibraryNotice('');
-      return;
-    }
-    const title = wikiFileBackTitle.trim();
-    const answer = (wikiLastQuery?.answer || wikiAnswer || '').trim();
-    if (!title) {
-      setLibraryError('请先填写回填标题。');
-      setLibraryNotice('');
-      return;
-    }
-    if (!answer) {
-      setLibraryError('当前没有可回填的查询结果。');
-      setLibraryNotice('');
-      return;
-    }
-
-    setLibraryBusy(true);
-    setLibraryError('');
-    setLibraryNotice('');
-    try {
-      const result = await fileBackWikiAnswer(session.token, {
-        title,
-        contentMd: answer,
-        summary: answer.slice(0, 200),
-        tags: ['query', 'file-back'],
-        spaceId: activeWikiSpaceId || undefined,
-      });
-      setLibraryNotice(`已回填到本空间 Wiki：${result.title}`);
-      setWikiLastFileBack({
-        operationId: result.operationId,
-        pageId: result.pageId,
-        title: result.title,
-        rawPath: result.rawPath,
-        directoryMode: result.directoryMode,
-        directoryFallbackReason: result.directoryFallbackReason,
-      });
-      const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
-      const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
-      setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
-      setWikiManualEditCount(directoryPayload.manualEdits.length);
-      setWikiRawFileCount(directoryPayload.rawFiles.length);
-      if (result.rawPath) {
-        setLibraryNotice(`已回填到 raw：${result.rawPath}，并标记为未整理。`);
-      }
-    } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Wiki 回填失败。');
     } finally {
       setLibraryBusy(false);
     }
@@ -4613,6 +4644,18 @@ function App() {
                     isDir: entry.isDir,
                     selected: Boolean(chatAttachedFiles[entry.path]),
                   })),
+                  tempManagerOpen: chatTempManagerOpen,
+                  tempManagerPath: chatTempManagerPath,
+                  tempManagerBusy: chatTempManagerBusy,
+                  tempManagerError: chatTempManagerError,
+                  tempManagerEntries: (chatTempManagerListing?.entries || []).map((entry) => ({
+                    path: entry.path,
+                    name: entry.name,
+                    isDir: entry.isDir,
+                  })),
+                  tempViewerOpen: chatTempViewerOpen,
+                  tempViewerTitle: chatTempViewerTitle,
+                  tempViewerContent: chatTempViewerContent,
                   saveDocModalOpen: chatSaveDocModalOpen,
                   saveDocTitle: chatSaveDocTitle,
                   saveDocItems: chatSaveDocItems,
@@ -4633,6 +4676,13 @@ function App() {
                   onAttachmentPickerOpenPath: (path: string) => void refreshChatAttachmentPicker(path),
                   onAttachmentPickerToggleFile: (path: string, name: string) => toggleChatAttachment(path, name),
                   onRemoveAttachment: (index: number) => removeChatAttachmentByIndex(index),
+                  onOpenTempManager: openChatTempManager,
+                  onCloseTempManager: () => setChatTempManagerOpen(false),
+                  onTempManagerOpenPath: (path: string) => void refreshChatTempManager(path),
+                  onTempManagerView: (path: string) => void viewChatTempFile(path),
+                  onTempManagerDelete: (path: string) => void deleteChatTempEntry(path),
+                  onTempManagerPromote: (path: string, name: string) => void promoteChatTempEntry(path, name),
+                  onCloseTempViewer: () => setChatTempViewerOpen(false),
                   onOpenSaveDocModal: openChatSaveDocModal,
                   onCloseSaveDocModal: () => setChatSaveDocModalOpen(false),
                   onChangeSaveDocTitle: setChatSaveDocTitle,
@@ -4689,13 +4739,8 @@ function App() {
                 wikiNotice={libraryNotice}
                 wikiSourceTitle={wikiSourceTitle}
                 wikiSourceContent={wikiSourceContent}
-                wikiQuestion={wikiQuestion}
-                wikiFileBackTitle={wikiFileBackTitle}
-                wikiAnswer={wikiLastQuery?.answer || wikiAnswer}
                 wikiPages={wikiPages}
                 wikiLastIngest={wikiLastIngest}
-                wikiLastQuery={wikiLastQueryMeta}
-                wikiLastFileBack={wikiLastFileBack}
                 wikiDirectoryRecords={wikiDirectoryView.records}
                 wikiDirectoryStructureNodes={wikiDirectoryView.structureNodes}
                 wikiDirectoryText={wikiDirectoryText}
@@ -4720,12 +4765,8 @@ function App() {
                 onChangeActiveSection={setLibraryActiveSection}
                 onChangeWikiSourceTitle={setWikiSourceTitle}
                 onChangeWikiSourceContent={setWikiSourceContent}
-                onChangeWikiQuestion={setWikiQuestion}
-                onChangeWikiFileBackTitle={setWikiFileBackTitle}
                 onRunWikiIngest={() => void runWikiIngest()}
-                onRunWikiQuery={() => void runWikiQuery()}
                 onRunWikiDirectoryConsistencyCheck={() => void runWikiDirectoryConsistencyCheckAction()}
-                onRunWikiFileBack={() => void runWikiFileBack()}
                 onRefreshWikiPages={() => void refreshWikiPages()}
                 onPickAndIngestWikiUploads={() => void pickAndIngestWikiRawFiles()}
                 onRefreshWikiDirectory={() => void refreshWikiDirectory()}

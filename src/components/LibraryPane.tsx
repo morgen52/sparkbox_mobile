@@ -45,7 +45,6 @@ export type LibrarySectionKey =
   | 'wiki_upload_file'
   | 'wiki_upload_image'
   | 'wiki_upload_text'
-  | 'wiki_query'
   | 'wiki_organize'
   | 'wiki_preview';
 
@@ -94,9 +93,6 @@ type LibraryPaneProps = {
   wikiNotice: string;
   wikiSourceTitle: string;
   wikiSourceContent: string;
-  wikiQuestion: string;
-  wikiFileBackTitle: string;
-  wikiAnswer: string;
   wikiPages: Array<{ id: string; title: string; summary: string; tags: string[] }>;
   wikiLastIngest: {
     operationId: string;
@@ -110,25 +106,6 @@ type LibraryPaneProps = {
     directoryProvider?: string;
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
-  } | null;
-  wikiLastQuery: {
-    operationId: string;
-    answer: string;
-    citationTitles: string[];
-    queryMode?: string;
-    queryFallbackReason?: string | null;
-    queryProvider?: string;
-    queryModel?: string;
-    queryIterations?: number;
-    queryToolCalls?: number;
-  } | null;
-  wikiLastFileBack: {
-    operationId: string;
-    pageId: string;
-    title: string;
-    rawPath?: string;
-    directoryMode?: string;
-    directoryFallbackReason?: string | null;
   } | null;
   wikiDirectoryRecords: Array<{ rawPath: string; title: string; kind: string; tags: string[] }>;
   wikiDirectoryStructureNodes: Array<{ name: string; items: string[] }>;
@@ -150,12 +127,8 @@ type LibraryPaneProps = {
   onChangeActiveSection: (section: LibrarySectionKey) => void;
   onChangeWikiSourceTitle: (value: string) => void;
   onChangeWikiSourceContent: (value: string) => void;
-  onChangeWikiQuestion: (value: string) => void;
-  onChangeWikiFileBackTitle: (value: string) => void;
   onRunWikiIngest: () => void;
-  onRunWikiQuery: () => void;
   onRunWikiDirectoryConsistencyCheck: () => void;
-  onRunWikiFileBack: () => void;
   onRefreshWikiPages: () => void;
   onPickAndIngestWikiUploads: () => void;
   onRefreshWikiDirectory: () => void;
@@ -246,13 +219,8 @@ export function LibraryPane(props: LibraryPaneProps) {
     wikiNotice,
     wikiSourceTitle,
     wikiSourceContent,
-    wikiQuestion,
-    wikiFileBackTitle,
-    wikiAnswer,
     wikiPages,
     wikiLastIngest,
-    wikiLastQuery,
-    wikiLastFileBack,
     wikiDirectoryRecords,
     wikiDirectoryStructureNodes,
     wikiDirectoryText,
@@ -265,12 +233,8 @@ export function LibraryPane(props: LibraryPaneProps) {
     onChangeActiveSection,
     onChangeWikiSourceTitle,
     onChangeWikiSourceContent,
-    onChangeWikiQuestion,
-    onChangeWikiFileBackTitle,
     onRunWikiIngest,
-    onRunWikiQuery,
     onRunWikiDirectoryConsistencyCheck,
-    onRunWikiFileBack,
     onRefreshWikiPages,
     onPickAndIngestWikiUploads,
     onRefreshWikiDirectory,
@@ -431,14 +395,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           </Pressable>
           <Pressable
             style={styles.librarySectionCard}
-            onPress={() => onChangeActiveSection('wiki_query')}
-            disabled={!activeSpace}
-          >
-            <Text style={styles.librarySectionTitle}>资料查询</Text>
-            <Text style={styles.librarySectionCopy}>进入 Wiki 问答、回填与页面浏览。</Text>
-          </Pressable>
-          <Pressable
-            style={styles.librarySectionCard}
             onPress={() => onChangeActiveSection('wiki_organize')}
             disabled={!activeSpace}
           >
@@ -485,10 +441,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_upload_text')} disabled={!activeSpace}>
             <Text style={styles.librarySectionTitle}>文本上传</Text>
             <Text style={styles.librarySectionCopy}>通过 Raw 标题+内容上传。</Text>
-          </Pressable>
-          <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_query')} disabled={!activeSpace}>
-            <Text style={styles.librarySectionTitle}>资料查询</Text>
-            <Text style={styles.librarySectionCopy}>对空间知识库提问并引用来源。</Text>
           </Pressable>
           <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_organize')} disabled={!activeSpace}>
             <Text style={styles.librarySectionTitle}>个人Wiki整理</Text>
@@ -565,42 +517,7 @@ export function LibraryPane(props: LibraryPaneProps) {
           </Pressable>
         </View>
 
-        <Text style={styles.selectionLabel}>Wiki 问题</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="例如：这个空间最近的关键决策是什么？"
-          placeholderTextColor="#7e8a83"
-          style={styles.input}
-          value={wikiQuestion}
-          onChangeText={onChangeWikiQuestion}
-        />
-        <Pressable
-          style={styles.secondaryButtonSmall}
-          onPress={onRunWikiQuery}
-          disabled={!activeSpace || wikiBusy}
-        >
-          <Text style={styles.secondaryButtonText}>执行查询</Text>
-        </Pressable>
-
-        <Text style={styles.selectionLabel}>回填标题</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="例如：本次讨论结论归档"
-          placeholderTextColor="#7e8a83"
-          style={styles.input}
-          value={wikiFileBackTitle}
-          onChangeText={onChangeWikiFileBackTitle}
-        />
         <View style={styles.inlineActions}>
-          <Pressable
-            style={styles.secondaryButtonSmall}
-            onPress={onRunWikiFileBack}
-            disabled={!activeSpace || wikiBusy}
-          >
-            <Text style={styles.secondaryButtonText}>回填到 Wiki</Text>
-          </Pressable>
           <Pressable
             style={styles.secondaryButtonSmall}
             onPress={onRefreshWikiPages}
@@ -613,7 +530,6 @@ export function LibraryPane(props: LibraryPaneProps) {
         {wikiNotice ? <Text style={styles.noticeText}>{wikiNotice}</Text> : null}
         {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         {wikiBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-        {wikiAnswer ? <Text style={styles.cardCopy}>查询结果：{wikiAnswer}</Text> : null}
 
         {wikiLastIngest ? (
           <View style={styles.deviceRowCard}>
@@ -641,23 +557,6 @@ export function LibraryPane(props: LibraryPaneProps) {
                 directory 回退已触发：{wikiLastIngest.directoryFallbackReason || 'model_unavailable'}
               </Text>
             ) : null}
-          </View>
-        ) : null}
-
-        {wikiLastQuery ? (
-          <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>最近查询结果</Text>
-            <Text style={styles.cardCopy}>操作ID：{wikiLastQuery.operationId}</Text>
-            <Text style={styles.cardCopy}>引用页面：{wikiLastQuery.citationTitles.join('、') || '无'}</Text>
-          </View>
-        ) : null}
-
-        {wikiLastFileBack ? (
-          <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>最近回填结果</Text>
-            <Text style={styles.cardCopy}>标题：{wikiLastFileBack.title}</Text>
-            <Text style={styles.cardCopy}>页面ID：{wikiLastFileBack.pageId}</Text>
-            <Text style={styles.cardCopy}>操作ID：{wikiLastFileBack.operationId}</Text>
           </View>
         ) : null}
 
@@ -791,63 +690,6 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.primaryButtonText}>导入文本</Text>
           </Pressable>
           {wikiNotice ? <Text style={styles.noticeText}>{wikiNotice}</Text> : null}
-          {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
-        </View>
-      </>
-    );
-  }
-
-  function renderWikiQuerySection(): React.ReactNode {
-    return (
-      <>
-        {renderSectionHeader('资料查询', '对当前空间 Wiki 内容提问并查看引用。')}
-        <View style={styles.settingsCard}>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="输入问题"
-            placeholderTextColor="#7e8a83"
-            style={styles.input}
-            value={wikiQuestion}
-            onChangeText={onChangeWikiQuestion}
-          />
-          <Pressable style={styles.primaryButtonSmall} onPress={onRunWikiQuery} disabled={!activeSpace || wikiBusy}>
-            <Text style={styles.primaryButtonText}>执行查询</Text>
-          </Pressable>
-          {wikiAnswer ? <Text style={styles.cardCopy}>查询结果：{wikiAnswer}</Text> : null}
-          {wikiLastQuery ? <Text style={styles.cardCopy}>引用页面：{wikiLastQuery.citationTitles.join('、') || '无'}</Text> : null}
-          {wikiLastQuery?.queryMode ? <Text style={styles.cardCopy}>查询模式：{wikiLastQuery.queryMode}</Text> : null}
-          {(wikiLastQuery?.queryProvider || wikiLastQuery?.queryModel) ? (
-            <Text style={styles.cardCopy}>
-              provider/model：{wikiLastQuery?.queryProvider || '-'} / {wikiLastQuery?.queryModel || '-'}
-            </Text>
-          ) : null}
-          {wikiLastQuery?.queryIterations ? (
-            <Text style={styles.cardCopy}>
-              迭代轮数：{wikiLastQuery.queryIterations} · 工具调用：{wikiLastQuery.queryToolCalls || 0}
-            </Text>
-          ) : null}
-          {wikiLastQuery?.queryFallbackReason ? (
-            <Text style={styles.errorText}>回退原因：{wikiLastQuery.queryFallbackReason}</Text>
-          ) : null}
-
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="回填标题（例如：本次查询结论）"
-            placeholderTextColor="#7e8a83"
-            style={styles.input}
-            value={wikiFileBackTitle}
-            onChangeText={onChangeWikiFileBackTitle}
-          />
-          <Pressable style={styles.secondaryButtonSmall} onPress={onRunWikiFileBack} disabled={!activeSpace || wikiBusy}>
-            <Text style={styles.secondaryButtonText}>回填为 raw 文档（未整理）</Text>
-          </Pressable>
-          {wikiLastFileBack ? (
-            <Text style={styles.cardCopy}>
-              最近回填：{wikiLastFileBack.title} · {wikiLastFileBack.rawPath || wikiLastFileBack.pageId}
-            </Text>
-          ) : null}
           {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         </View>
       </>
@@ -1470,9 +1312,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'wiki_upload_text') {
     return <>{renderWikiUploadText()}</>;
-  }
-  if (activeSection === 'wiki_query') {
-    return <>{renderWikiQuerySection()}</>;
   }
   if (activeSection === 'wiki_organize') {
     return <>{renderWikiOrganizeSection()}</>;
