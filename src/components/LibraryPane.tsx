@@ -13,6 +13,7 @@ import {
   describeUiDateTime,
   formatByteSize,
 } from '../appShell';
+import { MarkdownCardViewer } from './MarkdownCardViewer';
 import type {
   ChatSessionScope,
   HouseholdChatSessionSummary,
@@ -45,7 +46,6 @@ export type LibrarySectionKey =
   | 'wiki_upload_image'
   | 'wiki_upload_text'
   | 'wiki_query'
-  | 'wiki_lint'
   | 'wiki_organize'
   | 'wiki_preview';
 
@@ -97,7 +97,6 @@ type LibraryPaneProps = {
   wikiQuestion: string;
   wikiFileBackTitle: string;
   wikiAnswer: string;
-  wikiLintSummary: string;
   wikiPages: Array<{ id: string; title: string; summary: string; tags: string[] }>;
   wikiLastIngest: {
     operationId: string;
@@ -131,17 +130,6 @@ type LibraryPaneProps = {
     directoryMode?: string;
     directoryFallbackReason?: string | null;
   } | null;
-  wikiLastLint: {
-    operationId: string;
-    summary: string;
-    issueCount: number;
-    directoryMode?: string;
-    directoryFallbackReason?: string | null;
-    directoryModelBudgetSeconds?: number;
-    directoryProvider?: string;
-    directoryModel?: string;
-    directoryProviderTimeoutSeconds?: number;
-  } | null;
   wikiDirectoryRecords: Array<{ rawPath: string; title: string; kind: string; tags: string[] }>;
   wikiDirectoryStructureNodes: Array<{ name: string; items: string[] }>;
   wikiDirectoryText: string;
@@ -151,13 +139,14 @@ type LibraryPaneProps = {
   wikiUploadSourceType: 'note' | 'document' | 'image';
   wikiOrganizeStatus: {
     jobId: string;
+    mode?: string;
     status: string;
     iterations: number;
     durationMs: number;
     processedRecords: number;
     message: string;
   } | null;
-  wikiPreviewFiles: Array<{ path: string; preview: string; updatedAt: string }>;
+  wikiPreviewFiles: Array<{ path: string; preview: string; content: string; updatedAt: string }>;
   onChangeActiveSection: (section: LibrarySectionKey) => void;
   onChangeWikiSourceTitle: (value: string) => void;
   onChangeWikiSourceContent: (value: string) => void;
@@ -165,7 +154,7 @@ type LibraryPaneProps = {
   onChangeWikiFileBackTitle: (value: string) => void;
   onRunWikiIngest: () => void;
   onRunWikiQuery: () => void;
-  onRunWikiLint: () => void;
+  onRunWikiDirectoryConsistencyCheck: () => void;
   onRunWikiFileBack: () => void;
   onRefreshWikiPages: () => void;
   onPickAndIngestWikiUploads: () => void;
@@ -177,6 +166,7 @@ type LibraryPaneProps = {
   onReclassifyWikiRecord: (rawPath: string, kind: 'note' | 'document' | 'image') => void;
   onChangeWikiUploadSourceType: (value: 'note' | 'document' | 'image') => void;
   onStartWikiOrganize: () => void;
+  onStartWikiQualityOptimize: () => void;
   onRefreshWikiOrganizeStatus: () => void;
   onRefreshWikiPreview: () => void;
   onOpenFileEditor: () => void;
@@ -259,12 +249,10 @@ export function LibraryPane(props: LibraryPaneProps) {
     wikiQuestion,
     wikiFileBackTitle,
     wikiAnswer,
-    wikiLintSummary,
     wikiPages,
     wikiLastIngest,
     wikiLastQuery,
     wikiLastFileBack,
-    wikiLastLint,
     wikiDirectoryRecords,
     wikiDirectoryStructureNodes,
     wikiDirectoryText,
@@ -281,7 +269,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     onChangeWikiFileBackTitle,
     onRunWikiIngest,
     onRunWikiQuery,
-    onRunWikiLint,
+    onRunWikiDirectoryConsistencyCheck,
     onRunWikiFileBack,
     onRefreshWikiPages,
     onPickAndIngestWikiUploads,
@@ -293,6 +281,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     onReclassifyWikiRecord,
     onChangeWikiUploadSourceType,
     onStartWikiOrganize,
+    onStartWikiQualityOptimize,
     onRefreshWikiOrganizeStatus,
     onRefreshWikiPreview,
     onOpenFileEditor,
@@ -345,6 +334,16 @@ export function LibraryPane(props: LibraryPaneProps) {
   const [wikiRenameDrafts, setWikiRenameDrafts] = React.useState<Record<string, string>>({});
   const [wikiTitleDrafts, setWikiTitleDrafts] = React.useState<Record<string, string>>({});
   const [virtualFolder, setVirtualFolder] = React.useState('');
+  const [activeWikiPreviewPath, setActiveWikiPreviewPath] = React.useState('');
+
+  React.useEffect(() => {
+    if (!activeWikiPreviewPath) {
+      return;
+    }
+    if (!wikiPreviewFiles.some((item) => item.path === activeWikiPreviewPath)) {
+      setActiveWikiPreviewPath('');
+    }
+  }, [activeWikiPreviewPath, wikiPreviewFiles]);
 
   function closeFileActionsModal(): void {
     setFileActionsOpen(false);
@@ -440,14 +439,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           </Pressable>
           <Pressable
             style={styles.librarySectionCard}
-            onPress={() => onChangeActiveSection('wiki_lint')}
-            disabled={!activeSpace}
-          >
-            <Text style={styles.librarySectionTitle}>运行自检</Text>
-            <Text style={styles.librarySectionCopy}>检查页面质量与目录一致性。</Text>
-          </Pressable>
-          <Pressable
-            style={styles.librarySectionCard}
             onPress={() => onChangeActiveSection('wiki_organize')}
             disabled={!activeSpace}
           >
@@ -498,10 +489,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_query')} disabled={!activeSpace}>
             <Text style={styles.librarySectionTitle}>资料查询</Text>
             <Text style={styles.librarySectionCopy}>对空间知识库提问并引用来源。</Text>
-          </Pressable>
-          <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_lint')} disabled={!activeSpace}>
-            <Text style={styles.librarySectionTitle}>运行自检</Text>
-            <Text style={styles.librarySectionCopy}>检查目录和内容质量。</Text>
           </Pressable>
           <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_organize')} disabled={!activeSpace}>
             <Text style={styles.librarySectionTitle}>个人Wiki整理</Text>
@@ -576,13 +563,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           >
             <Text style={styles.primaryButtonText}>导入并编译</Text>
           </Pressable>
-          <Pressable
-            style={styles.secondaryButtonSmall}
-            onPress={onRunWikiLint}
-            disabled={!activeSpace || wikiBusy}
-          >
-            <Text style={styles.secondaryButtonText}>运行自检</Text>
-          </Pressable>
         </View>
 
         <Text style={styles.selectionLabel}>Wiki 问题</Text>
@@ -634,7 +614,6 @@ export function LibraryPane(props: LibraryPaneProps) {
         {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         {wikiBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
         {wikiAnswer ? <Text style={styles.cardCopy}>查询结果：{wikiAnswer}</Text> : null}
-        {wikiLintSummary ? <Text style={styles.cardCopy}>自检结果：{wikiLintSummary}</Text> : null}
 
         {wikiLastIngest ? (
           <View style={styles.deviceRowCard}>
@@ -679,33 +658,6 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.cardCopy}>标题：{wikiLastFileBack.title}</Text>
             <Text style={styles.cardCopy}>页面ID：{wikiLastFileBack.pageId}</Text>
             <Text style={styles.cardCopy}>操作ID：{wikiLastFileBack.operationId}</Text>
-          </View>
-        ) : null}
-
-        {wikiLastLint ? (
-          <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>最近自检结果</Text>
-            <Text style={styles.cardCopy}>操作ID：{wikiLastLint.operationId}</Text>
-            <Text style={styles.cardCopy}>{wikiLastLint.summary}</Text>
-            <Text style={styles.cardCopy}>问题数量：{wikiLastLint.issueCount}</Text>
-            {wikiLastLint.directoryMode ? (
-              <Text style={styles.cardCopy}>directory 生成模式：{wikiLastLint.directoryMode}</Text>
-            ) : null}
-            {(wikiLastLint.directoryProvider || wikiLastLint.directoryModel) ? (
-              <Text style={styles.cardCopy}>
-                provider/model：{wikiLastLint.directoryProvider || '-'} / {wikiLastLint.directoryModel || '-'}
-              </Text>
-            ) : null}
-            {wikiLastLint.directoryModelBudgetSeconds ? (
-              <Text style={styles.cardCopy}>
-                预算超时阈值：{wikiLastLint.directoryModelBudgetSeconds}s（provider超时：{wikiLastLint.directoryProviderTimeoutSeconds || 0}s）
-              </Text>
-            ) : null}
-            {wikiLastLint.directoryMode === 'deterministic' ? (
-              <Text style={styles.errorText}>
-                directory 回退已触发：{wikiLastLint.directoryFallbackReason || 'model_unavailable'}
-              </Text>
-            ) : null}
           </View>
         ) : null}
 
@@ -902,30 +854,17 @@ export function LibraryPane(props: LibraryPaneProps) {
     );
   }
 
-  function renderWikiLintSection(): React.ReactNode {
-    return (
-      <>
-        {renderSectionHeader('运行自检', '检查当前空间的目录一致性和页面质量。')}
-        <View style={styles.settingsCard}>
-          <Pressable style={styles.primaryButtonSmall} onPress={onRunWikiLint} disabled={!activeSpace || wikiBusy}>
-            <Text style={styles.primaryButtonText}>开始自检</Text>
-          </Pressable>
-          {wikiLintSummary ? <Text style={styles.cardCopy}>{wikiLintSummary}</Text> : null}
-          {wikiLastLint ? <Text style={styles.cardCopy}>问题数量：{wikiLastLint.issueCount}</Text> : null}
-          {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
-        </View>
-      </>
-    );
-  }
-
   function renderWikiOrganizeSection(): React.ReactNode {
     return (
       <>
-        {renderSectionHeader('个人Wiki整理', '后台运行多轮整理任务，把未整理 raw 转化为 wiki 条目。')}
+        {renderSectionHeader('个人Wiki整理', '后台运行多轮任务，整理素材并优化 Wiki 文档质量与结构。')}
         <View style={styles.settingsCard}>
           <View style={styles.inlineActions}>
             <Pressable style={styles.primaryButtonSmall} onPress={onStartWikiOrganize} disabled={!activeSpace || wikiBusy}>
               <Text style={styles.primaryButtonText}>启动整理</Text>
+            </Pressable>
+            <Pressable style={styles.primaryButtonSmall} onPress={onStartWikiQualityOptimize} disabled={!activeSpace || wikiBusy}>
+              <Text style={styles.primaryButtonText}>Wiki质量优化</Text>
             </Pressable>
             <Pressable style={styles.secondaryButtonSmall} onPress={onRefreshWikiOrganizeStatus} disabled={!activeSpace || wikiBusy}>
               <Text style={styles.secondaryButtonText}>刷新状态</Text>
@@ -934,6 +873,7 @@ export function LibraryPane(props: LibraryPaneProps) {
           {wikiOrganizeStatus ? (
             <View style={styles.deviceRowCard}>
               <Text style={styles.networkName}>最近整理任务</Text>
+              {wikiOrganizeStatus.mode ? <Text style={styles.cardCopy}>任务模式：{wikiOrganizeStatus.mode}</Text> : null}
               <Text style={styles.cardCopy}>状态：{wikiOrganizeStatus.status}</Text>
               <Text style={styles.cardCopy}>任务ID：{wikiOrganizeStatus.jobId || '-'}</Text>
               <Text style={styles.cardCopy}>轮数：{wikiOrganizeStatus.iterations}</Text>
@@ -952,20 +892,51 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
 
   function renderWikiPreviewSection(): React.ReactNode {
+    const activePreview = wikiPreviewFiles.find((item) => item.path === activeWikiPreviewPath) || null;
+
+    if (activePreview) {
+      return (
+        <>
+          {renderSectionHeader('Wiki 阅读器', `正在查看 ${activePreview.path}`)}
+          <View style={styles.settingsCard}>
+            <View style={styles.inlineActions}>
+              <Pressable style={styles.secondaryButtonSmall} onPress={() => setActiveWikiPreviewPath('')}>
+                <Text style={styles.secondaryButtonText}>返回文件列表</Text>
+              </Pressable>
+              <Pressable style={styles.primaryButtonSmall} onPress={onRefreshWikiPreview} disabled={!activeSpace || wikiBusy}>
+                <Text style={styles.primaryButtonText}>刷新预览</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.cardCopy}>更新：{describeFileTimestamp(activePreview.updatedAt)}</Text>
+            <MarkdownCardViewer markdown={activePreview.content || activePreview.preview || ''} styles={styles} />
+            {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
+          </View>
+        </>
+      );
+    }
+
     return (
       <>
-        {renderSectionHeader('Wiki 预览', '查看当前空间 wiki 目录的文件内容片段。')}
+        {renderSectionHeader('Wiki 预览', '每个 Wiki 文件都是一个条目，点击进入 Markdown 阅读器。')}
         <View style={styles.settingsCard}>
           <Pressable style={styles.primaryButtonSmall} onPress={onRefreshWikiPreview} disabled={!activeSpace || wikiBusy}>
             <Text style={styles.primaryButtonText}>刷新预览</Text>
           </Pressable>
           {wikiPreviewFiles.length === 0 ? <Text style={styles.cardCopy}>暂无可预览的 Wiki 文件。</Text> : null}
           {wikiPreviewFiles.map((item) => (
-            <View key={item.path} style={styles.deviceRowCard}>
+            <Pressable
+              key={item.path}
+              style={styles.deviceRowCard}
+              onPress={() => setActiveWikiPreviewPath(item.path)}
+              pressFeedback="scale"
+            >
               <Text style={styles.networkName}>{item.path}</Text>
               <Text style={styles.cardCopy}>更新：{describeFileTimestamp(item.updatedAt)}</Text>
-              <Text style={styles.cardCopy}>{item.preview || '（空内容）'}</Text>
-            </View>
+              <Text style={styles.cardCopy} numberOfLines={3}>
+                {item.preview || '（空内容）'}
+              </Text>
+              <Text style={styles.noticeText}>点击进入阅读器</Text>
+            </Pressable>
           ))}
           {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         </View>
@@ -1225,6 +1196,13 @@ export function LibraryPane(props: LibraryPaneProps) {
               disabled={!onlineDeviceAvailable || filesBusy}
             >
               <Text style={styles.secondaryButtonText}>刷新虚拟目录</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+              onPress={onRunWikiDirectoryConsistencyCheck}
+              disabled={!onlineDeviceAvailable || filesBusy}
+            >
+              <Text style={styles.secondaryButtonText}>目录一致性检查</Text>
             </Pressable>
             {canMutateActiveSpaceLibrary ? (
               <>
@@ -1495,9 +1473,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'wiki_query') {
     return <>{renderWikiQuerySection()}</>;
-  }
-  if (activeSection === 'wiki_lint') {
-    return <>{renderWikiLintSection()}</>;
   }
   if (activeSection === 'wiki_organize') {
     return <>{renderWikiOrganizeSection()}</>;

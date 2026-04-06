@@ -110,7 +110,9 @@ import {
   openSpaceSideChannel,
   openSpaceThreadSession,
   queryWiki,
-    startWikiOrganize,
+  runWikiDirectoryConsistencyCheck,
+  startWikiOrganize,
+  startWikiQualityOptimize,
   relayHouseholdSpaceMessage,
   reconnectDevice,
   renameHouseholdPath,
@@ -135,7 +137,6 @@ import {
   updateHouseholdMemberRole,
   updateHouseholdTask,
   uploadHouseholdFiles,
-  lintWiki,
   type DeviceConfigStatus,
   type DeviceDiagnostics,
   type DeviceInferenceDetail,
@@ -153,6 +154,7 @@ import {
   type HouseholdSpaceSummary,
   type SpaceTemplate,
   type WikiQueryResult,
+  type WikiDirectoryConsistencyResult,
   type WikiDirectoryPayload,
   type WikiOrganizeStatusResult,
 } from './src/householdApi';
@@ -489,7 +491,6 @@ function App() {
   const [wikiQuestion, setWikiQuestion] = useState('');
   const [wikiFileBackTitle, setWikiFileBackTitle] = useState('');
   const [wikiAnswer, setWikiAnswer] = useState('');
-  const [wikiLintSummary, setWikiLintSummary] = useState('');
   const [wikiPages, setWikiPages] = useState<Array<{ id: string; title: string; summary: string; tags: string[] }>>([]);
   const [wikiLastQuery, setWikiLastQuery] = useState<WikiQueryResult | null>(null);
   const [wikiLastIngest, setWikiLastIngest] = useState<{
@@ -524,24 +525,17 @@ function App() {
     directoryMode?: string;
     directoryFallbackReason?: string | null;
   } | null>(null);
-  const [wikiLastLint, setWikiLastLint] = useState<{
-    operationId: string;
-    summary: string;
-    issueCount: number;
-    directoryMode?: string;
-    directoryFallbackReason?: string | null;
-    directoryModelBudgetSeconds?: number;
-    directoryProvider?: string;
-    directoryModel?: string;
-    directoryProviderTimeoutSeconds?: number;
-  } | null>(null);
   const [wikiDirectoryText, setWikiDirectoryText] = useState('');
   const [wikiDirectoryLastUpdatedAt, setWikiDirectoryLastUpdatedAt] = useState('');
   const [wikiManualEditCount, setWikiManualEditCount] = useState(0);
   const [wikiRawFileCount, setWikiRawFileCount] = useState(0);
   const [wikiUploadSourceType, setWikiUploadSourceType] = useState<'note' | 'document' | 'image'>('note');
   const [wikiOrganizeStatus, setWikiOrganizeStatus] = useState<WikiOrganizeStatusResult | null>(null);
-  const [wikiPreviewFiles, setWikiPreviewFiles] = useState<Array<{ path: string; preview: string; updatedAt: string }>>([]);
+  const [wikiPreviewFiles, setWikiPreviewFiles] = useState<Array<{ path: string; preview: string; content: string; updatedAt: string }>>([]);
+  const [wikiPreviewCacheBySpace, setWikiPreviewCacheBySpace] = useState<
+    Record<string, Array<{ path: string; preview: string; content: string; updatedAt: string }>>
+  >({});
+  const [wikiPreviewCacheLoadedAt, setWikiPreviewCacheLoadedAt] = useState<Record<string, number>>({});
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsNotice, setSettingsNotice] = useState('');
@@ -686,6 +680,7 @@ function App() {
   const onlineDeviceAvailable = hasOnlineDevice(homeDevices);
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
   const activeWikiSpaceId = activeSpace?.kind === 'shared' ? activeSpace.id : '';
+  const activeWikiPreviewCacheKey = activeSpace ? `${activeSpace.kind}:${activeSpace.id}` : '';
   const activeChatMessages: HouseholdChatSessionMessage[] = activeChatSession?.messages ?? [];
   const chatAttachmentItems = useMemo(() => {
     const items = Object.values(chatAttachedFiles).sort((a, b) => a.path.localeCompare(b.path));
@@ -1629,13 +1624,11 @@ function App() {
       setWikiQuestion('');
       setWikiFileBackTitle('');
       setWikiAnswer('');
-      setWikiLintSummary('');
       setWikiPages([]);
       setWikiLastQuery(null);
       setWikiLastIngest(null);
       setWikiLastQueryMeta(null);
       setWikiLastFileBack(null);
-      setWikiLastLint(null);
       setWikiDirectoryText('');
       setWikiDirectoryLastUpdatedAt('');
       setWikiManualEditCount(0);
@@ -1643,6 +1636,8 @@ function App() {
       setWikiUploadSourceType('note');
       setWikiOrganizeStatus(null);
       setWikiPreviewFiles([]);
+      setWikiPreviewCacheBySpace({});
+      setWikiPreviewCacheLoadedAt({});
       setHomeLoaded(false);
       setHomeError('');
       return;
@@ -1772,13 +1767,11 @@ function App() {
     setWikiQuestion('');
     setWikiFileBackTitle('');
     setWikiAnswer('');
-    setWikiLintSummary('');
     setWikiPages([]);
     setWikiLastQuery(null);
     setWikiLastIngest(null);
     setWikiLastQueryMeta(null);
     setWikiLastFileBack(null);
-    setWikiLastLint(null);
     setWikiDirectoryText('');
     setWikiDirectoryLastUpdatedAt('');
     setWikiManualEditCount(0);
@@ -3463,7 +3456,6 @@ function App() {
       });
       setLibraryNotice(`已导入并编译页面：${result.title}`);
       setWikiFileBackTitle(`${result.title}-回填`);
-      setWikiLintSummary('');
       setWikiLastIngest({
         operationId: result.operationId,
         pageId: result.pageId,
@@ -3547,39 +3539,31 @@ function App() {
     }
   }
 
-  async function runWikiLint(): Promise<void> {
+  async function runWikiDirectoryConsistencyCheckAction(): Promise<void> {
     if (!session?.token) {
       return;
     }
     if (!activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行 Wiki 自检。');
-      setLibraryNotice('');
+      setFilesError('请先进入一个空间，再执行目录一致性检查。');
+      setFilesNotice('');
       return;
     }
-    setLibraryBusy(true);
-    setLibraryError('');
+    setFilesBusy(true);
+    setFilesError('');
+    setFilesNotice('');
     setLibraryNotice('');
     try {
-      const result = await lintWiki(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiLintSummary(result.summary);
-      setWikiLastLint({
-        operationId: result.operationId,
-        summary: result.summary,
-        issueCount: result.issues.length,
-        directoryMode: result.directoryMode,
-        directoryFallbackReason: result.directoryFallbackReason,
-        directoryModelBudgetSeconds: result.directoryModelBudgetSeconds,
-        directoryProvider: result.directoryProvider,
-        directoryModel: result.directoryModel,
-        directoryProviderTimeoutSeconds: result.directoryProviderTimeoutSeconds,
+      const result: WikiDirectoryConsistencyResult = await runWikiDirectoryConsistencyCheck(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
       });
+      const extraCount = result.initialExtra.length;
+      const lackCount = result.initialLack.length;
       if (result.directoryMode === 'deterministic') {
-        setLibraryNotice(
-          `自检完成，但 directory 走了回退路径：${result.directoryFallbackReason || 'model_unavailable'}。` +
-            (result.issues.length ? ` 另发现 ${result.issues.length} 个可改进项。` : ''),
+        setFilesNotice(
+          `目录一致性检查已完成（extra ${extraCount}，lack ${lackCount}），directory 走了回退路径：${result.directoryFallbackReason || 'model_unavailable'}。`,
         );
       } else {
-        setLibraryNotice(result.issues.length ? `发现 ${result.issues.length} 个可改进项。` : '未发现明显问题。');
+        setFilesNotice(`目录一致性检查已完成：extra ${extraCount}，lack ${lackCount}。`);
       }
       const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
@@ -3587,9 +3571,9 @@ function App() {
       setWikiManualEditCount(directoryPayload.manualEdits.length);
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Wiki 自检失败。');
+      setFilesError(error instanceof Error ? error.message : '目录一致性检查失败。');
     } finally {
-      setLibraryBusy(false);
+      setFilesBusy(false);
     }
   }
 
@@ -3739,6 +3723,7 @@ function App() {
       const started = await startWikiOrganize(session.token, { spaceId: activeWikiSpaceId || undefined, maxRounds: 10 });
       setWikiOrganizeStatus({
         jobId: started.jobId,
+        mode: started.mode || 'organize',
         status: started.status,
         iterations: 0,
         durationMs: 0,
@@ -3750,6 +3735,39 @@ function App() {
       setLibraryNotice('个人Wiki整理已启动，正在后台运行。');
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : '启动个人Wiki整理失败。');
+    } finally {
+      setLibraryBusy(false);
+    }
+  }
+
+  async function startWikiQualityOptimizeAction(): Promise<void> {
+    if (!session?.token || !activeSpaceId) {
+      setLibraryError('请先进入一个空间，再执行 Wiki质量优化。');
+      setLibraryNotice('');
+      return;
+    }
+    setLibraryBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const started = await startWikiQualityOptimize(session.token, {
+        spaceId: activeWikiSpaceId || undefined,
+        maxRounds: 10,
+      });
+      setWikiOrganizeStatus({
+        jobId: started.jobId,
+        mode: started.mode || 'quality_optimize',
+        status: started.status,
+        iterations: 0,
+        durationMs: 0,
+        processedRecords: 0,
+        startedAt: started.startedAt,
+        finishedAt: null,
+        message: 'wiki quality optimize running',
+      });
+      setLibraryNotice('Wiki质量优化已启动，正在后台运行。');
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '启动 Wiki质量优化失败。');
     } finally {
       setLibraryBusy(false);
     }
@@ -3785,22 +3803,43 @@ function App() {
     }
   }
 
-  async function refreshWikiPreviewData(): Promise<void> {
+  async function refreshWikiPreviewData(options?: { silent?: boolean }): Promise<void> {
+    const silent = Boolean(options?.silent);
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再读取 Wiki 预览。');
-      setLibraryNotice('');
+      if (!silent) {
+        setLibraryError('请先进入一个空间，再读取 Wiki 预览。');
+        setLibraryNotice('');
+      }
       return;
     }
-    setLibraryBusy(true);
-    setLibraryError('');
+    if (!silent) {
+      setLibraryBusy(true);
+      setLibraryError('');
+    }
     try {
       const preview = await getWikiPreview(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiPreviewFiles(preview.wikiFiles);
-      setLibraryNotice(`已刷新 Wiki 预览，共 ${preview.wikiFiles.length} 个文件。`);
+      if (activeWikiPreviewCacheKey) {
+        setWikiPreviewCacheBySpace((current) => ({
+          ...current,
+          [activeWikiPreviewCacheKey]: preview.wikiFiles,
+        }));
+        setWikiPreviewCacheLoadedAt((current) => ({
+          ...current,
+          [activeWikiPreviewCacheKey]: Date.now(),
+        }));
+      }
+      if (!silent) {
+        setLibraryNotice(`已刷新 Wiki 预览，共 ${preview.wikiFiles.length} 个文件。`);
+      }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '读取 Wiki 预览失败。');
+      if (!silent) {
+        setLibraryError(error instanceof Error ? error.message : '读取 Wiki 预览失败。');
+      }
     } finally {
-      setLibraryBusy(false);
+      if (!silent) {
+        setLibraryBusy(false);
+      }
     }
   }
 
@@ -3816,6 +3855,38 @@ function App() {
     }, 3000);
     return () => clearInterval(timer);
   }, [session?.token, wikiOrganizeStatus?.jobId, wikiOrganizeStatus?.status]);
+
+  useEffect(() => {
+    if (shellTab !== 'library' || libraryActiveSection !== 'wiki_preview') {
+      return;
+    }
+    if (!session?.token || !activeSpaceId || !activeWikiPreviewCacheKey) {
+      return;
+    }
+
+    const cached = wikiPreviewCacheBySpace[activeWikiPreviewCacheKey] || [];
+    const lastLoadedAt = wikiPreviewCacheLoadedAt[activeWikiPreviewCacheKey] || 0;
+    const staleMs = 90 * 1000;
+    const isStale = Date.now() - lastLoadedAt > staleMs;
+
+    if (cached.length > 0) {
+      setWikiPreviewFiles(cached);
+      if (isStale) {
+        void refreshWikiPreviewData({ silent: true });
+      }
+      return;
+    }
+
+    void refreshWikiPreviewData();
+  }, [
+    shellTab,
+    libraryActiveSection,
+    session?.token,
+    activeSpaceId,
+    activeWikiPreviewCacheKey,
+    wikiPreviewCacheBySpace,
+    wikiPreviewCacheLoadedAt,
+  ]);
 
   async function saveWikiDirectoryManualEdit(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
@@ -4419,12 +4490,10 @@ function App() {
                 wikiQuestion={wikiQuestion}
                 wikiFileBackTitle={wikiFileBackTitle}
                 wikiAnswer={wikiLastQuery?.answer || wikiAnswer}
-                wikiLintSummary={wikiLintSummary}
                 wikiPages={wikiPages}
                 wikiLastIngest={wikiLastIngest}
                 wikiLastQuery={wikiLastQueryMeta}
                 wikiLastFileBack={wikiLastFileBack}
-                wikiLastLint={wikiLastLint}
                 wikiDirectoryRecords={wikiDirectoryView.records}
                 wikiDirectoryStructureNodes={wikiDirectoryView.structureNodes}
                 wikiDirectoryText={wikiDirectoryText}
@@ -4436,6 +4505,7 @@ function App() {
                   wikiOrganizeStatus
                     ? {
                         jobId: wikiOrganizeStatus.jobId,
+                        mode: wikiOrganizeStatus.mode,
                         status: wikiOrganizeStatus.status,
                         iterations: wikiOrganizeStatus.iterations,
                         durationMs: wikiOrganizeStatus.durationMs,
@@ -4452,7 +4522,7 @@ function App() {
                 onChangeWikiFileBackTitle={setWikiFileBackTitle}
                 onRunWikiIngest={() => void runWikiIngest()}
                 onRunWikiQuery={() => void runWikiQuery()}
-                onRunWikiLint={() => void runWikiLint()}
+                onRunWikiDirectoryConsistencyCheck={() => void runWikiDirectoryConsistencyCheckAction()}
                 onRunWikiFileBack={() => void runWikiFileBack()}
                 onRefreshWikiPages={() => void refreshWikiPages()}
                 onPickAndIngestWikiUploads={() => void pickAndIngestWikiRawFiles()}
@@ -4464,6 +4534,7 @@ function App() {
                 onReclassifyWikiRecord={(rawPath, kind) => void reclassifyWikiRecord(rawPath, kind)}
                 onChangeWikiUploadSourceType={setWikiUploadSourceType}
                 onStartWikiOrganize={() => void startPersonalWikiOrganize()}
+                onStartWikiQualityOptimize={() => void startWikiQualityOptimizeAction()}
                 onRefreshWikiOrganizeStatus={() => void refreshPersonalWikiOrganizeStatus()}
                 onRefreshWikiPreview={() => void refreshWikiPreviewData()}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"

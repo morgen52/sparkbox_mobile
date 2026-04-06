@@ -502,6 +502,7 @@ export type WikiDirectoryPayload = {
 
 export type WikiOrganizeStartResult = {
   jobId: string;
+  mode?: string;
   status: string;
   maxRounds: number;
   startedAt: string;
@@ -509,6 +510,7 @@ export type WikiOrganizeStartResult = {
 
 export type WikiOrganizeStatusResult = {
   jobId: string;
+  mode?: string;
   status: string;
   iterations: number;
   durationMs: number;
@@ -518,11 +520,25 @@ export type WikiOrganizeStatusResult = {
   message: string;
 };
 
+export type WikiDirectoryConsistencyResult = {
+  operationId: string;
+  initialExtra: string[];
+  initialLack: string[];
+  directory: Record<string, unknown>;
+  directoryMode?: string;
+  directoryFallbackReason?: string | null;
+  directoryModelBudgetSeconds?: number;
+  directoryProvider?: string;
+  directoryModel?: string;
+  directoryProviderTimeoutSeconds?: number;
+};
+
 export type WikiPreviewResult = {
   root: string;
   wikiFiles: Array<{
     path: string;
     preview: string;
+    content: string;
     updatedAt: string;
   }>;
 };
@@ -1771,6 +1787,28 @@ export async function startWikiOrganize(
   });
   return {
     jobId: String(response.job_id ?? ''),
+    mode: String(response.mode ?? ''),
+    status: String(response.status ?? ''),
+    maxRounds: Number(response.max_rounds ?? 10),
+    startedAt: String(response.started_at ?? ''),
+  };
+}
+
+export async function startWikiQualityOptimize(
+  token: string,
+  options: { spaceId?: string | null; maxRounds?: number } = {},
+): Promise<WikiOrganizeStartResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/quality-optimize', {
+    method: 'POST',
+    token,
+    body: {
+      space_id: options.spaceId || undefined,
+      max_rounds: options.maxRounds ?? 10,
+    },
+  });
+  return {
+    jobId: String(response.job_id ?? ''),
+    mode: String(response.mode ?? ''),
     status: String(response.status ?? ''),
     maxRounds: Number(response.max_rounds ?? 10),
     startedAt: String(response.started_at ?? ''),
@@ -1783,6 +1821,7 @@ export async function getWikiOrganizeStatus(token: string, jobId: string): Promi
   });
   return {
     jobId: String(response.job_id ?? ''),
+    mode: String(response.mode ?? ''),
     status: String(response.status ?? ''),
     iterations: Number(response.iterations ?? 0),
     durationMs: Number(response.duration_ms ?? 0),
@@ -1790,6 +1829,35 @@ export async function getWikiOrganizeStatus(token: string, jobId: string): Promi
     startedAt: String(response.started_at ?? ''),
     finishedAt: response.finished_at == null ? null : String(response.finished_at),
     message: String(response.message ?? ''),
+  };
+}
+
+export async function runWikiDirectoryConsistencyCheck(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<WikiDirectoryConsistencyResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/directory/consistency-check', {
+    method: 'POST',
+    token,
+    body: {
+      space_id: options.spaceId || undefined,
+    },
+  });
+
+  return {
+    operationId: String(response.operation_id ?? ''),
+    initialExtra: Array.isArray(response.initial_extra) ? response.initial_extra.map((item) => String(item)) : [],
+    initialLack: Array.isArray(response.initial_lack) ? response.initial_lack.map((item) => String(item)) : [],
+    directory:
+      response.directory && typeof response.directory === 'object'
+        ? (response.directory as Record<string, unknown>)
+        : {},
+    directoryMode: String(response.directory_mode ?? ''),
+    directoryFallbackReason: response.directory_fallback_reason == null ? null : String(response.directory_fallback_reason),
+    directoryModelBudgetSeconds: Number(response.directory_model_budget_seconds ?? 0),
+    directoryProvider: String(response.directory_provider ?? ''),
+    directoryModel: String(response.directory_model ?? ''),
+    directoryProviderTimeoutSeconds: Number(response.directory_provider_timeout_seconds ?? 0),
   };
 }
 
@@ -1807,6 +1875,7 @@ export async function getWikiPreview(
           return {
             path: String(row.path ?? ''),
             preview: String(row.preview ?? ''),
+            content: String(row.content ?? row.preview ?? ''),
             updatedAt: String(row.updated_at ?? ''),
           };
         })
