@@ -541,6 +541,54 @@ export type WikiPreviewResult = {
   }>;
 };
 
+// ---------------------------------------------------------------------------
+// v2 Raw Manager types
+// ---------------------------------------------------------------------------
+
+export type RawDirectoryFile = {
+  filename: string;
+  fileId: string;
+  owners: string[];
+  organizedBy: Record<string, boolean>;
+  size: number;
+  sha256: string;
+  addedAt: string;
+};
+
+export type RawDirectoryPayload = {
+  version: number;
+  files: RawDirectoryFile[];
+};
+
+export type RawIngestResult = {
+  ok: boolean;
+  filename: string;
+  fileId: string;
+  owners: string[];
+};
+
+export type RawWorkspaceInfo = {
+  userId: string;
+  workspacePath: string;
+  pointers: Array<Record<string, unknown>>;
+  workFiles: Array<{ name: string; size: number; modifiedAt: string }>;
+  agentsMdPreview: string;
+  wikiMdPreview: string;
+};
+
+export type RawWorkFile = {
+  name: string;
+  size: number;
+  modifiedAt: string;
+};
+
+export type RawPromoteResult = {
+  ok: boolean;
+  filename: string;
+  fileId: string;
+  rawPath: string;
+};
+
 export type WikiChatTranscriptEntryInput = {
   role: string;
   sender: string;
@@ -1891,6 +1939,248 @@ export async function getDeviceConfigStatus(
 ): Promise<DeviceConfigStatus> {
   return cloudJson<DeviceConfigStatus>(`/api/devices/${encodeURIComponent(deviceId)}/config/status`, {
     token,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// v2 Raw Manager API functions
+// ---------------------------------------------------------------------------
+
+export async function getRawDirectory(
+  token: string,
+  options: { spaceId?: string | null } = {},
+): Promise<{ directory: RawDirectoryPayload }> {
+  const query = options.spaceId ? `?space_id=${encodeURIComponent(options.spaceId)}` : '';
+  const response = await cloudJson<Record<string, unknown>>(`/api/raw/directory${query}`, { token });
+  const dir = response.directory as Record<string, unknown> | undefined;
+  return {
+    directory: {
+      version: Number(dir?.version ?? 2),
+      files: Array.isArray(dir?.files)
+        ? (dir.files as Array<Record<string, unknown>>).map((f) => ({
+            filename: String(f.filename ?? ''),
+            fileId: String(f.file_id ?? ''),
+            owners: Array.isArray(f.owners) ? f.owners.map(String) : [],
+            organizedBy:
+              f.organized_by && typeof f.organized_by === 'object'
+                ? (f.organized_by as Record<string, boolean>)
+                : {},
+            size: Number(f.size ?? 0),
+            sha256: String(f.sha256 ?? ''),
+            addedAt: String(f.added_at ?? ''),
+          }))
+        : [],
+    },
+  };
+}
+
+export async function rawIngestText(
+  token: string,
+  input: { title: string; content: string; sourceType?: string; spaceId?: string | null; owners?: string[] },
+): Promise<RawIngestResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/ingest', {
+    method: 'POST',
+    token,
+    body: {
+      title: input.title,
+      content: input.content,
+      source_type: input.sourceType || 'note',
+      space_id: input.spaceId || undefined,
+      owners: input.owners || undefined,
+    },
+  });
+  return {
+    ok: Boolean(response.ok),
+    filename: String(response.filename ?? ''),
+    fileId: String(response.file_id ?? ''),
+    owners: Array.isArray(response.owners) ? response.owners.map(String) : [],
+  };
+}
+
+export async function rawIngestUpload(
+  token: string,
+  files: HouseholdUploadInput[],
+  options: { spaceId?: string | null; owners?: string } = {},
+): Promise<{ ok: boolean; saved: Array<{ filename: string; fileId: string; originalName: string; size: number; owners: string[] }> }> {
+  const params = new URLSearchParams();
+  if (options.spaceId) params.set('space_id', options.spaceId);
+  if (options.owners) params.set('owners', options.owners);
+
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    formData.append('files', {
+      uri: file.uri,
+      name: file.name || `upload-${index + 1}`,
+      type: file.mimeType || 'application/octet-stream',
+    } as any);
+  });
+
+  const response = await fetch(`${getCloudApiBase()}/api/raw/ingest-upload?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (typeof body.detail === 'string' && body.detail.trim()) detail = body.detail.trim();
+    } catch {}
+    throw new Error(detail);
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  return {
+    ok: Boolean(payload.ok),
+    saved: Array.isArray(payload.saved)
+      ? (payload.saved as Array<Record<string, unknown>>).map((item) => ({
+          filename: String(item.filename ?? ''),
+          fileId: String(item.file_id ?? ''),
+          originalName: String(item.original_name ?? ''),
+          size: Number(item.size ?? 0),
+          owners: Array.isArray(item.owners) ? item.owners.map(String) : [],
+        }))
+      : [],
+  };
+}
+
+export async function rawSaveChatTranscript(
+  token: string,
+  input: {
+    title: string;
+    entries: WikiChatTranscriptEntryInput[];
+    spaceId?: string | null;
+    owners?: string[];
+  },
+): Promise<Record<string, unknown>> {
+  return cloudJson<Record<string, unknown>>('/api/raw/chat-transcript', {
+    method: 'POST',
+    token,
+    body: {
+      title: input.title,
+      entries: input.entries.map((entry) => ({
+        role: entry.role,
+        sender: entry.sender,
+        content: entry.content,
+        created_at: entry.createdAt || undefined,
+      })),
+      space_id: input.spaceId || undefined,
+      owners: input.owners || undefined,
+    },
+  });
+}
+
+export async function deleteRawFile(
+  token: string,
+  filename: string,
+  options: { spaceId?: string | null } = {},
+): Promise<{ ok: boolean }> {
+  const params = new URLSearchParams({ filename });
+  if (options.spaceId) params.set('space_id', options.spaceId);
+  return cloudJson<{ ok: boolean }>(`/api/raw/file?${params.toString()}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function getRawWorkspace(token: string): Promise<RawWorkspaceInfo> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/workspace', { token });
+  return {
+    userId: String(response.user_id ?? ''),
+    workspacePath: String(response.workspace_path ?? ''),
+    pointers: Array.isArray(response.pointers) ? response.pointers as Array<Record<string, unknown>> : [],
+    workFiles: Array.isArray(response.work_files)
+      ? (response.work_files as Array<Record<string, unknown>>).map((f) => ({
+          name: String(f.name ?? ''),
+          size: Number(f.size ?? 0),
+          modifiedAt: String(f.modified_at ?? ''),
+        }))
+      : [],
+    agentsMdPreview: String(response.agents_md_preview ?? ''),
+    wikiMdPreview: String(response.wiki_md_preview ?? ''),
+  };
+}
+
+export async function listRawWorkFiles(token: string): Promise<RawWorkFile[]> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/work', { token });
+  return Array.isArray(response.files)
+    ? (response.files as Array<Record<string, unknown>>).map((f) => ({
+        name: String(f.name ?? ''),
+        size: Number(f.size ?? 0),
+        modifiedAt: String(f.modified_at ?? ''),
+      }))
+    : [];
+}
+
+export async function readRawWorkFile(
+  token: string,
+  path: string,
+): Promise<{ path: string; content: string }> {
+  return cloudJson<{ path: string; content: string }>(
+    `/api/raw/work/read?path=${encodeURIComponent(path)}`,
+    { token },
+  );
+}
+
+export async function deleteRawWorkFile(token: string, path: string): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>(`/api/raw/work?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function promoteRawWorkFile(
+  token: string,
+  input: { path: string; spaceId?: string | null; owners?: string[] },
+): Promise<RawPromoteResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/work/promote', {
+    method: 'POST',
+    token,
+    body: {
+      path: input.path,
+      space_id: input.spaceId || undefined,
+      owners: input.owners || undefined,
+    },
+  });
+  return {
+    ok: Boolean(response.ok),
+    filename: String(response.filename ?? ''),
+    fileId: String(response.file_id ?? ''),
+    rawPath: String(response.raw_path ?? ''),
+  };
+}
+
+export async function syncRawPointers(
+  token: string,
+  userId: string,
+  options: { spaceId?: string | null } = {},
+): Promise<{ ok: boolean }> {
+  return cloudJson<{ ok: boolean }>('/api/raw/sync-pointers', {
+    method: 'POST',
+    token,
+    body: {
+      user_id: userId,
+      space_id: options.spaceId || undefined,
+    },
+  });
+}
+
+export async function triggerWikiRebuild(
+  token: string,
+  userId: string,
+  options: { incremental?: boolean } = {},
+): Promise<Record<string, unknown>> {
+  return cloudJson<Record<string, unknown>>('/api/raw/workspace/wiki-rebuild', {
+    method: 'POST',
+    token,
+    body: {
+      user_id: userId,
+      incremental: options.incremental ?? true,
+    },
   });
 }
 

@@ -3882,14 +3882,11 @@ function App() {
       return;
     }
 
-    const targetPath = '.wiki/raw';
+    const targetPath = 'raw';
     setFilesBusy(true);
     setFilesError('');
     try {
-      await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath('.wiki'), {
-        spaceId: activeFileSpaceId || undefined,
-      }).catch(() => null);
-      await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(targetPath), {
+      await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath('raw'), {
         spaceId: activeFileSpaceId || undefined,
       }).catch(() => null);
       setLibraryNotice(`已打开 Raw 目录：${targetPath}`);
