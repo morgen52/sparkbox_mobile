@@ -1716,31 +1716,6 @@ export async function getWikiDirectory(
   };
 }
 
-export async function updateWikiDirectory(
-  token: string,
-  directoryJsonText: string,
-  reason = 'manual_edit',
-  options: { spaceId?: string | null } = {},
-): Promise<WikiDirectoryPayload> {
-  const response = await cloudJson<Record<string, unknown>>('/api/wiki/directory', {
-    method: 'PUT',
-    token,
-    body: {
-      directory_json_text: directoryJsonText,
-      reason,
-      space_id: options.spaceId || undefined,
-    },
-  });
-  return {
-    directory:
-      response.directory && typeof response.directory === 'object'
-        ? (response.directory as Record<string, unknown>)
-        : {},
-    rawFiles: [],
-    manualEdits: [],
-  };
-}
-
 export async function startWikiOrganize(
   token: string,
   options: { spaceId?: string | null; maxRounds?: number } = {},

@@ -289,14 +289,6 @@ export function describeLibraryPhotoEmptyState(scope: 'family' | 'private'): str
   return scope === 'family' ? '该空间还没有照片。' : '这里还没有照片。';
 }
 
-export function describeLibraryFileListTitle(scope: 'family' | 'private'): string {
-  return scope === 'family' ? '空间文件' : '我的文件';
-}
-
-export function describeLibraryFileListEmptyState(scope: 'family' | 'private'): string {
-  return scope === 'family' ? '该空间还没有文件。' : '这里还没有文件。';
-}
-
 export function describeLibraryTaskListTitle(scope: 'family' | 'private'): string {
   return scope === 'family' ? '空间任务' : '我的任务';
 }
@@ -336,21 +328,6 @@ export function decodeChatMessageContent(content: string): string {
 export function describeFileTimestamp(modified: string): string {
   const formatted = describeUiDateTime(modified);
   return formatted ? `更新于 ${formatted}` : '已保存到 Sparkbox';
-}
-
-export function describeFileUploader(
-  uploadedByUserId: string,
-  currentUserId: string,
-  members: Array<{ id: string; display_name: string }>,
-): string {
-  if (uploadedByUserId === currentUserId) {
-    return '你上传的';
-  }
-  const matchedMember = members.find((member) => member.id === uploadedByUserId);
-  if (matchedMember?.display_name) {
-    return `${matchedMember.display_name} 上传`; 
-  }
-  return '其他家庭成员上传';
 }
 
 const SERVICE_AVAILABILITY_ERROR_LABELS: Record<string, string> = {

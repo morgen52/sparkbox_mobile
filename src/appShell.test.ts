@@ -17,9 +17,6 @@ import {
   summarizeOwnerServiceOutput,
   describeServiceAvailabilityError,
   describeFileTimestamp,
-  describeFileUploader,
-  describeLibraryFileListEmptyState,
-  describeLibraryFileListTitle,
   describeLibraryPhotoEmptyState,
   describeLibraryTaskListEmptyState,
   describeLibraryTaskListTitle,
@@ -416,40 +413,14 @@ describe('describeFileTimestamp', () => {
   });
 });
 
-describe('describeFileUploader', () => {
-  it('uses friendly uploader labels instead of raw ids', () => {
-    expect(
-      describeFileUploader('member-1', 'owner-1', [
-        { id: 'owner-1', display_name: 'qwer' },
-        { id: 'member-1', display_name: 'morgen' },
-      ]),
-    ).toBe('Uploaded by morgen');
-    expect(
-      describeFileUploader('owner-1', 'owner-1', [
-        { id: 'owner-1', display_name: 'qwer' },
-      ]),
-    ).toBe('Uploaded by you');
-  });
-
-  it('falls back gracefully when the uploader is unknown', () => {
-    expect(describeFileUploader('missing-user', 'owner-1', [{ id: 'owner-1', display_name: 'qwer' }])).toBe(
-      'Uploaded by another household member',
-    );
-  });
-});
-
 describe('library empty-state copy', () => {
   it('keeps library section titles and empty states delivery-ready', () => {
-    expect(describeLibraryPhotoEmptyState('family')).toBe('No photos saved in this folder yet.');
-    expect(describeLibraryPhotoEmptyState('private')).toBe('No photos saved here yet.');
-    expect(describeLibraryFileListTitle('family')).toBe('Files saved in this space');
-    expect(describeLibraryFileListTitle('private')).toBe('Files saved just for you');
-    expect(describeLibraryFileListEmptyState('family')).toBe('No files saved in this folder yet.');
-    expect(describeLibraryFileListEmptyState('private')).toBe('No files saved here yet.');
-    expect(describeLibraryTaskListTitle('family')).toBe('Routines in this space');
-    expect(describeLibraryTaskListTitle('private')).toBe('Routines just for you');
-    expect(describeLibraryTaskListEmptyState('family')).toBe('No routines saved for this space yet.');
-    expect(describeLibraryTaskListEmptyState('private')).toBe('No routines saved just for you yet.');
+    expect(describeLibraryPhotoEmptyState('family')).toBe('该空间还没有照片。');
+    expect(describeLibraryPhotoEmptyState('private')).toBe('这里还没有照片。');
+    expect(describeLibraryTaskListTitle('family')).toBe('空间任务');
+    expect(describeLibraryTaskListTitle('private')).toBe('我的任务');
+    expect(describeLibraryTaskListEmptyState('family')).toBe('该空间还没有任务。');
+    expect(describeLibraryTaskListEmptyState('private')).toBe('这里还没有任务。');
   });
 });
 

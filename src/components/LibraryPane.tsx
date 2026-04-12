@@ -1,9 +1,7 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import {
   describeFileTimestamp,
-  describeFileUploader,
-  describeLibraryFileListEmptyState,
   describeLibraryPhotoEmptyState,
   describeLibraryTaskListEmptyState,
   describeLibraryTaskListTitle,
@@ -18,7 +16,6 @@ import type {
   ChatSessionScope,
   HouseholdChatSessionSummary,
   HouseholdFileEntry,
-  HouseholdFileListing,
   HouseholdMemberSummary,
   HouseholdSpaceDetail,
   HouseholdSpaceSummary,
@@ -40,7 +37,6 @@ export type LibrarySectionKey =
   | 'memories'
   | 'summaries'
   | 'photos'
-  | 'files'
   | 'tasks'
   | 'wiki_upload_file'
   | 'wiki_upload_image'
@@ -72,12 +68,10 @@ type LibraryPaneProps = {
   summaryNotice: string;
   filesNotice: string;
   tasksNotice: string;
-  currentFilePath: string;
   libraryOverviewSections: SectionCard[];
   memories: SpaceMemory[];
   summaries: SpaceSummary[];
   photoEntries: HouseholdFileEntry[];
-  fileListing: HouseholdFileListing | null;
   tasks: HouseholdTaskSummary[];
   homeMembers: HouseholdMemberSummary[];
   currentUserId: string;
@@ -107,11 +101,7 @@ type LibraryPaneProps = {
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
   } | null;
-  wikiDirectoryRecords: Array<{ rawPath: string; title: string; kind: string; tags: string[] }>;
-  wikiDirectoryStructureNodes: Array<{ name: string; items: string[] }>;
-  wikiDirectoryText: string;
   wikiDirectoryLastUpdatedAt: string;
-  wikiManualEditCount: number;
   wikiRawFileCount: number;
   wikiUploadSourceType: 'note' | 'document' | 'image';
   wikiOrganizeStatus: {
@@ -132,17 +122,13 @@ type LibraryPaneProps = {
   onRefreshWikiPages: () => void;
   onPickAndIngestWikiUploads: () => void;
   onRefreshWikiDirectory: () => void;
-  onOpenWikiFilesSection: () => void;
   onRenameWikiRawRecord: (rawPath: string, newName: string) => void;
   onDeleteWikiRawRecord: (rawPath: string) => void;
-  onRetitleWikiRecord: (rawPath: string, title: string) => void;
-  onReclassifyWikiRecord: (rawPath: string, kind: 'note' | 'document' | 'image') => void;
   onChangeWikiUploadSourceType: (value: 'note' | 'document' | 'image') => void;
   onStartWikiOrganize: () => void;
   onStartWikiQualityOptimize: () => void;
   onRefreshWikiOrganizeStatus: () => void;
   onRefreshWikiPreview: () => void;
-  onOpenFileEditor: () => void;
   onOpenTaskEditor: () => void;
   onRefreshLibrary: () => void;
   onOpenMemoryEditor: () => void;
@@ -159,11 +145,6 @@ type LibraryPaneProps = {
   onDownloadPhoto: (entry: HouseholdFileEntry) => void;
   onDeletePhoto: (entry: HouseholdFileEntry) => void;
   canManageFileEntry: (entry: HouseholdFileEntry) => boolean;
-  onRefreshFiles: (path?: string, force?: boolean) => void;
-  onUploadFiles: () => void;
-  onDownloadFile: (entry: HouseholdFileEntry) => void;
-  onRenameFile: (entry: HouseholdFileEntry) => void;
-  onDeleteFile: (entry: HouseholdFileEntry) => void;
   onRefreshTasks: () => void;
   canEditTask: (task: HouseholdTaskSummary) => boolean;
   canTriggerTask: (task: HouseholdTaskSummary) => boolean;
@@ -198,12 +179,10 @@ export function LibraryPane(props: LibraryPaneProps) {
     summaryNotice,
     filesNotice,
     tasksNotice,
-    currentFilePath,
     libraryOverviewSections,
     memories,
     summaries,
     photoEntries,
-    fileListing,
     tasks,
     homeMembers,
     currentUserId,
@@ -221,11 +200,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     wikiSourceContent,
     wikiPages,
     wikiLastIngest,
-    wikiDirectoryRecords,
-    wikiDirectoryStructureNodes,
-    wikiDirectoryText,
     wikiDirectoryLastUpdatedAt,
-    wikiManualEditCount,
     wikiRawFileCount,
     wikiUploadSourceType,
     wikiOrganizeStatus,
@@ -238,17 +213,13 @@ export function LibraryPane(props: LibraryPaneProps) {
     onRefreshWikiPages,
     onPickAndIngestWikiUploads,
     onRefreshWikiDirectory,
-    onOpenWikiFilesSection,
     onRenameWikiRawRecord,
     onDeleteWikiRawRecord,
-    onRetitleWikiRecord,
-    onReclassifyWikiRecord,
     onChangeWikiUploadSourceType,
     onStartWikiOrganize,
     onStartWikiQualityOptimize,
     onRefreshWikiOrganizeStatus,
     onRefreshWikiPreview,
-    onOpenFileEditor,
     onOpenTaskEditor,
     onRefreshLibrary,
     onOpenMemoryEditor,
@@ -265,11 +236,6 @@ export function LibraryPane(props: LibraryPaneProps) {
     onDownloadPhoto,
     onDeletePhoto,
     canManageFileEntry,
-    onRefreshFiles,
-    onUploadFiles,
-    onDownloadFile,
-    onRenameFile,
-    onDeleteFile,
     onRefreshTasks,
     canEditTask,
     canTriggerTask,
@@ -285,19 +251,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     private: '私密聊天',
   };
 
-  const normalizedPath = (currentFilePath || '').replace(/^\/+|\/+$/g, '');
-  const pathSegments = normalizedPath ? normalizedPath.split('/') : [];
-  const orderedEntries = [...(fileListing?.entries ?? [])].sort((left, right) => {
-    if (left.isDir !== right.isDir) {
-      return left.isDir ? -1 : 1;
-    }
-    return left.name.localeCompare(right.name);
-  });
-  const [fileActionsOpen, setFileActionsOpen] = React.useState(false);
-  const [fileActionsEntry, setFileActionsEntry] = React.useState<HouseholdFileEntry | null>(null);
-  const [wikiRenameDrafts, setWikiRenameDrafts] = React.useState<Record<string, string>>({});
-  const [wikiTitleDrafts, setWikiTitleDrafts] = React.useState<Record<string, string>>({});
-  const [virtualFolder, setVirtualFolder] = React.useState('');
+
   const [activeWikiPreviewPath, setActiveWikiPreviewPath] = React.useState('');
 
   React.useEffect(() => {
@@ -308,11 +262,6 @@ export function LibraryPane(props: LibraryPaneProps) {
       setActiveWikiPreviewPath('');
     }
   }, [activeWikiPreviewPath, wikiPreviewFiles]);
-
-  function closeFileActionsModal(): void {
-    setFileActionsOpen(false);
-    setFileActionsEntry(null);
-  }
 
   function resolveOverviewSectionKey(title: string): LibrarySectionKey | null {
     const normalized = title.trim().toLowerCase();
@@ -327,9 +276,6 @@ export function LibraryPane(props: LibraryPaneProps) {
     }
     if (normalized === 'photos' || normalized === '照片') {
       return 'photos';
-    }
-    if (normalized === 'files' || normalized === '文件') {
-      return 'files';
     }
     if (normalized === 'tasks' || normalized === '任务') {
       return 'tasks';
@@ -387,14 +333,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           </Pressable>
           <Pressable
             style={styles.librarySectionCard}
-            onPress={() => onChangeActiveSection('files')}
-            disabled={!activeSpace}
-          >
-            <Text style={styles.librarySectionTitle}>文件资源管理器</Text>
-            <Text style={styles.librarySectionCopy}>进入基于 directory 的虚拟目录管理。</Text>
-          </Pressable>
-          <Pressable
-            style={styles.librarySectionCard}
             onPress={() => onChangeActiveSection('wiki_organize')}
             disabled={!activeSpace}
           >
@@ -449,10 +387,6 @@ export function LibraryPane(props: LibraryPaneProps) {
           <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_preview')} disabled={!activeSpace}>
             <Text style={styles.librarySectionTitle}>Wiki 预览</Text>
             <Text style={styles.librarySectionCopy}>预览 wiki 目录中的 Markdown。</Text>
-          </Pressable>
-          <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('files')} disabled={!activeSpace}>
-            <Text style={styles.librarySectionTitle}>文件资源管理器</Text>
-            <Text style={styles.librarySectionCopy}>管理 directory 虚拟目录结构。</Text>
           </Pressable>
         </View>
 
@@ -563,35 +497,13 @@ export function LibraryPane(props: LibraryPaneProps) {
         <View style={styles.deviceRowCard}>
           <Text style={styles.networkName}>directory 目录管理器（可视化）</Text>
           <Text style={styles.cardCopy}>
-            最近更新时间：{wikiDirectoryLastUpdatedAt || '尚未加载'} · 最近7天人工修改：{wikiManualEditCount} · raw文件数：{wikiRawFileCount}
+            最近更新时间：{wikiDirectoryLastUpdatedAt || '尚未加载'} · raw文件数：{wikiRawFileCount}
           </Text>
           <View style={styles.inlineActions}>
             <Pressable style={styles.secondaryButtonSmall} onPress={onRefreshWikiDirectory} disabled={!activeSpace || wikiBusy}>
               <Text style={styles.secondaryButtonText}>刷新目录</Text>
             </Pressable>
           </View>
-
-          {wikiDirectoryStructureNodes.length ? (
-            <View style={styles.deviceRowCard}>
-              <Text style={styles.networkName}>目录结构</Text>
-              {wikiDirectoryStructureNodes.map((node, index) => (
-                <Text key={`${node.name}-${index}`} style={styles.cardCopy}>
-                  {node.name} · {node.items.length} 项
-                </Text>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>文件资源管理器</Text>
-            <Text style={styles.cardCopy}>当前 directory 记录数：{wikiDirectoryRecords.length}</Text>
-            <Text style={styles.cardCopy}>不在本卡片内嵌编辑，点击按钮进入独立文件管理区。</Text>
-            <Pressable style={styles.secondaryButtonSmall} onPress={onOpenWikiFilesSection} disabled={!activeSpace || wikiBusy}>
-              <Text style={styles.secondaryButtonText}>进入文件资源管理器</Text>
-            </Pressable>
-          </View>
-
-          {wikiDirectoryText ? <Text style={styles.cardCopy}>已隐藏原始 JSON 文本编辑，改用可视化管理。</Text> : null}
         </View>
 
         {wikiPages.length ? (
@@ -984,225 +896,6 @@ export function LibraryPane(props: LibraryPaneProps) {
     );
   }
 
-  function renderFiles(): React.ReactNode {
-    const grouped = new Map<string, Array<{ rawPath: string; title: string; kind: string; tags: string[] }>>();
-    wikiDirectoryStructureNodes.forEach((node) => {
-      const nodeName = (node.name || '').trim();
-      if (!nodeName) {
-        return;
-      }
-      const list: Array<{ rawPath: string; title: string; kind: string; tags: string[] }> = [];
-      node.items.forEach((rawPath) => {
-        const record = wikiDirectoryRecords.find((row) => row.rawPath === rawPath);
-        if (record) {
-          list.push(record);
-        }
-      });
-      grouped.set(nodeName, list);
-    });
-
-    const listedPaths = new Set<string>();
-    grouped.forEach((records) => {
-      records.forEach((record) => listedPaths.add(record.rawPath));
-    });
-    const ungrouped = wikiDirectoryRecords.filter((record) => !listedPaths.has(record.rawPath));
-    if (ungrouped.length) {
-      grouped.set('ungrouped', ungrouped);
-    }
-
-    const folders = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
-    const inRoot = !virtualFolder;
-    const activeRecords = grouped.get(virtualFolder) || [];
-
-    return (
-      <>
-        <View style={styles.settingsCard}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>文件资源管理器（虚拟目录）</Text>
-            <Pressable style={styles.summaryRefreshButton} onPress={() => onChangeActiveSection('overview')}>
-              <Text style={styles.summaryRefreshButtonText}>返回概览</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.cardCopy}>
-            {onlineDeviceAvailable
-              ? `基于 directory.json 浏览 ${activeSpace ? activeSpace.name : '当前空间'} 的虚拟目录结构。`
-              : '请先让 Sparkbox 在线，再浏览或更新目录结构。'}
-          </Text>
-          {filesNotice ? <Text style={styles.noticeText}>{filesNotice}</Text> : null}
-          {filesError ? <Text style={styles.errorText}>{filesError}</Text> : null}
-
-          <View style={styles.inlineActions}>
-            <Pressable
-              style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-              onPress={onRefreshWikiDirectory}
-              disabled={!onlineDeviceAvailable || filesBusy}
-            >
-              <Text style={styles.secondaryButtonText}>刷新虚拟目录</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-              onPress={onRunWikiDirectoryConsistencyCheck}
-              disabled={!onlineDeviceAvailable || filesBusy}
-            >
-              <Text style={styles.secondaryButtonText}>目录一致性检查</Text>
-            </Pressable>
-            {canMutateActiveSpaceLibrary ? (
-              <>
-                <Pressable
-                  style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                  onPress={() => {
-                    setVirtualFolder('');
-                  }}
-                  disabled={!onlineDeviceAvailable || filesBusy}
-                >
-                  <Text style={styles.secondaryButtonText}>返回目录根</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.primaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
-                  onPress={onPickAndIngestWikiUploads}
-                  disabled={!onlineDeviceAvailable || filesBusy}
-                >
-                  <Text style={styles.primaryButtonText}>上传并导入</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </View>
-
-        </View>
-
-        <View style={styles.settingsCard}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>目录内容</Text>
-            <Pressable
-              style={[styles.summaryRefreshButton, inRoot ? styles.networkRowDisabled : null]}
-              onPress={() => setVirtualFolder('')}
-              disabled={inRoot || filesBusy}
-            >
-              <Text style={styles.summaryRefreshButtonText}>上级目录</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.cardCopy}>当前目录：{inRoot ? '/' : `/${virtualFolder}`}</Text>
-          {filesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-          {!filesBusy && inRoot && folders.length === 0 ? (
-            <Text style={styles.cardCopy}>directory 里还没有可浏览的分类节点。</Text>
-          ) : null}
-          {inRoot
-            ? folders.map((folderName) => (
-                <Pressable
-                  key={folderName}
-                  style={[styles.libraryExplorerRow, styles.libraryExplorerRowFolder]}
-                  onPress={() => setVirtualFolder(folderName)}
-                  disabled={filesBusy}
-                  pressFeedback="scale"
-                >
-                  <View style={styles.libraryExplorerRowMain}>
-                    <Text style={styles.libraryExplorerIcon}>[DIR]</Text>
-                    <View style={styles.libraryExplorerMeta}>
-                      <Text style={styles.networkName}>{folderName}</Text>
-                      <Text style={styles.cardCopy}>{(grouped.get(folderName) || []).length} 项记录</Text>
-                    </View>
-                  </View>
-                </Pressable>
-              ))
-            : null}
-
-          {!inRoot && !filesBusy && activeRecords.length === 0 ? <Text style={styles.cardCopy}>该虚拟目录暂无记录。</Text> : null}
-          {!inRoot
-            ? activeRecords.map((record) => {
-                const renameDraft = wikiRenameDrafts[record.rawPath] ?? record.rawPath.split('/').pop() ?? record.rawPath;
-                const titleDraft = wikiTitleDrafts[record.rawPath] ?? record.title;
-                const itemKind = record.kind === 'document' || record.kind === 'image' ? record.kind : 'note';
-                return (
-                  <View key={record.rawPath} style={styles.deviceRowCard}>
-                    <Text style={styles.networkName}>{record.title}</Text>
-                    <Text style={styles.cardCopy}>raw: {record.rawPath}</Text>
-                    <Text style={styles.cardCopy}>tags: {(record.tags || []).join(', ') || '无'}</Text>
-
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      placeholder="显示标题"
-                      placeholderTextColor="#7e8a83"
-                      style={styles.input}
-                      value={titleDraft}
-                      onChangeText={(value) =>
-                        setWikiTitleDrafts((current) => ({
-                          ...current,
-                          [record.rawPath]: value,
-                        }))
-                      }
-                    />
-                    <Pressable
-                      style={styles.secondaryButtonSmall}
-                      onPress={() => onRetitleWikiRecord(record.rawPath, titleDraft)}
-                      disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                    >
-                      <Text style={styles.secondaryButtonText}>保存标题</Text>
-                    </Pressable>
-
-                    <View style={styles.inlineActions}>
-                      <Pressable
-                        style={[styles.scopePill, itemKind === 'note' ? styles.scopePillActive : null]}
-                        onPress={() => onReclassifyWikiRecord(record.rawPath, 'note')}
-                        disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                      >
-                        <Text style={[styles.scopePillLabel, itemKind === 'note' ? styles.scopePillLabelActive : null]}>笔记</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.scopePill, itemKind === 'document' ? styles.scopePillActive : null]}
-                        onPress={() => onReclassifyWikiRecord(record.rawPath, 'document')}
-                        disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                      >
-                        <Text style={[styles.scopePillLabel, itemKind === 'document' ? styles.scopePillLabelActive : null]}>文档</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.scopePill, itemKind === 'image' ? styles.scopePillActive : null]}
-                        onPress={() => onReclassifyWikiRecord(record.rawPath, 'image')}
-                        disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                      >
-                        <Text style={[styles.scopePillLabel, itemKind === 'image' ? styles.scopePillLabelActive : null]}>图片</Text>
-                      </Pressable>
-                    </View>
-
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      placeholder="文件名（仅文件名）"
-                      placeholderTextColor="#7e8a83"
-                      style={styles.input}
-                      value={renameDraft}
-                      onChangeText={(value) =>
-                        setWikiRenameDrafts((current) => ({
-                          ...current,
-                          [record.rawPath]: value,
-                        }))
-                      }
-                    />
-                    <View style={styles.inlineActions}>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => onRenameWikiRawRecord(record.rawPath, renameDraft)}
-                        disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>重命名 raw</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() => onDeleteWikiRawRecord(record.rawPath)}
-                        disabled={!canMutateActiveSpaceLibrary || filesBusy}
-                      >
-                        <Text style={styles.secondaryButtonText}>删除 raw</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })
-            : null}
-        </View>
-      </>
-    );
-  }
-
   function renderTasks(): React.ReactNode {
     return (
       <>
@@ -1300,9 +993,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'photos') {
     return <>{renderPhotos()}</>;
-  }
-  if (activeSection === 'files') {
-    return <>{renderFiles()}</>;
   }
   if (activeSection === 'wiki_upload_file') {
     return <>{renderWikiUploadFile()}</>;

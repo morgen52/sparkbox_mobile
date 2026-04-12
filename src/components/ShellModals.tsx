@@ -58,12 +58,6 @@ type ShellModalsProps = {
   onChangeMemoryContent: (value: string) => void;
   onToggleMemoryPinned: () => void;
   onSubmitMemoryEditor: () => void;
-  fileEditorOpen: boolean;
-  fileEditorMode: 'mkdir' | 'rename' | null;
-  fileTargetEntry: any;
-  fileEditorValue: string;
-  filesError: string;
-  filesBusy: boolean;
   networkSheetOpen: boolean;
   manualEntry: boolean;
   selectedNetwork: any;
@@ -72,9 +66,6 @@ type ShellModalsProps = {
   wifiPassword: string;
   canSubmitWifi: boolean;
   provisionBusy: boolean;
-  onCloseFileEditor: () => void;
-  onChangeFileEditorValue: (value: string) => void;
-  onSubmitFileEditor: () => void;
   onCloseNetworkSheet: () => void;
   onChangeSelectedSsid: (value: string) => void;
   onChangeWifiPassword: (value: string) => void;
@@ -183,12 +174,6 @@ export function ShellModals(props: ShellModalsProps) {
 
       <SetupUtilityModals
         styles={props.styles}
-        fileEditorOpen={props.fileEditorOpen}
-        fileEditorMode={props.fileEditorMode}
-        fileTargetEntry={props.fileTargetEntry}
-        fileEditorValue={props.fileEditorValue}
-        filesError={props.filesError}
-        filesBusy={props.filesBusy}
         networkSheetOpen={props.networkSheetOpen}
         manualEntry={props.manualEntry}
         selectedNetwork={props.selectedNetwork}
@@ -197,9 +182,6 @@ export function ShellModals(props: ShellModalsProps) {
         wifiPassword={props.wifiPassword}
         canSubmitWifi={props.canSubmitWifi}
         provisionBusy={props.provisionBusy}
-        onCloseFileEditor={props.onCloseFileEditor}
-        onChangeFileEditorValue={props.onChangeFileEditorValue}
-        onSubmitFileEditor={props.onSubmitFileEditor}
         onCloseNetworkSheet={props.onCloseNetworkSheet}
         onChangeSelectedSsid={props.onChangeSelectedSsid}
         onChangeWifiPassword={props.onChangeWifiPassword}

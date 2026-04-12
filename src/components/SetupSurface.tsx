@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '../authFlow';
 import type { ClaimPayload } from '../utils/appRuntime';
 import type { LocalSetupNetwork } from '../localSetupApi';
-import type { HouseholdFileEntry, HouseholdTaskScope, HouseholdTaskSummary } from '../householdApi';
+import type { HouseholdTaskScope, HouseholdTaskSummary } from '../householdApi';
 import { SetupFlowPane } from './SetupFlowPane';
 import { SetupUtilityModals } from './SetupUtilityModals';
 import { TaskEditorModal } from './TaskEditorModal';
@@ -90,16 +90,7 @@ type SetupSurfaceProps = {
   onOpenManualEntry: () => void;
   onChooseNetwork: (network: LocalSetupNetwork) => void;
   onStartCloudVerification: () => void;
-  fileEditorOpen: boolean;
-  fileEditorMode: 'mkdir' | 'rename' | null;
-  fileTargetEntry: HouseholdFileEntry | null;
-  fileEditorValue: string;
-  filesError: string;
-  filesBusy: boolean;
   canSubmitWifi: boolean;
-  onCloseFileEditor: () => void;
-  onChangeFileEditorValue: (value: string) => void;
-  onSubmitFileEditor: () => void;
   onCloseNetworkSheet: () => void;
   onChangeSelectedSsid: (value: string) => void;
   onChangeWifiPassword: (value: string) => void;
@@ -210,12 +201,6 @@ export function SetupSurface(props: SetupSurfaceProps) {
 
       <SetupUtilityModals
         styles={props.styles}
-        fileEditorOpen={props.fileEditorOpen}
-        fileEditorMode={props.fileEditorMode}
-        fileTargetEntry={props.fileTargetEntry}
-        fileEditorValue={props.fileEditorValue}
-        filesError={props.filesError}
-        filesBusy={props.filesBusy}
         networkSheetOpen={props.networkSheetOpen}
         manualEntry={props.manualEntry}
         selectedNetwork={props.selectedNetwork}
@@ -224,9 +209,6 @@ export function SetupSurface(props: SetupSurfaceProps) {
         wifiPassword={props.wifiPassword}
         canSubmitWifi={props.canSubmitWifi}
         provisionBusy={props.provisionBusy}
-        onCloseFileEditor={props.onCloseFileEditor}
-        onChangeFileEditorValue={props.onChangeFileEditorValue}
-        onSubmitFileEditor={props.onSubmitFileEditor}
         onCloseNetworkSheet={props.onCloseNetworkSheet}
         onChangeSelectedSsid={props.onChangeSelectedSsid}
         onChangeWifiPassword={props.onChangeWifiPassword}

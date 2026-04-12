@@ -44,13 +44,10 @@ import {
   decodeChatMessageContent,
   describeDiagnosticsSource,
   describeDeviceActionNotice,
-  describeLibraryFileListEmptyState,
-  describeLibraryFileListTitle,
   describeLibraryPhotoEmptyState,
   describeLibraryTaskListEmptyState,
   describeLibraryTaskListTitle,
   describeFileTimestamp,
-  describeFileUploader,
   describeInviteExpiry,
   describeInviteRole,
   describeServiceAvailabilityError,
@@ -135,7 +132,6 @@ import {
   updateHouseholdSpaceMembers,
   updateSpaceMemory,
   updateDeviceProviderConfig,
-  updateWikiDirectory,
   updateHouseholdMemberRole,
   updateHouseholdTask,
   uploadHouseholdFiles,
@@ -562,10 +558,6 @@ function App() {
   const [filesBusy, setFilesBusy] = useState(false);
   const [filesError, setFilesError] = useState('');
   const [filesNotice, setFilesNotice] = useState('');
-  const [fileEditorOpen, setFileEditorOpen] = useState(false);
-  const [fileEditorMode, setFileEditorMode] = useState<'mkdir' | 'rename' | null>(null);
-  const [fileEditorValue, setFileEditorValue] = useState('');
-  const [fileTargetEntry, setFileTargetEntry] = useState<HouseholdFileEntry | null>(null);
   const [taskScope, setTaskScope] = useState<HouseholdTaskScope>('family');
   const [tasks, setTasks] = useState<HouseholdTaskSummary[]>([]);
   const [tasksBusy, setTasksBusy] = useState(false);
@@ -626,9 +618,7 @@ function App() {
     directoryModel?: string;
     directoryProviderTimeoutSeconds?: number;
   } | null>(null);
-  const [wikiDirectoryText, setWikiDirectoryText] = useState('');
   const [wikiDirectoryLastUpdatedAt, setWikiDirectoryLastUpdatedAt] = useState('');
-  const [wikiManualEditCount, setWikiManualEditCount] = useState(0);
   const [wikiRawFileCount, setWikiRawFileCount] = useState(0);
   const [wikiUploadSourceType, setWikiUploadSourceType] = useState<'note' | 'document' | 'image'>('note');
   const [wikiOrganizeStatus, setWikiOrganizeStatus] = useState<WikiOrganizeStatusResult | null>(null);
@@ -1047,78 +1037,10 @@ function App() {
       .replace(/^\/+|\/+$/g, '');
   }
 
-  function parseWikiDirectoryObject(rawText: string): Record<string, unknown> {
-    try {
-      const parsed = JSON.parse(rawText) as Record<string, unknown>;
-      if (parsed && typeof parsed === 'object') {
-        return parsed;
-      }
-    } catch {
-      // ignore parse failure and return defaults
-    }
-    return {};
-  }
-
   function sanitizeWikiFileName(fileName: string): string {
     const trimmed = (fileName || '').trim().replace(/[\\/]+/g, '');
     const normalized = trimmed.replace(/[^a-zA-Z0-9._\-\u4e00-\u9fff]+/g, '_');
     return normalized.slice(0, 160);
-  }
-
-  const wikiDirectoryView = useMemo(() => {
-    const directory = parseWikiDirectoryObject(wikiDirectoryText);
-    const recordsRaw = Array.isArray(directory.records) ? directory.records : [];
-    const structureRaw = Array.isArray(directory.structure) ? directory.structure : [];
-
-    const records = recordsRaw
-      .map((item) => {
-        if (!item || typeof item !== 'object') {
-          return null;
-        }
-        const row = item as Record<string, unknown>;
-        const rawPath = String(row.raw_path || '').trim();
-        if (!rawPath) {
-          return null;
-        }
-        const tags = Array.isArray(row.tags) ? row.tags.map((tag) => String(tag || '').trim()).filter(Boolean) : [];
-        return {
-          rawPath,
-          title: String(row.title || '').trim() || rawPath.split('/').pop() || rawPath,
-          kind: String(row.kind || 'note').trim().toLowerCase() || 'note',
-          tags,
-        };
-      })
-      .filter((item): item is { rawPath: string; title: string; kind: string; tags: string[] } => Boolean(item));
-
-    const structureNodes = structureRaw
-      .map((node) => {
-        if (!node || typeof node !== 'object') {
-          return null;
-        }
-        const row = node as Record<string, unknown>;
-        const name = String(row.name || '').trim() || 'unnamed';
-        const items = Array.isArray(row.items) ? row.items.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
-        return { name, items };
-      })
-      .filter((node): node is { name: string; items: string[] } => Boolean(node));
-
-    return { directory, records, structureNodes };
-  }, [wikiDirectoryText]);
-
-  async function saveWikiDirectoryObject(nextDirectory: Record<string, unknown>, reason: string, notice: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    const payload = await updateWikiDirectory(
-      session.token,
-      JSON.stringify(nextDirectory, null, 2),
-      reason,
-      { spaceId: activeWikiSpaceId || undefined },
-    );
-    setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
-    setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
-    setLibraryNotice(notice);
-    await refreshWikiDirectory();
   }
 
   async function renameWikiRawRecord(rawPath: string, newName: string): Promise<void> {
@@ -1157,32 +1079,8 @@ function App() {
         toDeviceFilePath(`.wiki/raw/${destination}`),
         { spaceId: activeFileSpaceId || undefined },
       );
-
-      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
-      const records = Array.isArray(nextDirectory.records)
-        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) => {
-            if (String(item.raw_path || '') === source) {
-              return {
-                ...item,
-                raw_path: destination,
-                title: String(item.title || '').trim() || finalName.replace(/\.[^.]+$/, ''),
-              };
-            }
-            return item;
-          })
-        : [];
-      nextDirectory.records = records;
-
-      if (Array.isArray(nextDirectory.structure)) {
-        nextDirectory.structure = (nextDirectory.structure as Array<Record<string, unknown>>).map((node) => {
-          const items = Array.isArray(node.items)
-            ? node.items.map((entry) => (String(entry || '') === source ? destination : String(entry || '')))
-            : [];
-          return { ...node, items };
-        });
-      }
-
-      await saveWikiDirectoryObject(nextDirectory, 'raw_file_rename', `已重命名 raw 文件：${source} -> ${destination}`);
+      setLibraryNotice(`已重命名 raw 文件：${source} -> ${destination}`);
+      await refreshWikiDirectory();
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : '重命名 raw 文件失败。');
     } finally {
@@ -1208,79 +1106,10 @@ function App() {
         toDeviceFilePath(`.wiki/raw/${target}`),
         { spaceId: activeFileSpaceId || undefined },
       );
-
-      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
-      const records = Array.isArray(nextDirectory.records)
-        ? (nextDirectory.records as Array<Record<string, unknown>>).filter((item) => String(item.raw_path || '') !== target)
-        : [];
-      nextDirectory.records = records;
-
-      if (Array.isArray(nextDirectory.structure)) {
-        nextDirectory.structure = (nextDirectory.structure as Array<Record<string, unknown>>).map((node) => {
-          const items = Array.isArray(node.items)
-            ? node.items.map((entry) => String(entry || '')).filter((entry) => entry !== target)
-            : [];
-          return { ...node, items };
-        });
-      }
-
-      await saveWikiDirectoryObject(nextDirectory, 'raw_file_delete', `已删除 raw 文件：${target}`);
+      setLibraryNotice(`已删除 raw 文件：${target}`);
+      await refreshWikiDirectory();
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : '删除 raw 文件失败。');
-    } finally {
-      setLibraryBusy(false);
-    }
-  }
-
-  async function retitleWikiRecord(rawPath: string, title: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    const target = (rawPath || '').trim();
-    const nextTitle = (title || '').trim();
-    if (!target || !nextTitle) {
-      setLibraryError('标题不能为空。');
-      return;
-    }
-    setLibraryBusy(true);
-    setLibraryError('');
-    setLibraryNotice('');
-    try {
-      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
-      nextDirectory.records = Array.isArray(nextDirectory.records)
-        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) =>
-            String(item.raw_path || '') === target ? { ...item, title: nextTitle } : item,
-          )
-        : [];
-      await saveWikiDirectoryObject(nextDirectory, 'record_title_update', `已更新标题：${nextTitle}`);
-    } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '更新标题失败。');
-    } finally {
-      setLibraryBusy(false);
-    }
-  }
-
-  async function reclassifyWikiRecord(rawPath: string, kind: 'note' | 'document' | 'image'): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    const target = (rawPath || '').trim();
-    if (!target) {
-      return;
-    }
-    setLibraryBusy(true);
-    setLibraryError('');
-    setLibraryNotice('');
-    try {
-      const nextDirectory = { ...wikiDirectoryView.directory } as Record<string, unknown>;
-      nextDirectory.records = Array.isArray(nextDirectory.records)
-        ? (nextDirectory.records as Array<Record<string, unknown>>).map((item) =>
-            String(item.raw_path || '') === target ? { ...item, kind } : item,
-          )
-        : [];
-      await saveWikiDirectoryObject(nextDirectory, 'record_kind_update', `已更新类型：${target} -> ${kind}`);
-    } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '更新类型失败。');
     } finally {
       setLibraryBusy(false);
     }
@@ -1739,9 +1568,7 @@ function App() {
       setWikiSourceContent('');
       setWikiPages([]);
       setWikiLastIngest(null);
-      setWikiDirectoryText('');
       setWikiDirectoryLastUpdatedAt('');
-      setWikiManualEditCount(0);
       setWikiRawFileCount(0);
       setWikiUploadSourceType('note');
       setWikiOrganizeStatus(null);
@@ -1876,9 +1703,7 @@ function App() {
     setWikiSourceContent('');
     setWikiPages([]);
     setWikiLastIngest(null);
-    setWikiDirectoryText('');
     setWikiDirectoryLastUpdatedAt('');
-    setWikiManualEditCount(0);
     setWikiRawFileCount(0);
     setWikiOrganizeStatus(null);
     setWikiPreviewFiles([]);
@@ -2789,10 +2614,6 @@ function App() {
     setFilesBusy(false);
     setFilesError('');
     setFilesNotice('');
-    setFileEditorOpen(false);
-    setFileEditorMode(null);
-    setFileEditorValue('');
-    setFileTargetEntry(null);
     setDiagnosticsBusy(false);
     setDiagnosticsError('');
     setDiagnosticsDeviceId('');
@@ -3072,10 +2893,6 @@ function App() {
         setTaskEditorOpen(false);
         return true;
       }
-      if (fileEditorOpen) {
-        setFileEditorOpen(false);
-        return true;
-      }
       if (memoryEditorOpen) {
         closeMemoryEditor();
         return true;
@@ -3110,7 +2927,6 @@ function App() {
   }, [
     activeChatSessionId,
     chatSessionEditorOpen,
-    fileEditorOpen,
     libraryActiveSection,
     memoryEditorOpen,
     networkSheetOpen,
@@ -3302,50 +3118,6 @@ function App() {
       }));
     } catch (error) {
       setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not load files right now.');
-    } finally {
-      setFilesBusy(false);
-    }
-  }
-
-  function openFileEditor(mode: 'mkdir' | 'rename', entry?: HouseholdFileEntry): void {
-    setFileEditorMode(mode);
-    setFileTargetEntry(entry ?? null);
-    setFileEditorValue(mode === 'rename' && entry ? entry.name : '');
-    setFileEditorOpen(true);
-    setFilesError('');
-  }
-
-  async function submitFileEditor(): Promise<void> {
-    if (!session?.token || !fileEditorMode) {
-      return;
-    }
-    const trimmed = fileEditorValue.trim();
-    if (!trimmed) {
-      setFilesError('Enter a name first.');
-      return;
-    }
-    setFilesBusy(true);
-    setFilesError('');
-    try {
-      if (fileEditorMode === 'mkdir') {
-        const nextPath = currentFilePath ? `${currentFilePath}/${trimmed}` : trimmed;
-        await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath(nextPath), {
-          spaceId: activeFileSpaceId || undefined,
-        });
-        setFilesNotice(`Created ${trimmed}.`);
-      } else if (fileTargetEntry) {
-        const src = fileTargetEntry.path;
-        const parent = src.includes('/') ? src.slice(0, src.lastIndexOf('/')) : '';
-        const dst = parent ? `${parent}/${trimmed}` : trimmed;
-        await renameHouseholdPath(session.token, fileSpace, toDeviceFilePath(src), toDeviceFilePath(dst), {
-          spaceId: activeFileSpaceId || undefined,
-        });
-        setFilesNotice(`Renamed to ${trimmed}.`);
-      }
-      setFileEditorOpen(false);
-      await refreshFiles(undefined, { force: true });
-    } catch (error) {
-      setFilesError(error instanceof Error ? describeServiceAvailabilityError(error.message) : 'Could not save this change.');
     } finally {
       setFilesBusy(false);
     }
@@ -3641,9 +3413,7 @@ function App() {
       const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
       const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
       setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
-      setWikiManualEditCount(directoryPayload.manualEdits.length);
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : 'Wiki 导入失败。');
@@ -3679,9 +3449,7 @@ function App() {
         setFilesNotice(`目录一致性检查已完成：extra ${extraCount}，lack ${lackCount}。`);
       }
       const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiDirectoryText(JSON.stringify(directoryPayload.directory, null, 2));
       setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
-      setWikiManualEditCount(directoryPayload.manualEdits.length);
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
       setFilesError(error instanceof Error ? error.message : '目录一致性检查失败。');
@@ -3729,7 +3497,7 @@ function App() {
       }).catch(() => null);
       setLibraryNotice(`已打开 Raw 目录：${targetPath}`);
       setLibraryError('');
-      setLibraryActiveSection('files');
+      setLibraryActiveSection('wiki');
       await refreshFiles(targetPath, { force: true });
     } catch (error) {
       setFilesError(error instanceof Error ? error.message : '无法打开 Raw 目录。');
@@ -3749,9 +3517,7 @@ function App() {
     setLibraryNotice('');
     try {
       const payload: WikiDirectoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
-      setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
       setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
-      setWikiManualEditCount(payload.manualEdits.length);
       setWikiRawFileCount(payload.rawFiles.length);
       setLibraryNotice(`目录已刷新，raw 文件 ${payload.rawFiles.length} 个。`);
     } catch (error) {
@@ -3938,36 +3704,6 @@ function App() {
     wikiPreviewCacheBySpace,
     wikiPreviewCacheLoadedAt,
   ]);
-
-  async function saveWikiDirectoryManualEdit(): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再保存目录。');
-      setLibraryNotice('');
-      return;
-    }
-    const text = wikiDirectoryText.trim();
-    if (!text) {
-      setLibraryError('请输入目录 JSON 内容。');
-      setLibraryNotice('');
-      return;
-    }
-    setLibraryBusy(true);
-    setLibraryError('');
-    setLibraryNotice('');
-    try {
-      const payload = await updateWikiDirectory(session.token, text, 'user_manual_structure_update', {
-        spaceId: activeWikiSpaceId || undefined,
-      });
-      setWikiDirectoryText(JSON.stringify(payload.directory, null, 2));
-      setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
-      setLibraryNotice('目录已保存，并完成一致性校验。');
-      await refreshWikiDirectory();
-    } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '保存 directory.json 失败。');
-    } finally {
-      setLibraryBusy(false);
-    }
-  }
 
   async function pickAndIngestWikiRawFiles(forcedSourceType?: 'note' | 'document' | 'image'): Promise<void> {
     if (!session?.token || !activeSpaceId) {
@@ -4535,12 +4271,10 @@ function App() {
                 summaryNotice={summaryNotice}
                 filesNotice={filesNotice}
                 tasksNotice={tasksNotice}
-                currentFilePath={currentFilePath}
                 libraryOverviewSections={libraryOverviewSections}
                 memories={spaceLibrary.memories}
                 summaries={spaceLibrary.summaries}
                 photoEntries={photoEntries}
-                fileListing={fileListing}
                 tasks={tasks}
                 homeMembers={homeMembers}
                 currentUserId={session.user.id}
@@ -4557,11 +4291,7 @@ function App() {
                 wikiSourceContent={wikiSourceContent}
                 wikiPages={wikiPages}
                 wikiLastIngest={wikiLastIngest}
-                wikiDirectoryRecords={wikiDirectoryView.records}
-                wikiDirectoryStructureNodes={wikiDirectoryView.structureNodes}
-                wikiDirectoryText={wikiDirectoryText}
                 wikiDirectoryLastUpdatedAt={wikiDirectoryLastUpdatedAt}
-                wikiManualEditCount={wikiManualEditCount}
                 wikiRawFileCount={wikiRawFileCount}
                 wikiUploadSourceType={wikiUploadSourceType}
                 wikiOrganizeStatus={
@@ -4586,18 +4316,14 @@ function App() {
                 onRefreshWikiPages={() => void refreshWikiPages()}
                 onPickAndIngestWikiUploads={() => void pickAndIngestWikiRawFiles()}
                 onRefreshWikiDirectory={() => void refreshWikiDirectory()}
-                onOpenWikiFilesSection={() => setLibraryActiveSection('files')}
                 onRenameWikiRawRecord={(rawPath, newName) => void renameWikiRawRecord(rawPath, newName)}
                 onDeleteWikiRawRecord={(rawPath) => void deleteWikiRawRecord(rawPath)}
-                onRetitleWikiRecord={(rawPath, title) => void retitleWikiRecord(rawPath, title)}
-                onReclassifyWikiRecord={(rawPath, kind) => void reclassifyWikiRecord(rawPath, kind)}
                 onChangeWikiUploadSourceType={setWikiUploadSourceType}
                 onStartWikiOrganize={() => void startPersonalWikiOrganize()}
                 onStartWikiQualityOptimize={() => void startWikiQualityOptimizeAction()}
                 onRefreshWikiOrganizeStatus={() => void refreshPersonalWikiOrganizeStatus()}
                 onRefreshWikiPreview={() => void refreshWikiPreviewData()}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
-                onOpenFileEditor={() => openFileEditor('mkdir')}
                 onOpenTaskEditor={() => openTaskEditor()}
                 onRefreshLibrary={() => void refreshLibrary()}
                 onOpenMemoryEditor={() => openMemoryEditor()}
@@ -4617,11 +4343,6 @@ function App() {
                 onDownloadPhoto={(entry) => void downloadFileEntry(entry)}
                 onDeletePhoto={(entry) => void deleteFileEntry(entry)}
                 canManageFileEntry={canManageFileEntry}
-                onRefreshFiles={(path, force) => void refreshFiles(path, { force })}
-                onUploadFiles={() => void pickAndUploadFiles()}
-                onDownloadFile={(entry) => void downloadFileEntry(entry)}
-                onRenameFile={(entry) => openFileEditor('rename', entry)}
-                onDeleteFile={(entry) => void deleteFileEntry(entry)}
                 onRefreshTasks={() => void refreshTasks()}
                 canEditTask={canEditTask}
                 canTriggerTask={canTriggerTask}
@@ -4761,12 +4482,6 @@ function App() {
             onChangeMemoryContent={setMemoryContent}
             onToggleMemoryPinned={() => setMemoryPinned((current) => !current)}
             onSubmitMemoryEditor={() => void submitMemoryEditor()}
-            fileEditorOpen={fileEditorOpen}
-            fileEditorMode={fileEditorMode}
-            fileTargetEntry={fileTargetEntry}
-            fileEditorValue={fileEditorValue}
-            filesError={filesError}
-            filesBusy={filesBusy}
             networkSheetOpen={false}
             manualEntry={false}
             selectedNetwork={null}
@@ -4775,9 +4490,6 @@ function App() {
             wifiPassword=""
             canSubmitWifi={false}
             provisionBusy={false}
-            onCloseFileEditor={() => setFileEditorOpen(false)}
-            onChangeFileEditorValue={setFileEditorValue}
-            onSubmitFileEditor={() => void submitFileEditor()}
             onCloseNetworkSheet={() => undefined}
             onChangeSelectedSsid={() => undefined}
             onChangeWifiPassword={() => undefined}
@@ -4898,16 +4610,7 @@ function App() {
       onOpenManualEntry={openManualEntry}
       onChooseNetwork={chooseNetwork}
       onStartCloudVerification={() => void startCloudVerification()}
-      fileEditorOpen={fileEditorOpen}
-      fileEditorMode={fileEditorMode}
-      fileTargetEntry={fileTargetEntry}
-      fileEditorValue={fileEditorValue}
-      filesError={filesError}
-      filesBusy={filesBusy}
       canSubmitWifi={canSubmitWifi}
-      onCloseFileEditor={() => setFileEditorOpen(false)}
-      onChangeFileEditorValue={setFileEditorValue}
-      onSubmitFileEditor={() => void submitFileEditor()}
       onCloseNetworkSheet={() => setNetworkSheetOpen(false)}
       onChangeSelectedSsid={setSelectedSsid}
       onChangeWifiPassword={setWifiPassword}

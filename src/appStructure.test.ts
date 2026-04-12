@@ -575,13 +575,11 @@ describe('App structure', () => {
     const quickActionsSource = readFileSync(resolve(__dirname, './components/LibraryQuickActionsCard.tsx'), 'utf8');
 
     expect(appSource).toContain('ShellHeader');
-    expect(appSource).toContain('LibraryQuickActionsCard');
     expect(shellHeaderSource).toContain('Sparkbox');
     expect(shellHeaderSource).toContain('styles.shellTabBar');
-    expect(quickActionsSource).toContain('Quick actions');
-    expect(quickActionsSource).toContain('The creation shortcuts live here so they are always easy to reach.');
-    expect(quickActionsSource).toContain('New folder');
-    expect(quickActionsSource).toContain('New task');
+    expect(quickActionsSource).toContain('快捷操作');
+    expect(quickActionsSource).toContain('常用创建入口都放在这里，方便随时使用。');
+    expect(quickActionsSource).toContain('新建任务');
   });
 
   it('keeps settings summary cards in a dedicated pane', () => {
