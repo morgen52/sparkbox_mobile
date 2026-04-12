@@ -52,14 +52,6 @@ type ChatDetailPaneProps = {
   attachmentPickerBusy: boolean;
   attachmentPickerError: string;
   attachmentPickerEntries: Array<{ path: string; name: string; isDir: boolean; selected: boolean }>;
-  tempManagerOpen: boolean;
-  tempManagerPath: string;
-  tempManagerBusy: boolean;
-  tempManagerError: string;
-  tempManagerEntries: Array<{ path: string; name: string; isDir: boolean }>;
-  tempViewerOpen: boolean;
-  tempViewerTitle: string;
-  tempViewerContent: string;
   saveDocModalOpen: boolean;
   saveDocTitle: string;
   saveDocItems: Array<{ id: string; checked: boolean; sender: string; role: string; content: string }>;
@@ -75,13 +67,6 @@ type ChatDetailPaneProps = {
   onAttachmentPickerOpenPath: (path: string) => void;
   onAttachmentPickerToggleFile: (path: string, name: string) => void;
   onRemoveAttachment: (index: number) => void;
-  onOpenTempManager: () => void;
-  onCloseTempManager: () => void;
-  onTempManagerOpenPath: (path: string) => void;
-  onTempManagerView: (path: string) => void;
-  onTempManagerDelete: (path: string) => void;
-  onTempManagerPromote: (path: string, name: string) => void;
-  onCloseTempViewer: () => void;
   onOpenSaveDocModal: () => void;
   onCloseSaveDocModal: () => void;
   onChangeSaveDocTitle: (value: string) => void;
@@ -113,14 +98,6 @@ export function ChatDetailPane({
   attachmentPickerBusy,
   attachmentPickerError,
   attachmentPickerEntries,
-  tempManagerOpen,
-  tempManagerPath,
-  tempManagerBusy,
-  tempManagerError,
-  tempManagerEntries,
-  tempViewerOpen,
-  tempViewerTitle,
-  tempViewerContent,
   saveDocModalOpen,
   saveDocTitle,
   saveDocItems,
@@ -136,13 +113,6 @@ export function ChatDetailPane({
   onAttachmentPickerOpenPath,
   onAttachmentPickerToggleFile,
   onRemoveAttachment,
-  onOpenTempManager,
-  onCloseTempManager,
-  onTempManagerOpenPath,
-  onTempManagerView,
-  onTempManagerDelete,
-  onTempManagerPromote,
-  onCloseTempViewer,
   onOpenSaveDocModal,
   onCloseSaveDocModal,
   onChangeSaveDocTitle,
@@ -354,13 +324,6 @@ export function ChatDetailPane({
             <Text style={styles.secondaryButtonText}>＋ 文件</Text>
           </Pressable>
           <Pressable
-            style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
-            onPress={onOpenTempManager}
-            disabled={!hasActiveChatSession || chatBusy}
-          >
-            <Text style={styles.secondaryButtonText}>临时目录</Text>
-          </Pressable>
-          <Pressable
             style={[styles.secondaryButtonSmall, !hasMessages ? styles.networkRowDisabled : null]}
             onPress={onOpenSaveDocModal}
             disabled={!hasMessages || chatBusy}
@@ -380,8 +343,8 @@ export function ChatDetailPane({
       <Modal visible={attachmentPickerOpen} transparent animationType="slide" onRequestClose={onCloseAttachmentPicker}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>选择文件资源</Text>
-            <Text style={styles.cardCopy}>当前路径：{attachmentPickerPath || 'root'}</Text>
+            <Text style={styles.modalTitle}>选择原始文件</Text>
+            <Text style={styles.cardCopy}>当前路径：raw/{attachmentPickerPath || ''}</Text>
             {attachmentPickerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
             {attachmentPickerError ? <Text style={styles.errorText}>{attachmentPickerError}</Text> : null}
             <ScrollView style={styles.chatAttachmentPickerList}>
@@ -410,80 +373,6 @@ export function ChatDetailPane({
               </Pressable>
               <Pressable style={styles.primaryButtonSmall} onPress={onCloseAttachmentPicker}>
                 <Text style={styles.primaryButtonText}>完成</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={tempManagerOpen} transparent animationType="slide" onRequestClose={onCloseTempManager}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>临时目录</Text>
-            <Text style={styles.cardCopy}>当前路径：{tempManagerPath || 'temp root'}</Text>
-            {tempManagerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
-            {tempManagerError ? <Text style={styles.errorText}>{tempManagerError}</Text> : null}
-            <ScrollView style={styles.chatAttachmentPickerList}>
-              {tempManagerEntries.map((entry) => (
-                <View key={`temp-entry-${entry.path}`} style={styles.chatAttachmentPickerItem}>
-                  <Pressable
-                    onPress={() => {
-                      if (entry.isDir) {
-                        onTempManagerOpenPath(entry.path);
-                      }
-                    }}
-                  >
-                    <Text style={styles.chatAttachmentPickerItemTitle}>
-                      {entry.isDir ? 'DIR' : 'FILE'} · {entry.name}
-                    </Text>
-                    <Text style={styles.chatAttachmentPickerItemCopy}>{entry.path}</Text>
-                  </Pressable>
-                  {!entry.isDir ? (
-                    <View style={[styles.inlineActions, { marginTop: 8 }]}>
-                      <Pressable style={styles.secondaryButtonSmall} onPress={() => onTempManagerView(entry.path)}>
-                        <Text style={styles.secondaryButtonText}>查看</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.secondaryButtonSmall}
-                        onPress={() =>
-                          Alert.alert('删除临时文件？', '删除后无法恢复。', [
-                            { text: '取消', style: 'cancel' },
-                            { text: '删除', style: 'destructive', onPress: () => onTempManagerDelete(entry.path) },
-                          ])
-                        }
-                      >
-                        <Text style={styles.secondaryButtonText}>删除</Text>
-                      </Pressable>
-                      <Pressable style={styles.primaryButtonSmall} onPress={() => onTempManagerPromote(entry.path, entry.name)}>
-                        <Text style={styles.primaryButtonText}>转为正式资源</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
-              ))}
-            </ScrollView>
-            <View style={styles.inlineActions}>
-              <Pressable style={styles.secondaryButtonSmall} onPress={() => onTempManagerOpenPath('')}>
-                <Text style={styles.secondaryButtonText}>回到根目录</Text>
-              </Pressable>
-              <Pressable style={styles.primaryButtonSmall} onPress={onCloseTempManager}>
-                <Text style={styles.primaryButtonText}>关闭</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={tempViewerOpen} transparent animationType="slide" onRequestClose={onCloseTempViewer}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{tempViewerTitle || '临时文档'}</Text>
-            <ScrollView style={styles.chatAttachmentPickerList}>
-              <MarkdownRenderer markdown={tempViewerContent || ''} styles={styles} tone="chatAssistant" />
-            </ScrollView>
-            <View style={styles.inlineActions}>
-              <Pressable style={styles.primaryButtonSmall} onPress={onCloseTempViewer}>
-                <Text style={styles.primaryButtonText}>关闭</Text>
               </Pressable>
             </View>
           </View>

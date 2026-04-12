@@ -78,7 +78,6 @@ import {
   createSpaceMemory,
   deleteHouseholdChatSession,
   deleteHouseholdSpace,
-  deleteWikiTempPath,
   deleteSpaceMemory,
   deleteSpaceSummary,
   deleteHouseholdPath,
@@ -88,7 +87,6 @@ import {
   fileBackChatTranscript,
   getWikiOrganizeStatus,
   getWikiPreview,
-  getWikiTempFiles,
   getWikiDirectory,
   getDeviceConfigStatus,
   getDeviceDiagnostics,
@@ -114,13 +112,11 @@ import {
   onboardDeviceProvider,
   openSpaceSideChannel,
   openSpaceThreadSession,
-  promoteWikiTempFile,
   runWikiDirectoryConsistencyCheck,
   startWikiOrganize,
   startWikiQualityOptimize,
   relayHouseholdSpaceMessage,
   reconnectDevice,
-  readWikiTempFile,
   renameHouseholdPath,
   resetDeviceToSetupMode,
   type HouseholdTaskScope,
@@ -275,8 +271,6 @@ const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'househol
   'household_ops',
 ];
 const SWIPE_SPACE_DELETE_WIDTH = 78;
-const CHAT_ATTACHMENT_WIKI_ROOT = '.wiki';
-const CHAT_ATTACHMENT_VISIBLE_ROOT_DIRS = new Set(['add_record', 'raw', 'temp', 'wiki']);
 
 function SwipeToDeleteSpaceRow({
   space,
@@ -536,14 +530,6 @@ function App() {
   const [chatAttachmentPickerListing, setChatAttachmentPickerListing] = useState<HouseholdFileListing | null>(null);
   const [chatAttachmentPickerBusy, setChatAttachmentPickerBusy] = useState(false);
   const [chatAttachmentPickerError, setChatAttachmentPickerError] = useState('');
-  const [chatTempManagerOpen, setChatTempManagerOpen] = useState(false);
-  const [chatTempManagerPath, setChatTempManagerPath] = useState('');
-  const [chatTempManagerListing, setChatTempManagerListing] = useState<HouseholdFileListing | null>(null);
-  const [chatTempManagerBusy, setChatTempManagerBusy] = useState(false);
-  const [chatTempManagerError, setChatTempManagerError] = useState('');
-  const [chatTempViewerOpen, setChatTempViewerOpen] = useState(false);
-  const [chatTempViewerTitle, setChatTempViewerTitle] = useState('');
-  const [chatTempViewerContent, setChatTempViewerContent] = useState('');
   const [chatAttachedFiles, setChatAttachedFiles] = useState<Record<string, { path: string; name: string }>>({});
   const [chatSaveDocModalOpen, setChatSaveDocModalOpen] = useState(false);
   const [chatSaveDocTitle, setChatSaveDocTitle] = useState('');
@@ -1059,35 +1045,6 @@ function App() {
     return (path || '')
       .replace(/\\+/g, '/')
       .replace(/^\/+|\/+$/g, '');
-  }
-
-  function toChatAttachmentDevicePath(displayPath: string): string {
-    const normalized = normalizeDisplayFilePath(displayPath);
-    if (!normalized) {
-      return CHAT_ATTACHMENT_WIKI_ROOT;
-    }
-    if (normalized === CHAT_ATTACHMENT_WIKI_ROOT) {
-      return CHAT_ATTACHMENT_WIKI_ROOT;
-    }
-    if (normalized.startsWith(`${CHAT_ATTACHMENT_WIKI_ROOT}/`)) {
-      return normalized;
-    }
-    return normalized ? `${CHAT_ATTACHMENT_WIKI_ROOT}/${normalized}` : CHAT_ATTACHMENT_WIKI_ROOT;
-  }
-
-  function fromChatAttachmentDevicePath(devicePath: string | null | undefined): string {
-    const normalized = normalizeDisplayFilePath(devicePath);
-    if (!normalized || normalized === CHAT_ATTACHMENT_WIKI_ROOT) {
-      return '';
-    }
-    let trimmed = normalized;
-    while (trimmed.startsWith(`${CHAT_ATTACHMENT_WIKI_ROOT}/`)) {
-      trimmed = trimmed.slice(CHAT_ATTACHMENT_WIKI_ROOT.length + 1);
-    }
-    if (trimmed === CHAT_ATTACHMENT_WIKI_ROOT) {
-      return '';
-    }
-    return trimmed;
   }
 
   function parseWikiDirectoryObject(rawText: string): Record<string, unknown> {
@@ -2942,49 +2899,30 @@ function App() {
     setChatAttachmentPickerBusy(true);
     setChatAttachmentPickerError('');
     try {
-      let listing: HouseholdFileListing;
-      try {
-        listing = await getHouseholdFiles(
-          session.token,
-          chatAttachmentSpace,
-          toChatAttachmentDevicePath(path),
-          { spaceId: chatAttachmentSpaceId },
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message.toLowerCase() : '';
-        if (!message.includes('path does not exist')) {
-          throw error;
-        }
-        // Bootstrap .wiki when this space has never initialized wiki files yet.
-        await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
-        listing = await getHouseholdFiles(
-          session.token,
-          chatAttachmentSpace,
-          toChatAttachmentDevicePath(path),
-          { spaceId: chatAttachmentSpaceId },
-        );
-      }
+      // Browse raw/ directory directly
+      const devicePath = path ? `raw/${path}` : 'raw';
+      const listing = await getHouseholdFiles(
+        session.token,
+        chatAttachmentSpace,
+        devicePath,
+        { spaceId: chatAttachmentSpaceId },
+      );
       const mapped = mapListingToActiveSpace(listing);
-      const relativePath = fromChatAttachmentDevicePath(mapped.path);
-      const relativeEntries = mapped.entries
-        .map((entry) => ({
-          ...entry,
-          path: fromChatAttachmentDevicePath(entry.path),
-        }))
-        .filter((entry) => {
-          if (relativePath) {
-            return true;
-          }
-          return entry.isDir && CHAT_ATTACHMENT_VISIBLE_ROOT_DIRS.has(entry.name);
-        });
-      const relativeListing: HouseholdFileListing = {
+      // Strip the raw/ prefix for display
+      const displayPath = normalizeDisplayFilePath(
+        (mapped.path || '').replace(/^raw\/?/, ''),
+      );
+      const displayEntries = mapped.entries.map((entry) => ({
+        ...entry,
+        path: `raw/${normalizeDisplayFilePath(entry.path).replace(/^raw\/?/, '')}`.replace(/\/$/, ''),
+      }));
+      setChatAttachmentPickerListing({
         ...mapped,
-        path: relativePath,
-        parent: relativePath ? relativePath.split('/').slice(0, -1).join('/') || '' : '',
-        entries: relativeEntries,
-      };
-      setChatAttachmentPickerListing(relativeListing);
-      setChatAttachmentPickerPath(relativePath);
+        path: displayPath,
+        parent: displayPath ? displayPath.split('/').slice(0, -1).join('/') || '' : '',
+        entries: displayEntries,
+      });
+      setChatAttachmentPickerPath(displayPath);
     } catch (error) {
       setChatAttachmentPickerError(error instanceof Error ? error.message : '读取文件失败。');
     } finally {
@@ -3022,106 +2960,6 @@ function App() {
     setChatAttachmentPickerOpen(true);
     setChatAttachmentPickerPath('');
     void refreshChatAttachmentPicker('');
-  }
-
-  async function refreshChatTempManager(path: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    setChatTempManagerBusy(true);
-    setChatTempManagerError('');
-    try {
-      const listing = await getWikiTempFiles(session.token, {
-        spaceId: activeWikiSpaceId || undefined,
-        path: toDeviceFilePath(path),
-      });
-      const normalizedPath = normalizeDisplayFilePath(listing.path);
-      const mapped: HouseholdFileListing = {
-        space: fileSpace,
-        path: normalizedPath,
-        root: 'temp',
-        parent: normalizedPath ? normalizedPath.split('/').slice(0, -1).join('/') || null : null,
-        entries: listing.entries.map((entry) => ({
-          ...entry,
-          path: normalizeDisplayFilePath(entry.path),
-        })),
-      };
-      setChatTempManagerListing(mapped);
-      setChatTempManagerPath(normalizedPath);
-    } catch (error) {
-      setChatTempManagerError(error instanceof Error ? error.message : '读取临时目录失败。');
-    } finally {
-      setChatTempManagerBusy(false);
-    }
-  }
-
-  function openChatTempManager(): void {
-    setChatTempManagerOpen(true);
-    void refreshChatTempManager(chatTempManagerPath || '');
-  }
-
-  async function viewChatTempFile(path: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    setChatTempManagerBusy(true);
-    setChatTempManagerError('');
-    try {
-      const payload = await readWikiTempFile(session.token, {
-        spaceId: activeWikiSpaceId || undefined,
-        path: toDeviceFilePath(path),
-      });
-      setChatTempViewerTitle(payload.path.split('/').pop() || payload.path || '临时文档');
-      setChatTempViewerContent(payload.content);
-      setChatTempViewerOpen(true);
-    } catch (error) {
-      setChatTempManagerError(error instanceof Error ? error.message : '读取临时文档失败。');
-    } finally {
-      setChatTempManagerBusy(false);
-    }
-  }
-
-  async function deleteChatTempEntry(path: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    setChatTempManagerBusy(true);
-    setChatTempManagerError('');
-    try {
-      await deleteWikiTempPath(session.token, {
-        spaceId: activeWikiSpaceId || undefined,
-        path: toDeviceFilePath(path),
-      });
-      await refreshChatTempManager(chatTempManagerPath || '');
-    } catch (error) {
-      setChatTempManagerError(error instanceof Error ? error.message : '删除临时文件失败。');
-    } finally {
-      setChatTempManagerBusy(false);
-    }
-  }
-
-  async function promoteChatTempEntry(path: string, name: string): Promise<void> {
-    if (!session?.token || !activeSpaceId) {
-      return;
-    }
-    setChatTempManagerBusy(true);
-    setChatTempManagerError('');
-    try {
-      const suggestedTitle = (name || '').replace(/\.[^.]+$/, '').trim() || 'Temp Note';
-      const result = await promoteWikiTempFile(session.token, {
-        spaceId: activeWikiSpaceId || undefined,
-        path: toDeviceFilePath(path),
-        title: suggestedTitle,
-      });
-      setChatTempManagerOpen(false);
-      Alert.alert('已转为正式资源', `已写入 raw：${result.rawPath}`);
-      await refreshChatTempManager(chatTempManagerPath || '');
-      await refreshWikiDirectory();
-    } catch (error) {
-      setChatTempManagerError(error instanceof Error ? error.message : '转为正式资源失败。');
-    } finally {
-      setChatTempManagerBusy(false);
-    }
   }
 
   function openChatSaveDocModal(): void {
@@ -4641,18 +4479,6 @@ function App() {
                     isDir: entry.isDir,
                     selected: Boolean(chatAttachedFiles[entry.path]),
                   })),
-                  tempManagerOpen: chatTempManagerOpen,
-                  tempManagerPath: chatTempManagerPath,
-                  tempManagerBusy: chatTempManagerBusy,
-                  tempManagerError: chatTempManagerError,
-                  tempManagerEntries: (chatTempManagerListing?.entries || []).map((entry) => ({
-                    path: entry.path,
-                    name: entry.name,
-                    isDir: entry.isDir,
-                  })),
-                  tempViewerOpen: chatTempViewerOpen,
-                  tempViewerTitle: chatTempViewerTitle,
-                  tempViewerContent: chatTempViewerContent,
                   saveDocModalOpen: chatSaveDocModalOpen,
                   saveDocTitle: chatSaveDocTitle,
                   saveDocItems: chatSaveDocItems,
@@ -4673,13 +4499,6 @@ function App() {
                   onAttachmentPickerOpenPath: (path: string) => void refreshChatAttachmentPicker(path),
                   onAttachmentPickerToggleFile: (path: string, name: string) => toggleChatAttachment(path, name),
                   onRemoveAttachment: (index: number) => removeChatAttachmentByIndex(index),
-                  onOpenTempManager: openChatTempManager,
-                  onCloseTempManager: () => setChatTempManagerOpen(false),
-                  onTempManagerOpenPath: (path: string) => void refreshChatTempManager(path),
-                  onTempManagerView: (path: string) => void viewChatTempFile(path),
-                  onTempManagerDelete: (path: string) => void deleteChatTempEntry(path),
-                  onTempManagerPromote: (path: string, name: string) => void promoteChatTempEntry(path, name),
-                  onCloseTempViewer: () => setChatTempViewerOpen(false),
                   onOpenSaveDocModal: openChatSaveDocModal,
                   onCloseSaveDocModal: () => setChatSaveDocModalOpen(false),
                   onChangeSaveDocTitle: setChatSaveDocTitle,
