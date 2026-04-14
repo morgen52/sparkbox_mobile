@@ -307,22 +307,26 @@ const HTML_ENTITY_MAP: Record<string, string> = {
 };
 
 export function decodeChatMessageContent(content: string): string {
-  const normalized = String(content);
-  if (!normalized.includes('&')) {
-    return normalized;
+  let normalized = String(content);
+  if (normalized.includes('&')) {
+    normalized = normalized.replace(/&(?:#(\d+)|#x([0-9a-fA-F]+)|([a-zA-Z]+));/g, (match, decimal, hex, named) => {
+      if (decimal) {
+        const codePoint = Number.parseInt(decimal, 10);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+      }
+      if (hex) {
+        const codePoint = Number.parseInt(hex, 16);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+      }
+      const mapped = HTML_ENTITY_MAP[String(named).toLowerCase()];
+      return mapped ?? match;
+    });
   }
-  return normalized.replace(/&(?:#(\d+)|#x([0-9a-fA-F]+)|([a-zA-Z]+));/g, (match, decimal, hex, named) => {
-    if (decimal) {
-      const codePoint = Number.parseInt(decimal, 10);
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
-    }
-    if (hex) {
-      const codePoint = Number.parseInt(hex, 16);
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
-    }
-    const mapped = HTML_ENTITY_MAP[String(named).toLowerCase()];
-    return mapped ?? match;
-  });
+  // Strip <think>…</think> reasoning blocks (Qwen, DeepSeek, etc.)
+  normalized = normalized.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // Collapse 3+ consecutive newlines into 2
+  normalized = normalized.replace(/\n{3,}/g, '\n\n');
+  return normalized.trim();
 }
 
 export function describeFileTimestamp(modified: string): string {

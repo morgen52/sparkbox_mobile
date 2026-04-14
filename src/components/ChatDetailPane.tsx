@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, type LayoutChangeEvent, Modal, ScrollView, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -120,6 +120,11 @@ export function ChatDetailPane({
   onConfirmSaveDoc,
   onSend,
 }: ChatDetailPaneProps) {
+  const { height: windowHeight } = useWindowDimensions();
+  const timelineMaxHeight = Math.max(240, Math.min(560, Math.floor(windowHeight * 0.52)));
+  const [markdownEnabled, setMarkdownEnabled] = React.useState(true);
+  const [debugBlocks, setDebugBlocks] = React.useState(false);
+  const [layoutInfo, setLayoutInfo] = React.useState<Record<string, { w: number; h: number }>>({});
   return (
     <>
       <View style={styles.card}>
@@ -136,6 +141,20 @@ export function ChatDetailPane({
             >
               <Text style={styles.secondaryButtonText}>返回聊天列表</Text>
             </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable onPress={() => setDebugBlocks((d) => !d)}>
+                <Text style={{ fontSize: 11, color: debugBlocks ? '#e63946' : '#7e8a83' }}>
+                  {markdownEnabled ? (debugBlocks ? 'DBG' : 'MD') : 'TXT'}
+                </Text>
+              </Pressable>
+              <Switch
+                value={markdownEnabled}
+                onValueChange={setMarkdownEnabled}
+                trackColor={{ false: '#ccc', true: '#0b6e4f' }}
+                thumbColor="#fff"
+                style={{ transform: [{ scale: 0.7 }] }}
+              />
+            </View>
             {hasActiveChatSession ? (
               <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
                 {onlineDeviceAvailable ? '设备在线' : '设备离线'}
@@ -213,9 +232,16 @@ export function ChatDetailPane({
         {!hasMessages ? (
           <Text style={styles.cardCopy}>当前聊天还没有消息。</Text>
         ) : (
-          chatTimelineGroups.map((group) =>
-            group.kind === 'status' ? (
-              <View key={group.id} style={styles.chatStatusNotice}>
+          <ScrollView
+            style={[styles.chatTimelineViewport, { maxHeight: timelineMaxHeight }]}
+            contentContainerStyle={styles.chatTimelineViewportContent}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            removeClippedSubviews={false}
+          >
+            {chatTimelineGroups.map((group) =>
+              group.kind === 'status' ? (
+                <View key={group.id} style={styles.chatStatusNotice}>
                 <View style={styles.chatStatusNoticeHeader}>
                   <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
                   {group.message.createdAt ? (
@@ -225,11 +251,16 @@ export function ChatDetailPane({
                   ) : null}
                 </View>
                 <View style={{ marginTop: 6 }}>
-                  <MarkdownRenderer
-                    markdown={decodeChatMessageContent(group.message.content)}
-                    styles={styles}
-                    tone="chatAssistant"
-                  />
+                  {markdownEnabled ? (
+                    <MarkdownRenderer
+                      markdown={decodeChatMessageContent(group.message.content)}
+                      styles={styles}
+                      tone="chatAssistant"
+                      debug={debugBlocks}
+                    />
+                  ) : (
+                    <Text style={[styles.cardCopy, { color: '#1f2d2a' }]} selectable>{decodeChatMessageContent(group.message.content)}</Text>
+                  )}
                 </View>
                 <Text style={styles.cardCopy}>{group.statusCopy}</Text>
                 {group.message.failed && group.message.errorMessage ? (
@@ -246,24 +277,41 @@ export function ChatDetailPane({
                     </Pressable>
                   </View>
                 ) : null}
-              </View>
-            ) : (
-              <View
-                key={group.id}
-                style={[
-                  styles.chatMessageGroup,
-                  group.role === 'user' ? styles.chatMessageGroupUser : styles.chatMessageGroupAssistant,
-                ]}
-              >
+                </View>
+              ) : (
+                <View
+                  key={group.id}
+                  style={[
+                    styles.chatMessageGroup,
+                    group.role === 'user' ? styles.chatMessageGroupUser : styles.chatMessageGroupAssistant,
+                  ]}
+                >
                 <Text style={styles.selectionLabel}>{group.senderLabel}</Text>
-                {group.messages.map((message, index) => (
+                {group.messages.map((message, index) => {
+                  const bubbleKey = `${group.id}-${index}`;
+                  const decoded = decodeChatMessageContent(message.content);
+                  const info = layoutInfo[bubbleKey];
+                  return (
                   <View
                     key={`${group.id}-${index}-${message.content}`}
                     style={[
                       styles.chatBubble,
                       group.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                      debugBlocks ? { borderWidth: 2, borderColor: '#e63946', borderStyle: 'dashed' } : null,
                     ]}
+                    onLayout={debugBlocks ? (e: LayoutChangeEvent) => {
+                      const w = Math.round(e.nativeEvent.layout.width);
+                      const h = Math.round(e.nativeEvent.layout.height);
+                      setLayoutInfo((prev) => ({ ...prev, [bubbleKey]: { w, h } }));
+                    } : undefined}
                   >
+                    {debugBlocks ? (
+                      <View style={{ backgroundColor: '#000', padding: 4 }}>
+                        <Text style={{ fontSize: 9, color: '#0f0', fontFamily: 'monospace' }}>
+                          BUBBLE[{index}] layout={info ? `${info.w}x${info.h}` : '...'}
+                        </Text>
+                      </View>
+                    ) : null}
                     {message.createdAt ? (
                       <View style={styles.chatBubbleMetaRow}>
                         <Text
@@ -276,16 +324,28 @@ export function ChatDetailPane({
                         </Text>
                       </View>
                     ) : null}
-                    <MarkdownRenderer
-                      markdown={decodeChatMessageContent(message.content)}
-                      styles={styles}
-                      tone={group.role === 'user' ? 'chatUser' : 'chatAssistant'}
-                    />
+                    <View style={message.createdAt ? { marginTop: 8 } : undefined}>
+                      {markdownEnabled ? (
+                        <MarkdownRenderer
+                          markdown={decoded}
+                          styles={styles}
+                          tone={group.role === 'user' ? 'chatUser' : 'chatAssistant'}
+                          debug={debugBlocks}
+                        />
+                      ) : (
+                        <Text
+                          style={[styles.cardCopy, { color: group.role === 'user' ? '#ffffff' : '#1f2d2a' }]}
+                          selectable
+                        >{decoded}</Text>
+                      )}
+                    </View>
                   </View>
-                ))}
-              </View>
-            ),
-          )
+                  );
+                })}
+                </View>
+              ),
+            )}
+          </ScrollView>
         )}
       </View>
 

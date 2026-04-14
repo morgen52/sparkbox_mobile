@@ -11,7 +11,6 @@ import {
   describeUiDateTime,
   formatByteSize,
 } from '../appShell';
-import { MarkdownCardViewer } from './MarkdownCardViewer';
 import type {
   ChatSessionScope,
   HouseholdChatSessionSummary,
@@ -40,9 +39,7 @@ export type LibrarySectionKey =
   | 'tasks'
   | 'wiki_upload_file'
   | 'wiki_upload_image'
-  | 'wiki_upload_text'
-  | 'wiki_organize'
-  | 'wiki_preview';
+  | 'wiki_upload_text';
 
 type LibraryPaneProps = {
   styles: Record<string, any>;
@@ -104,16 +101,7 @@ type LibraryPaneProps = {
   wikiDirectoryLastUpdatedAt: string;
   wikiRawFileCount: number;
   wikiUploadSourceType: 'note' | 'document' | 'image';
-  wikiOrganizeStatus: {
-    jobId: string;
-    mode?: string;
-    status: string;
-    iterations: number;
-    durationMs: number;
-    processedRecords: number;
-    message: string;
-  } | null;
-  wikiPreviewFiles: Array<{ path: string; preview: string; content: string; updatedAt: string }>;
+
   onChangeActiveSection: (section: LibrarySectionKey) => void;
   onChangeWikiSourceTitle: (value: string) => void;
   onChangeWikiSourceContent: (value: string) => void;
@@ -125,10 +113,7 @@ type LibraryPaneProps = {
   onRenameWikiRawRecord: (rawPath: string, newName: string) => void;
   onDeleteWikiRawRecord: (rawPath: string) => void;
   onChangeWikiUploadSourceType: (value: 'note' | 'document' | 'image') => void;
-  onStartWikiOrganize: () => void;
-  onStartWikiQualityOptimize: () => void;
-  onRefreshWikiOrganizeStatus: () => void;
-  onRefreshWikiPreview: () => void;
+
   onOpenTaskEditor: () => void;
   onRefreshLibrary: () => void;
   onOpenMemoryEditor: () => void;
@@ -203,8 +188,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     wikiDirectoryLastUpdatedAt,
     wikiRawFileCount,
     wikiUploadSourceType,
-    wikiOrganizeStatus,
-    wikiPreviewFiles,
+
     onChangeActiveSection,
     onChangeWikiSourceTitle,
     onChangeWikiSourceContent,
@@ -216,10 +200,7 @@ export function LibraryPane(props: LibraryPaneProps) {
     onRenameWikiRawRecord,
     onDeleteWikiRawRecord,
     onChangeWikiUploadSourceType,
-    onStartWikiOrganize,
-    onStartWikiQualityOptimize,
-    onRefreshWikiOrganizeStatus,
-    onRefreshWikiPreview,
+
     onOpenTaskEditor,
     onRefreshLibrary,
     onOpenMemoryEditor,
@@ -252,16 +233,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   };
 
 
-  const [activeWikiPreviewPath, setActiveWikiPreviewPath] = React.useState('');
-
-  React.useEffect(() => {
-    if (!activeWikiPreviewPath) {
-      return;
-    }
-    if (!wikiPreviewFiles.some((item) => item.path === activeWikiPreviewPath)) {
-      setActiveWikiPreviewPath('');
-    }
-  }, [activeWikiPreviewPath, wikiPreviewFiles]);
 
   function resolveOverviewSectionKey(title: string): LibrarySectionKey | null {
     const normalized = title.trim().toLowerCase();
@@ -331,22 +302,7 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.librarySectionTitle}>文本上传</Text>
             <Text style={styles.librarySectionCopy}>填写 Raw 标题和内容后直接导入。</Text>
           </Pressable>
-          <Pressable
-            style={styles.librarySectionCard}
-            onPress={() => onChangeActiveSection('wiki_organize')}
-            disabled={!activeSpace}
-          >
-            <Text style={styles.librarySectionTitle}>个人Wiki整理</Text>
-            <Text style={styles.librarySectionCopy}>后台多轮整理未归档 raw 并写入 wiki。</Text>
-          </Pressable>
-          <Pressable
-            style={styles.librarySectionCard}
-            onPress={() => onChangeActiveSection('wiki_preview')}
-            disabled={!activeSpace}
-          >
-            <Text style={styles.librarySectionTitle}>Wiki 预览</Text>
-            <Text style={styles.librarySectionCopy}>浏览当前空间 wiki 下的 Markdown 内容。</Text>
-          </Pressable>
+
         </View>
       </View>
     );
@@ -380,14 +336,7 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.librarySectionTitle}>文本上传</Text>
             <Text style={styles.librarySectionCopy}>通过 Raw 标题+内容上传。</Text>
           </Pressable>
-          <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_organize')} disabled={!activeSpace}>
-            <Text style={styles.librarySectionTitle}>个人Wiki整理</Text>
-            <Text style={styles.librarySectionCopy}>后台迭代整理 add_record 到 wiki。</Text>
-          </Pressable>
-          <Pressable style={styles.librarySectionCard} onPress={() => onChangeActiveSection('wiki_preview')} disabled={!activeSpace}>
-            <Text style={styles.librarySectionTitle}>Wiki 预览</Text>
-            <Text style={styles.librarySectionCopy}>预览 wiki 目录中的 Markdown。</Text>
-          </Pressable>
+
         </View>
 
         <Text style={styles.selectionLabel}>上传即导入（Ingest）</Text>
@@ -602,96 +551,6 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.primaryButtonText}>导入文本</Text>
           </Pressable>
           {wikiNotice ? <Text style={styles.noticeText}>{wikiNotice}</Text> : null}
-          {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
-        </View>
-      </>
-    );
-  }
-
-  function renderWikiOrganizeSection(): React.ReactNode {
-    return (
-      <>
-        {renderSectionHeader('个人Wiki整理', '后台运行多轮任务，整理素材并优化 Wiki 文档质量与结构。')}
-        <View style={styles.settingsCard}>
-          <View style={styles.inlineActions}>
-            <Pressable style={styles.primaryButtonSmall} onPress={onStartWikiOrganize} disabled={!activeSpace || wikiBusy}>
-              <Text style={styles.primaryButtonText}>启动整理</Text>
-            </Pressable>
-            <Pressable style={styles.primaryButtonSmall} onPress={onStartWikiQualityOptimize} disabled={!activeSpace || wikiBusy}>
-              <Text style={styles.primaryButtonText}>Wiki质量优化</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryButtonSmall} onPress={onRefreshWikiOrganizeStatus} disabled={!activeSpace || wikiBusy}>
-              <Text style={styles.secondaryButtonText}>刷新状态</Text>
-            </Pressable>
-          </View>
-          {wikiOrganizeStatus ? (
-            <View style={styles.deviceRowCard}>
-              <Text style={styles.networkName}>最近整理任务</Text>
-              {wikiOrganizeStatus.mode ? <Text style={styles.cardCopy}>任务模式：{wikiOrganizeStatus.mode}</Text> : null}
-              <Text style={styles.cardCopy}>状态：{wikiOrganizeStatus.status}</Text>
-              <Text style={styles.cardCopy}>任务ID：{wikiOrganizeStatus.jobId || '-'}</Text>
-              <Text style={styles.cardCopy}>轮数：{wikiOrganizeStatus.iterations}</Text>
-              <Text style={styles.cardCopy}>处理记录：{wikiOrganizeStatus.processedRecords}</Text>
-              <Text style={styles.cardCopy}>耗时：{Math.max(0, Math.round(wikiOrganizeStatus.durationMs / 1000))} 秒</Text>
-              <Text style={styles.cardCopy}>信息：{wikiOrganizeStatus.message || '-'}</Text>
-            </View>
-          ) : (
-            <Text style={styles.cardCopy}>尚未启动整理任务。</Text>
-          )}
-          {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
-          {wikiNotice ? <Text style={styles.noticeText}>{wikiNotice}</Text> : null}
-        </View>
-      </>
-    );
-  }
-
-  function renderWikiPreviewSection(): React.ReactNode {
-    const activePreview = wikiPreviewFiles.find((item) => item.path === activeWikiPreviewPath) || null;
-
-    if (activePreview) {
-      return (
-        <>
-          {renderSectionHeader('Wiki 阅读器', `正在查看 ${activePreview.path}`)}
-          <View style={styles.settingsCard}>
-            <View style={styles.inlineActions}>
-              <Pressable style={styles.secondaryButtonSmall} onPress={() => setActiveWikiPreviewPath('')}>
-                <Text style={styles.secondaryButtonText}>返回文件列表</Text>
-              </Pressable>
-              <Pressable style={styles.primaryButtonSmall} onPress={onRefreshWikiPreview} disabled={!activeSpace || wikiBusy}>
-                <Text style={styles.primaryButtonText}>刷新预览</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.cardCopy}>更新：{describeFileTimestamp(activePreview.updatedAt)}</Text>
-            <MarkdownCardViewer markdown={activePreview.content || activePreview.preview || ''} styles={styles} />
-            {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
-          </View>
-        </>
-      );
-    }
-
-    return (
-      <>
-        {renderSectionHeader('Wiki 预览', '每个 Wiki 文件都是一个条目，点击进入 Markdown 阅读器。')}
-        <View style={styles.settingsCard}>
-          <Pressable style={styles.primaryButtonSmall} onPress={onRefreshWikiPreview} disabled={!activeSpace || wikiBusy}>
-            <Text style={styles.primaryButtonText}>刷新预览</Text>
-          </Pressable>
-          {wikiPreviewFiles.length === 0 ? <Text style={styles.cardCopy}>暂无可预览的 Wiki 文件。</Text> : null}
-          {wikiPreviewFiles.map((item) => (
-            <Pressable
-              key={item.path}
-              style={styles.deviceRowCard}
-              onPress={() => setActiveWikiPreviewPath(item.path)}
-              pressFeedback="scale"
-            >
-              <Text style={styles.networkName}>{item.path}</Text>
-              <Text style={styles.cardCopy}>更新：{describeFileTimestamp(item.updatedAt)}</Text>
-              <Text style={styles.cardCopy} numberOfLines={3}>
-                {item.preview || '（空内容）'}
-              </Text>
-              <Text style={styles.noticeText}>点击进入阅读器</Text>
-            </Pressable>
-          ))}
           {wikiError ? <Text style={styles.errorText}>{wikiError}</Text> : null}
         </View>
       </>
@@ -1002,12 +861,6 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'wiki_upload_text') {
     return <>{renderWikiUploadText()}</>;
-  }
-  if (activeSection === 'wiki_organize') {
-    return <>{renderWikiOrganizeSection()}</>;
-  }
-  if (activeSection === 'wiki_preview') {
-    return <>{renderWikiPreviewSection()}</>;
   }
   return <>{renderWiki()}</>;
 }

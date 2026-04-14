@@ -923,7 +923,6 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
   chatMessageGroup: {
-    gap: 6,
     maxWidth: '88%',
     marginBottom: 8,
   },
@@ -957,6 +956,12 @@ export const styles = StyleSheet.create({
     color: '#61746a',
     fontSize: 12,
     fontWeight: '600',
+  },
+  chatTimelineViewport: {
+    borderRadius: 16,
+  },
+  chatTimelineViewportContent: {
+    paddingBottom: 4,
   },
   chatExplorerRail: {
     gap: 10,
@@ -1244,8 +1249,9 @@ export const styles = StyleSheet.create({
   },
   chatBubble: {
     borderRadius: 20,
-    padding: 14,
-    gap: 8,
+    paddingTop: 14,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
   chatBubbleMetaRow: {
     flexDirection: 'row',

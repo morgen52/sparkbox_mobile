@@ -1775,6 +1775,47 @@ export async function getWikiOrganizeStatus(token: string, jobId: string): Promi
   };
 }
 
+// ---------------------------------------------------------------------------
+// User Skill
+// ---------------------------------------------------------------------------
+
+export type UserSkillResult = {
+  exists: boolean;
+  content: string;
+  length: number;
+  updatedAt: string;
+};
+
+export type UserSkillDistillResult = {
+  ok: boolean;
+  length: number;
+  error: string;
+};
+
+export async function distillUserSkill(token: string): Promise<UserSkillDistillResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/skill-distill', {
+    method: 'POST',
+    token,
+  });
+  return {
+    ok: Boolean(response.ok ?? false),
+    length: Number(response.length ?? 0),
+    error: String(response.error ?? ''),
+  };
+}
+
+export async function getUserSkill(token: string): Promise<UserSkillResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/wiki/skill', {
+    token,
+  });
+  return {
+    exists: Boolean(response.exists ?? false),
+    content: String(response.content ?? ''),
+    length: Number(response.length ?? 0),
+    updatedAt: String(response.updated_at ?? ''),
+  };
+}
+
 export async function runWikiDirectoryConsistencyCheck(
   token: string,
   options: { spaceId?: string | null } = {},

@@ -27,6 +27,8 @@ import { ChatsPane } from './src/components/ChatsPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import type { LibrarySectionKey } from './src/components/LibraryPane';
+import { UserToolsPane } from './src/components/UserToolsPane';
+import type { UserToolSection } from './src/components/UserToolsPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
 import { SettingsDevicesPane } from './src/components/SettingsDevicesPane';
 import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
@@ -154,6 +156,8 @@ import {
   type WikiDirectoryConsistencyResult,
   type WikiDirectoryPayload,
   type WikiOrganizeStatusResult,
+  distillUserSkill,
+  getUserSkill,
 } from './src/householdApi';
 import {
   canChangeMemberRole,
@@ -417,7 +421,8 @@ function App() {
   // here so cross-surface resets happen in one place.
   const [shellTab, setShellTab] = useState<ShellTab>('chats');
   const [spaceHomeMode, setSpaceHomeMode] = useState<'list' | 'inside'>('list');
-  const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings'>('spaces');
+  const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings' | 'user-tools'>('spaces');
+  const [userToolsSection, setUserToolsSection] = useState<UserToolSection>('overview');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
@@ -623,6 +628,9 @@ function App() {
   const [wikiUploadSourceType, setWikiUploadSourceType] = useState<'note' | 'document' | 'image'>('note');
   const [wikiOrganizeStatus, setWikiOrganizeStatus] = useState<WikiOrganizeStatusResult | null>(null);
   const [wikiPreviewFiles, setWikiPreviewFiles] = useState<Array<{ path: string; preview: string; content: string; updatedAt: string }>>([]);
+  const [userSkillContent, setUserSkillContent] = useState('');
+  const [userSkillUpdatedAt, setUserSkillUpdatedAt] = useState('');
+  const [userSkillBusy, setUserSkillBusy] = useState(false);
   const [wikiPreviewCacheBySpace, setWikiPreviewCacheBySpace] = useState<
     Record<string, Array<{ path: string; preview: string; content: string; updatedAt: string }>>
   >({});
@@ -2877,6 +2885,14 @@ function App() {
           setSpaceListViewMode('spaces');
           return true;
         }
+        if (spaceListViewMode === 'user-tools') {
+          if (userToolsSection !== 'overview') {
+            setUserToolsSection('overview');
+            return true;
+          }
+          setSpaceListViewMode('spaces');
+          return true;
+        }
         // Space list root: allow Android to exit.
         return false;
       }
@@ -3529,7 +3545,7 @@ function App() {
 
   async function startPersonalWikiOrganize(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行个人Wiki整理。');
+      setLibraryError('请先进入一个空间，再执行个人画像与Wiki整理。');
       setLibraryNotice('');
       return;
     }
@@ -3549,9 +3565,9 @@ function App() {
         finishedAt: null,
         message: 'organize running',
       });
-      setLibraryNotice('个人Wiki整理已启动，正在后台运行。');
+      setLibraryNotice('个人画像与Wiki整理已启动，正在后台运行。');
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '启动个人Wiki整理失败。');
+      setLibraryError(error instanceof Error ? error.message : '启动个人画像与Wiki整理失败。');
     } finally {
       setLibraryBusy(false);
     }
@@ -3587,6 +3603,40 @@ function App() {
       setLibraryError(error instanceof Error ? error.message : '启动 Wiki质量优化失败。');
     } finally {
       setLibraryBusy(false);
+    }
+  }
+
+  async function startUserSkillDistill(): Promise<void> {
+    if (!session?.token) {
+      setLibraryError('请先登录。');
+      return;
+    }
+    setUserSkillBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await distillUserSkill(session.token);
+      if (result.ok) {
+        setLibraryNotice('用户 Skill 提炼完成。');
+        await refreshUserSkill();
+      } else {
+        setLibraryError(result.error || '提炼用户 Skill 失败。');
+      }
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : '提炼用户 Skill 失败。');
+    } finally {
+      setUserSkillBusy(false);
+    }
+  }
+
+  async function refreshUserSkill(): Promise<void> {
+    if (!session?.token) return;
+    try {
+      const result = await getUserSkill(session.token);
+      setUserSkillContent(result.content);
+      setUserSkillUpdatedAt(result.updatedAt);
+    } catch {
+      // Silently ignore — skill may not exist yet
     }
   }
 
@@ -3674,10 +3724,10 @@ function App() {
   }, [session?.token, wikiOrganizeStatus?.jobId, wikiOrganizeStatus?.status]);
 
   useEffect(() => {
-    if (shellTab !== 'library' || libraryActiveSection !== 'wiki_preview') {
+    if (spaceListViewMode !== 'user-tools' || userToolsSection !== 'wiki_preview') {
       return;
     }
-    if (!session?.token || !activeSpaceId || !activeWikiPreviewCacheKey) {
+    if (!session?.token) {
       return;
     }
 
@@ -3696,8 +3746,8 @@ function App() {
 
     void refreshWikiPreviewData();
   }, [
-    shellTab,
-    libraryActiveSection,
+    spaceListViewMode,
+    userToolsSection,
     session?.token,
     activeSpaceId,
     activeWikiPreviewCacheKey,
@@ -3809,7 +3859,14 @@ function App() {
               </View>
               <Pressable
                 style={styles.headerBackButton}
-                onPress={() => setSpaceListViewMode((current) => (current === 'spaces' ? 'global-settings' : 'spaces'))}
+                onPress={() => {
+                  if (spaceListViewMode === 'spaces') {
+                    setSpaceListViewMode('global-settings');
+                  } else {
+                    setSpaceListViewMode('spaces');
+                    setUserToolsSection('overview');
+                  }
+                }}
               >
                 <Text style={styles.headerBackButtonText}>
                   {spaceListViewMode === 'spaces' ? '全局设置' : '返回我的空间'}
@@ -3860,9 +3917,63 @@ function App() {
                 {!spaces.length && !spacesBusy ? <Text style={styles.cardCopy}>还没有 Space，可先创建一个。</Text> : null}
                 {spacesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                 {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
+                <Pressable
+                  style={styles.chatTreeFolder}
+                  pressFeedback="none"
+                  onPress={() => {
+                    setSpaceListViewMode('user-tools');
+                    setUserToolsSection('overview');
+                  }}
+                >
+                  <View style={styles.chatTreeFolderHeader}>
+                    <View style={styles.chatTreeFolderHeaderBody}>
+                      <Text style={styles.chatTreeFolderTitle}>个人工具</Text>
+                      <Text style={styles.chatTreeFolderMeta}>画像整理 · Skill 提炼 · Wiki 预览</Text>
+                    </View>
+                    <View style={styles.spaceListCardRightRail}>
+                      <Text style={styles.spaceTemplateBadge}>用户级</Text>
+                      <Text style={styles.chatTreeFolderChevron}>›</Text>
+                    </View>
+                  </View>
+                </Pressable>
                 <Pressable style={styles.secondaryButton} onPress={() => void logout()}>
                   <Text style={styles.secondaryButtonText}>退出登录</Text>
                 </Pressable>
+              </ScrollView>
+            ) : spaceListViewMode === 'user-tools' ? (
+              <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
+                <UserToolsPane
+                  styles={styles}
+                  busy={libraryBusy}
+                  error={libraryError}
+                  notice={libraryNotice}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  wikiOrganizeStatus={
+                    wikiOrganizeStatus
+                      ? {
+                          jobId: wikiOrganizeStatus.jobId,
+                          mode: wikiOrganizeStatus.mode,
+                          status: wikiOrganizeStatus.status,
+                          iterations: wikiOrganizeStatus.iterations,
+                          durationMs: wikiOrganizeStatus.durationMs,
+                          processedRecords: wikiOrganizeStatus.processedRecords,
+                          message: wikiOrganizeStatus.message,
+                        }
+                      : null
+                  }
+                  onStartWikiOrganize={() => void startPersonalWikiOrganize()}
+                  onStartWikiQualityOptimize={() => void startWikiQualityOptimizeAction()}
+                  onRefreshWikiOrganizeStatus={() => void refreshPersonalWikiOrganizeStatus()}
+                  userSkillContent={userSkillContent}
+                  userSkillUpdatedAt={userSkillUpdatedAt}
+                  userSkillBusy={userSkillBusy}
+                  onDistillUserSkill={() => void startUserSkillDistill()}
+                  onRefreshUserSkill={() => void refreshUserSkill()}
+                  wikiPreviewFiles={wikiPreviewFiles}
+                  onRefreshWikiPreview={() => void refreshWikiPreviewData()}
+                  activeSection={userToolsSection}
+                  onChangeActiveSection={setUserToolsSection}
+                />
               </ScrollView>
             ) : (
               <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
@@ -4015,6 +4126,7 @@ function App() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={false}
+            nestedScrollEnabled
             contentContainerStyle={shellTab === 'chats' || shellTab === 'library' || shellTab === 'settings' ? styles.chatContent : styles.content}
           >
             {shellTab === 'chats' ? (
@@ -4294,20 +4406,6 @@ function App() {
                 wikiDirectoryLastUpdatedAt={wikiDirectoryLastUpdatedAt}
                 wikiRawFileCount={wikiRawFileCount}
                 wikiUploadSourceType={wikiUploadSourceType}
-                wikiOrganizeStatus={
-                  wikiOrganizeStatus
-                    ? {
-                        jobId: wikiOrganizeStatus.jobId,
-                        mode: wikiOrganizeStatus.mode,
-                        status: wikiOrganizeStatus.status,
-                        iterations: wikiOrganizeStatus.iterations,
-                        durationMs: wikiOrganizeStatus.durationMs,
-                        processedRecords: wikiOrganizeStatus.processedRecords,
-                        message: wikiOrganizeStatus.message,
-                      }
-                    : null
-                }
-                wikiPreviewFiles={wikiPreviewFiles}
                 onChangeActiveSection={setLibraryActiveSection}
                 onChangeWikiSourceTitle={setWikiSourceTitle}
                 onChangeWikiSourceContent={setWikiSourceContent}
@@ -4319,10 +4417,6 @@ function App() {
                 onRenameWikiRawRecord={(rawPath, newName) => void renameWikiRawRecord(rawPath, newName)}
                 onDeleteWikiRawRecord={(rawPath) => void deleteWikiRawRecord(rawPath)}
                 onChangeWikiUploadSourceType={setWikiUploadSourceType}
-                onStartWikiOrganize={() => void startPersonalWikiOrganize()}
-                onStartWikiQualityOptimize={() => void startWikiQualityOptimizeAction()}
-                onRefreshWikiOrganizeStatus={() => void refreshPersonalWikiOrganizeStatus()}
-                onRefreshWikiPreview={() => void refreshWikiPreviewData()}
                 taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
                 onOpenTaskEditor={() => openTaskEditor()}
                 onRefreshLibrary={() => void refreshLibrary()}
