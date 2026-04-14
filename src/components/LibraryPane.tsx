@@ -23,6 +23,7 @@ import type {
   SpaceSummary,
 } from '../householdApi';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
+import { MarkdownCardViewer } from './MarkdownCardViewer';
 import { describeCaptureSummaryActionLabel, describeSummarySectionCopy } from '../spaceShell';
 
 type SectionCard = {
@@ -37,6 +38,7 @@ export type LibrarySectionKey =
   | 'summaries'
   | 'photos'
   | 'tasks'
+  | 'raw_browser'
   | 'wiki_upload_file'
   | 'wiki_upload_image'
   | 'wiki_upload_text';
@@ -101,6 +103,16 @@ type LibraryPaneProps = {
   wikiDirectoryLastUpdatedAt: string;
   wikiRawFileCount: number;
   wikiUploadSourceType: 'note' | 'document' | 'image';
+
+  rawBrowserFiles: HouseholdFileEntry[];
+  rawBrowserBusy: boolean;
+  rawBrowserContent: string;
+  rawBrowserActivePath: string;
+  rawBrowserCurrentDir: string;
+  onRefreshRawBrowser: (subpath?: string) => void;
+  onNavigateRawBrowserDir: (subpath: string) => void;
+  onReadRawBrowserFile: (path: string) => void;
+  onCloseRawBrowserReader: () => void;
 
   onChangeActiveSection: (section: LibrarySectionKey) => void;
   onChangeWikiSourceTitle: (value: string) => void;
@@ -188,6 +200,16 @@ export function LibraryPane(props: LibraryPaneProps) {
     wikiDirectoryLastUpdatedAt,
     wikiRawFileCount,
     wikiUploadSourceType,
+
+    rawBrowserFiles,
+    rawBrowserBusy,
+    rawBrowserContent,
+    rawBrowserActivePath,
+    rawBrowserCurrentDir,
+    onRefreshRawBrowser,
+    onNavigateRawBrowserDir,
+    onReadRawBrowserFile,
+    onCloseRawBrowserReader,
 
     onChangeActiveSection,
     onChangeWikiSourceTitle,
@@ -302,9 +324,116 @@ export function LibraryPane(props: LibraryPaneProps) {
             <Text style={styles.librarySectionTitle}>文本上传</Text>
             <Text style={styles.librarySectionCopy}>填写 Raw 标题和内容后直接导入。</Text>
           </Pressable>
+          <Pressable
+            style={styles.librarySectionCard}
+            onPress={() => onChangeActiveSection('raw_browser')}
+            disabled={!activeSpace}
+          >
+            <Text style={styles.librarySectionTitle}>Raw 资源查阅</Text>
+            <Text style={styles.librarySectionCopy}>浏览当前空间的 raw 文件资源。</Text>
+          </Pressable>
 
         </View>
       </View>
+    );
+  }
+
+  function renderRawBrowser(): React.ReactNode {
+    const isDocFile = (name: string) => /\.(md|txt|json|toml|yaml|yml|csv|log)$/i.test(name);
+
+    // Reading a file
+    if (rawBrowserActivePath) {
+      return (
+        <>
+          {renderSectionHeader('Raw 文件阅读', rawBrowserActivePath)}
+          <View style={styles.settingsCard}>
+            <View style={styles.inlineActions}>
+              <Pressable style={styles.secondaryButtonSmall} onPress={onCloseRawBrowserReader}>
+                <Text style={styles.secondaryButtonText}>返回文件列表</Text>
+              </Pressable>
+            </View>
+            {rawBrowserBusy ? (
+              <ActivityIndicator style={{ marginVertical: 12 }} />
+            ) : rawBrowserContent ? (
+              <MarkdownCardViewer markdown={rawBrowserContent} styles={styles} />
+            ) : (
+              <Text style={styles.cardCopy}>（无法读取文件内容）</Text>
+            )}
+            {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
+          </View>
+        </>
+      );
+    }
+
+    // File listing
+    return (
+      <>
+        {renderSectionHeader('Raw 资源查阅', rawBrowserCurrentDir ? `raw/${rawBrowserCurrentDir}/` : 'raw/')}
+        <View style={styles.settingsCard}>
+          <View style={styles.inlineActions}>
+            <Pressable
+              style={styles.primaryButtonSmall}
+              onPress={() => onRefreshRawBrowser(rawBrowserCurrentDir || undefined)}
+              disabled={rawBrowserBusy}
+            >
+              <Text style={styles.primaryButtonText}>{rawBrowserBusy ? '刷新中…' : '刷新列表'}</Text>
+            </Pressable>
+            {rawBrowserCurrentDir ? (
+              <Pressable
+                style={styles.secondaryButtonSmall}
+                onPress={() => {
+                  const parent = rawBrowserCurrentDir.includes('/')
+                    ? rawBrowserCurrentDir.slice(0, rawBrowserCurrentDir.lastIndexOf('/'))
+                    : '';
+                  onNavigateRawBrowserDir(parent);
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>↑ 返回上级</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {rawBrowserFiles.length === 0 && !rawBrowserBusy ? (
+            <Text style={styles.cardCopy}>当前目录为空。</Text>
+          ) : null}
+          {rawBrowserFiles.map((entry) => {
+            const displayName = entry.name || entry.path.split('/').pop() || entry.path;
+            const relativePath = rawBrowserCurrentDir
+              ? `${rawBrowserCurrentDir}/${displayName}`
+              : displayName;
+            return (
+              <View key={entry.path} style={styles.deviceRowCard}>
+                <Pressable
+                  onPress={
+                    entry.isDir
+                      ? () => onNavigateRawBrowserDir(relativePath)
+                      : isDocFile(displayName)
+                        ? () => onReadRawBrowserFile(relativePath)
+                        : undefined
+                  }
+                  disabled={!entry.isDir && !isDocFile(displayName)}
+                  pressFeedback="scale"
+                >
+                  <Text style={styles.networkName}>
+                    {entry.isDir ? '📁 ' : '📄 '}{displayName}
+                  </Text>
+                  {!entry.isDir && typeof entry.size === 'number' ? (
+                    <Text style={styles.cardCopy}>
+                      {formatByteSize(entry.size)}
+                      {entry.modified ? `　${describeFileTimestamp(entry.modified)}` : ''}
+                    </Text>
+                  ) : entry.isDir ? (
+                    <Text style={styles.cardCopy}>点击进入子目录</Text>
+                  ) : null}
+                  {!entry.isDir && isDocFile(displayName) ? (
+                    <Text style={styles.noticeText}>点击查看内容</Text>
+                  ) : null}
+                </Pressable>
+              </View>
+            );
+          })}
+          {libraryError ? <Text style={styles.errorText}>{libraryError}</Text> : null}
+        </View>
+      </>
     );
   }
 
@@ -843,6 +972,9 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'overview') {
     return <>{renderOverview()}</>;
+  }
+  if (activeSection === 'raw_browser') {
+    return <>{renderRawBrowser()}</>;
   }
   if (activeSection === 'memories') {
     return <>{renderMemories()}</>;

@@ -1,10 +1,11 @@
 import React from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { describeFileTimestamp } from '../appShell';
+import type { RawWorkFile } from '../householdApi';
 import { MarkdownCardViewer } from './MarkdownCardViewer';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
-export type UserToolSection = 'overview' | 'wiki_organize' | 'user_skill' | 'wiki_preview';
+export type UserToolSection = 'overview' | 'wiki_organize' | 'user_skill' | 'wiki_preview' | 'workspace_manager';
 
 type UserToolsPaneProps = {
   styles: Record<string, any>;
@@ -38,6 +39,19 @@ type UserToolsPaneProps = {
   wikiPreviewFiles: Array<{ path: string; preview: string; content: string; updatedAt: string }>;
   onRefreshWikiPreview: () => void;
 
+  // Workspace manager (work/ directory)
+  workFiles: RawWorkFile[];
+  workFileBusy: boolean;
+  workFileContent: string;
+  workFileActivePath: string;
+  workCurrentDir: string;
+  onRefreshWorkFiles: (subpath?: string) => void;
+  onNavigateWorkDir: (subpath: string) => void;
+  onReadWorkFile: (path: string) => void;
+  onPromoteWorkFile: (path: string) => void;
+  onDeleteWorkFile: (path: string) => void;
+  onCloseWorkFileReader: () => void;
+
   activeSection: UserToolSection;
   onChangeActiveSection: (section: UserToolSection) => void;
 };
@@ -60,6 +74,17 @@ export function UserToolsPane(props: UserToolsPaneProps) {
     onRefreshUserSkill,
     wikiPreviewFiles,
     onRefreshWikiPreview,
+    workFiles,
+    workFileBusy,
+    workFileContent,
+    workFileActivePath,
+    workCurrentDir,
+    onRefreshWorkFiles,
+    onNavigateWorkDir,
+    onReadWorkFile,
+    onPromoteWorkFile,
+    onDeleteWorkFile,
+    onCloseWorkFileReader,
     activeSection,
     onChangeActiveSection,
   } = props;
@@ -113,6 +138,13 @@ export function UserToolsPane(props: UserToolsPaneProps) {
           >
             <Text style={styles.librarySectionTitle}>Wiki 预览</Text>
             <Text style={styles.librarySectionCopy}>浏览 wiki 下的 Markdown 内容。</Text>
+          </Pressable>
+          <Pressable
+            style={styles.librarySectionCard}
+            onPress={() => onChangeActiveSection('workspace_manager')}
+          >
+            <Text style={styles.librarySectionTitle}>工作区管理</Text>
+            <Text style={styles.librarySectionCopy}>浏览 work/ 目录文件，可转入 raw 触发整理。</Text>
           </Pressable>
         </View>
       </View>
@@ -248,8 +280,129 @@ export function UserToolsPane(props: UserToolsPaneProps) {
     );
   }
 
+  function renderWorkspaceManagerSection(): React.ReactNode {
+    const isDocFile = (name: string) => /\.(md|txt|json|toml|yaml|yml|csv|log)$/i.test(name);
+    const formatSize = (bytes: number) => {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    // Reading a file
+    if (workFileActivePath) {
+      return (
+        <>
+          {renderSectionHeader('工作区文件阅读', workFileActivePath)}
+          <View style={styles.settingsCard}>
+            <View style={styles.inlineActions}>
+              <Pressable style={styles.secondaryButtonSmall} onPress={onCloseWorkFileReader}>
+                <Text style={styles.secondaryButtonText}>返回文件列表</Text>
+              </Pressable>
+              <Pressable
+                style={styles.primaryButtonSmall}
+                onPress={() => onPromoteWorkFile(workFileActivePath)}
+                disabled={workFileBusy}
+              >
+                <Text style={styles.primaryButtonText}>转入 raw</Text>
+              </Pressable>
+            </View>
+            {workFileBusy ? (
+              <ActivityIndicator style={{ marginVertical: 12 }} />
+            ) : workFileContent ? (
+              <MarkdownCardViewer markdown={workFileContent} styles={styles} />
+            ) : (
+              <Text style={styles.cardCopy}>（无法读取文件内容）</Text>
+            )}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+          </View>
+        </>
+      );
+    }
+
+    // File listing
+    return (
+      <>
+        {renderSectionHeader('工作区管理', workCurrentDir ? `work/${workCurrentDir}/` : 'work/')}
+        <View style={styles.settingsCard}>
+          <View style={styles.inlineActions}>
+            <Pressable style={styles.primaryButtonSmall} onPress={() => onRefreshWorkFiles(workCurrentDir || undefined)} disabled={workFileBusy}>
+              <Text style={styles.primaryButtonText}>{workFileBusy ? '刷新中…' : '刷新列表'}</Text>
+            </Pressable>
+            {workCurrentDir ? (
+              <Pressable
+                style={styles.secondaryButtonSmall}
+                onPress={() => {
+                  const parent = workCurrentDir.includes('/')
+                    ? workCurrentDir.slice(0, workCurrentDir.lastIndexOf('/'))
+                    : '';
+                  onNavigateWorkDir(parent);
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>↑ 返回上级</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {workFiles.length === 0 && !workFileBusy ? (
+            <Text style={styles.cardCopy}>当前目录为空。</Text>
+          ) : null}
+          {workFiles.map((file) => (
+            <View key={file.path || file.name} style={styles.deviceRowCard}>
+              <Pressable
+                onPress={
+                  file.isDir
+                    ? () => onNavigateWorkDir(file.path)
+                    : isDocFile(file.name)
+                      ? () => onReadWorkFile(file.path)
+                      : undefined
+                }
+                disabled={!file.isDir && !isDocFile(file.name)}
+                pressFeedback="scale"
+              >
+                <Text style={styles.networkName}>
+                  {file.isDir ? '📁 ' : '📄 '}{file.name}
+                </Text>
+                {!file.isDir ? (
+                  <Text style={styles.cardCopy}>
+                    {formatSize(file.size)}　{file.modifiedAt ? describeFileTimestamp(file.modifiedAt) : ''}
+                  </Text>
+                ) : (
+                  <Text style={styles.cardCopy}>点击进入子目录</Text>
+                )}
+                {!file.isDir && isDocFile(file.name) ? (
+                  <Text style={styles.noticeText}>点击查看内容</Text>
+                ) : null}
+              </Pressable>
+              {!file.isDir ? (
+                <View style={[styles.inlineActions, { marginTop: 8 }]}>
+                  <Pressable
+                    style={styles.primaryButtonSmall}
+                    onPress={() => onPromoteWorkFile(file.path)}
+                    disabled={workFileBusy}
+                  >
+                    <Text style={styles.primaryButtonText}>转入 raw</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
+                    onPress={() => onDeleteWorkFile(file.path)}
+                    disabled={workFileBusy}
+                  >
+                    <Text style={styles.secondaryButtonText}>删除</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ))}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+        </View>
+      </>
+    );
+  }
+
   if (activeSection === 'wiki_organize') return <>{renderWikiOrganizeSection()}</>;
   if (activeSection === 'user_skill') return <>{renderUserSkillSection()}</>;
   if (activeSection === 'wiki_preview') return <>{renderWikiPreviewSection()}</>;
+  if (activeSection === 'workspace_manager') return <>{renderWorkspaceManagerSection()}</>;
   return <>{renderOverview()}</>;
 }

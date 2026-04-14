@@ -577,7 +577,9 @@ export type RawWorkspaceInfo = {
 };
 
 export type RawWorkFile = {
+  path: string;
   name: string;
+  isDir: boolean;
   size: number;
   modifiedAt: string;
 };
@@ -1504,6 +1506,25 @@ export function buildHouseholdFileDownloadUrl(
   return `${getCloudApiBase()}/api/files/download?${params.toString()}`;
 }
 
+export async function readHouseholdFileText(
+  token: string,
+  space: HouseholdFileSpace,
+  path: string,
+  options: { spaceId?: string | null } = {},
+): Promise<string> {
+  const params = new URLSearchParams({ space, path });
+  if (options.spaceId) {
+    params.set('space_id', options.spaceId);
+  }
+  const response = await fetch(`${getCloudApiBase()}/api/files/download?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`读取文件失败: ${response.status}`);
+  }
+  return response.text();
+}
+
 export async function getDeviceDiagnostics(
   token: string,
   deviceId: string,
@@ -2121,15 +2142,53 @@ export async function getRawWorkspace(token: string): Promise<RawWorkspaceInfo> 
   };
 }
 
-export async function listRawWorkFiles(token: string): Promise<RawWorkFile[]> {
-  const response = await cloudJson<Record<string, unknown>>('/api/raw/work', { token });
-  return Array.isArray(response.files)
-    ? (response.files as Array<Record<string, unknown>>).map((f) => ({
-        name: String(f.name ?? ''),
+export async function listRawWorkFiles(token: string, subpath?: string): Promise<RawWorkFile[]> {
+  const url = subpath
+    ? `/api/raw/work?path=${encodeURIComponent(subpath)}`
+    : '/api/raw/work';
+  const response = await cloudJson<Record<string, unknown>>(url, { token });
+  if (!Array.isArray(response.files)) return [];
+  // Backend returns flat list with relative paths; group into virtual directory entries
+  const prefix = subpath ? (subpath.endsWith('/') ? subpath : subpath + '/') : '';
+  const seen = new Set<string>();
+  const result: RawWorkFile[] = [];
+  for (const f of response.files as Array<Record<string, unknown>>) {
+    const fullPath = String(f.path ?? '');
+    if (!fullPath) continue;
+    // If we have a prefix filter, skip files not under it
+    if (prefix && !fullPath.startsWith(prefix)) continue;
+    const remainder = prefix ? fullPath.slice(prefix.length) : fullPath;
+    const slashIdx = remainder.indexOf('/');
+    if (slashIdx >= 0) {
+      // This is inside a subdirectory — show the directory entry
+      const dirName = remainder.slice(0, slashIdx);
+      if (!seen.has(dirName)) {
+        seen.add(dirName);
+        result.push({
+          path: prefix + dirName,
+          name: dirName,
+          isDir: true,
+          size: 0,
+          modifiedAt: '',
+        });
+      }
+    } else {
+      // Direct file at this level
+      result.push({
+        path: fullPath,
+        name: remainder,
+        isDir: false,
         size: Number(f.size ?? 0),
         modifiedAt: String(f.modified_at ?? ''),
-      }))
-    : [];
+      });
+    }
+  }
+  // Sort: directories first, then files
+  result.sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return result;
 }
 
 export async function readRawWorkFile(
@@ -2163,7 +2222,7 @@ export async function promoteRawWorkFile(
     },
   });
   return {
-    ok: Boolean(response.ok),
+    ok: Boolean(response.ok ?? response.promoted),
     filename: String(response.filename ?? ''),
     fileId: String(response.file_id ?? ''),
     rawPath: String(response.raw_path ?? ''),

@@ -158,6 +158,12 @@ import {
   type WikiOrganizeStatusResult,
   distillUserSkill,
   getUserSkill,
+  listRawWorkFiles,
+  readRawWorkFile,
+  promoteRawWorkFile,
+  deleteRawWorkFile,
+  readHouseholdFileText,
+  type RawWorkFile,
 } from './src/householdApi';
 import {
   canChangeMemberRole,
@@ -423,6 +429,16 @@ function App() {
   const [spaceHomeMode, setSpaceHomeMode] = useState<'list' | 'inside'>('list');
   const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings' | 'user-tools'>('spaces');
   const [userToolsSection, setUserToolsSection] = useState<UserToolSection>('overview');
+  const [workFiles, setWorkFiles] = useState<RawWorkFile[]>([]);
+  const [workFileBusy, setWorkFileBusy] = useState(false);
+  const [workFileContent, setWorkFileContent] = useState('');
+  const [workFileActivePath, setWorkFileActivePath] = useState('');
+  const [workCurrentDir, setWorkCurrentDir] = useState('');
+  const [rawBrowserFiles, setRawBrowserFiles] = useState<HouseholdFileEntry[]>([]);
+  const [rawBrowserBusy, setRawBrowserBusy] = useState(false);
+  const [rawBrowserContent, setRawBrowserContent] = useState('');
+  const [rawBrowserActivePath, setRawBrowserActivePath] = useState('');
+  const [rawBrowserCurrentDir, setRawBrowserCurrentDir] = useState('');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
@@ -1557,6 +1573,10 @@ function App() {
       setSummaryCapturePickerOpen(false);
       setSelectedSummaryCaptureSessionId('');
       setLibraryActiveSection('overview');
+      setRawBrowserFiles([]);
+      setRawBrowserContent('');
+      setRawBrowserActivePath('');
+      setRawBrowserCurrentDir('');
       setFileListing(null);
       setFileListingCache({});
       setFilesError('');
@@ -2887,6 +2907,19 @@ function App() {
         }
         if (spaceListViewMode === 'user-tools') {
           if (userToolsSection !== 'overview') {
+            // If viewing a work file, go back to file list first
+            if (userToolsSection === 'workspace_manager' && workFileActivePath) {
+              setWorkFileActivePath('');
+              setWorkFileContent('');
+              return true;
+            }
+            if (userToolsSection === 'workspace_manager' && workCurrentDir) {
+              const parent = workCurrentDir.includes('/')
+                ? workCurrentDir.slice(0, workCurrentDir.lastIndexOf('/'))
+                : '';
+              navigateWorkDir(parent);
+              return true;
+            }
             setUserToolsSection('overview');
             return true;
           }
@@ -2927,6 +2960,20 @@ function App() {
       }
 
       if (shellTab === 'library' && libraryActiveSection !== 'overview') {
+        if (libraryActiveSection === 'raw_browser') {
+          if (rawBrowserActivePath) {
+            setRawBrowserActivePath('');
+            setRawBrowserContent('');
+            return true;
+          }
+          if (rawBrowserCurrentDir) {
+            const parent = rawBrowserCurrentDir.includes('/')
+              ? rawBrowserCurrentDir.slice(0, rawBrowserCurrentDir.lastIndexOf('/'))
+              : '';
+            navigateRawBrowserDir(parent);
+            return true;
+          }
+        }
         setLibraryActiveSection('overview');
         return true;
       }
@@ -3710,6 +3757,135 @@ function App() {
     }
   }
 
+  // ── Work directory management ──────────────────────────────
+  async function refreshWorkFiles(subpath?: string): Promise<void> {
+    if (!session?.token) {
+      setLibraryError('未登录。');
+      return;
+    }
+    setWorkFileBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const files = await listRawWorkFiles(session.token, subpath);
+      setWorkFiles(files);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '获取 work 文件列表失败。');
+    } finally {
+      setWorkFileBusy(false);
+    }
+  }
+
+  function navigateWorkDir(subpath: string): void {
+    setWorkCurrentDir(subpath);
+    void refreshWorkFiles(subpath || undefined);
+  }
+
+  async function openWorkFile(path: string): Promise<void> {
+    if (!session?.token) return;
+    setWorkFileBusy(true);
+    setLibraryError('');
+    try {
+      const result = await readRawWorkFile(session.token, path);
+      setWorkFileContent(result.content || '');
+      setWorkFileActivePath(path);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '读取工作区文件失败。');
+    } finally {
+      setWorkFileBusy(false);
+    }
+  }
+
+  async function promoteWorkFile(path: string): Promise<void> {
+    if (!session?.token) return;
+    setWorkFileBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await promoteRawWorkFile(session.token, {
+        path,
+        // Always promote to user's private space (no spaceId → private)
+      });
+      if (result.ok) {
+        setLibraryNotice(`已将 ${path} 转入 raw（${result.filename}）。`);
+        // If we were reading this file, go back to list
+        if (workFileActivePath === path) {
+          setWorkFileActivePath('');
+          setWorkFileContent('');
+        }
+        // Refresh list
+        void refreshWorkFiles(workCurrentDir || undefined);
+      } else {
+        setLibraryError('转入 raw 失败。');
+      }
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '转入 raw 失败。');
+    } finally {
+      setWorkFileBusy(false);
+    }
+  }
+
+  async function deleteWorkFile(path: string): Promise<void> {
+    if (!session?.token) return;
+    setWorkFileBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      await deleteRawWorkFile(session.token, path);
+      setLibraryNotice(`已删除 ${path}。`);
+      if (workFileActivePath === path) {
+        setWorkFileActivePath('');
+        setWorkFileContent('');
+      }
+      void refreshWorkFiles(workCurrentDir || undefined);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '删除工作区文件失败。');
+    } finally {
+      setWorkFileBusy(false);
+    }
+  }
+
+  // ── Raw browser (per-space raw/ file explorer) ─────────────
+  async function refreshRawBrowser(subpath?: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) return;
+    const space: HouseholdFileSpace = activeSpace?.kind === 'shared' ? 'family' : 'private';
+    const spaceId = activeSpace?.kind === 'shared' ? activeSpace.id : undefined;
+    setRawBrowserBusy(true);
+    setLibraryError('');
+    try {
+      const devicePath = subpath ? `raw/${subpath}` : 'raw';
+      const listing = await getHouseholdFiles(session.token, space, devicePath, { spaceId });
+      setRawBrowserFiles(listing.entries);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '获取 raw 文件列表失败。');
+      setRawBrowserFiles([]);
+    } finally {
+      setRawBrowserBusy(false);
+    }
+  }
+
+  function navigateRawBrowserDir(subpath: string): void {
+    setRawBrowserCurrentDir(subpath);
+    void refreshRawBrowser(subpath || undefined);
+  }
+
+  async function openRawBrowserFile(filePath: string): Promise<void> {
+    if (!session?.token || !activeSpaceId) return;
+    const space: HouseholdFileSpace = activeSpace?.kind === 'shared' ? 'family' : 'private';
+    const spaceId = activeSpace?.kind === 'shared' ? activeSpace.id : undefined;
+    setRawBrowserBusy(true);
+    setLibraryError('');
+    try {
+      const content = await readHouseholdFileText(session.token, space, `raw/${filePath}`, { spaceId });
+      setRawBrowserContent(content);
+      setRawBrowserActivePath(filePath);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '读取 raw 文件失败。');
+    } finally {
+      setRawBrowserBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!session?.token) {
       return;
@@ -3754,6 +3930,26 @@ function App() {
     wikiPreviewCacheBySpace,
     wikiPreviewCacheLoadedAt,
   ]);
+
+  // Auto-load work files when entering workspace_manager section
+  useEffect(() => {
+    if (spaceListViewMode !== 'user-tools' || userToolsSection !== 'workspace_manager') {
+      return;
+    }
+    if (!session?.token) return;
+    if (workFiles.length === 0) {
+      void refreshWorkFiles(workCurrentDir || undefined);
+    }
+  }, [spaceListViewMode, userToolsSection, session?.token]);
+
+  // Auto-load raw files when entering raw_browser section
+  useEffect(() => {
+    if (libraryActiveSection !== 'raw_browser') return;
+    if (!session?.token || !activeSpaceId) return;
+    if (rawBrowserFiles.length === 0) {
+      void refreshRawBrowser(rawBrowserCurrentDir || undefined);
+    }
+  }, [libraryActiveSection, session?.token, activeSpaceId]);
 
   async function pickAndIngestWikiRawFiles(forcedSourceType?: 'note' | 'document' | 'image'): Promise<void> {
     if (!session?.token || !activeSpaceId) {
@@ -3971,6 +4167,17 @@ function App() {
                   onRefreshUserSkill={() => void refreshUserSkill()}
                   wikiPreviewFiles={wikiPreviewFiles}
                   onRefreshWikiPreview={() => void refreshWikiPreviewData()}
+                  workFiles={workFiles}
+                  workFileBusy={workFileBusy}
+                  workFileContent={workFileContent}
+                  workFileActivePath={workFileActivePath}
+                  workCurrentDir={workCurrentDir}
+                  onRefreshWorkFiles={(sub?: string) => void refreshWorkFiles(sub)}
+                  onNavigateWorkDir={navigateWorkDir}
+                  onReadWorkFile={(path: string) => void openWorkFile(path)}
+                  onPromoteWorkFile={(path: string) => void promoteWorkFile(path)}
+                  onDeleteWorkFile={(path: string) => void deleteWorkFile(path)}
+                  onCloseWorkFileReader={() => { setWorkFileActivePath(''); setWorkFileContent(''); }}
                   activeSection={userToolsSection}
                   onChangeActiveSection={setUserToolsSection}
                 />
@@ -4406,6 +4613,15 @@ function App() {
                 wikiDirectoryLastUpdatedAt={wikiDirectoryLastUpdatedAt}
                 wikiRawFileCount={wikiRawFileCount}
                 wikiUploadSourceType={wikiUploadSourceType}
+                rawBrowserFiles={rawBrowserFiles}
+                rawBrowserBusy={rawBrowserBusy}
+                rawBrowserContent={rawBrowserContent}
+                rawBrowserActivePath={rawBrowserActivePath}
+                rawBrowserCurrentDir={rawBrowserCurrentDir}
+                onRefreshRawBrowser={(sub?: string) => void refreshRawBrowser(sub)}
+                onNavigateRawBrowserDir={navigateRawBrowserDir}
+                onReadRawBrowserFile={(path: string) => void openRawBrowserFile(path)}
+                onCloseRawBrowserReader={() => { setRawBrowserActivePath(''); setRawBrowserContent(''); }}
                 onChangeActiveSection={setLibraryActiveSection}
                 onChangeWikiSourceTitle={setWikiSourceTitle}
                 onChangeWikiSourceContent={setWikiSourceContent}
