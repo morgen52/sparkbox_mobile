@@ -628,3 +628,292 @@ data/zeroclaw_workspaces/{user_id}/         ← 每用户独立
 ```
 
 这样 ZeroClaw 在回复时能参考用户上传的文档内容，而不仅仅依赖自己的系统 prompt。
+
+## 11. 生产环境 config.toml 调整清单
+
+以下是在默认 `zeroclaw onboard` 基础上，需要手动调整以适配 Sparkbox 生产场景的配置项。
+
+### 11.1 循环检测放宽
+
+ZeroClaw 内置循环检测器（loop detector），当同一工具连续以相同参数调用 3 次时会发出警告，4 次时**直接阻断**。在 Sparkbox 场景下，agent 有时需要多次 `file_read` 查看不同文件内容（参数相似），默认阈值过于激进。
+
+```toml
+[pacing]
+loop_detection_enabled = true
+loop_detection_window_size = 20      # 检测窗口大小
+loop_detection_max_repeats = 5       # ← 建议从 3 调高到 5
+```
+
+> **经验教训**: 我们曾遇到 agent 尝试记忆用户信息时，`file_read` 被循环检测器阻断（连续读同一文件 4 次），导致 exit code 1、agent 声称已完成但实际未执行。将阈值调至 5 后问题消失。
+
+### 11.2 工具可用性确认
+
+ZeroClaw v0.6.8 在使用 `--config-dir` + `ZEROCLAW_WORKSPACE` 方式调用时，完整工具集为 43 个：
+
+```
+核心文件:   shell, file_read, file_write, file_edit, glob_search, content_search
+记忆:       memory_store, memory_recall, memory_forget, memory_export, memory_purge
+调度:       cron_add, cron_list, cron_remove, cron_update, cron_run, cron_runs, schedule
+网络:       web_fetch, web_search_tool, http_request, browser_open, browser
+多媒体:     image_info, screenshot, pdf_read
+模型:       model_routing_config, model_switch, llm_task, canvas
+会话:       sessions_list, sessions_history, sessions_send
+交互:       poll, reaction, ask_user, escalate_to_human
+运维:       backup, proxy_config, git_operations, pushover, calculator, weather
+```
+
+如需限制可用工具（降低成本/安全收窄），编辑 `[autonomy]`：
+
+```toml
+[autonomy]
+# 空列表 = 不限制（默认）
+non_cli_excluded_tools = []
+
+# 如需禁用某些工具：
+# non_cli_excluded_tools = ["browser_open", "browser", "git_operations"]
+```
+
+### 11.3 多模态 / 图像识别
+
+ZeroClaw 支持 `image_info` 工具读取图片信息，但要真正"看懂"图片内容，**底层模型必须支持 vision**。
+
+```toml
+[multimodal]
+max_images = 4                  # 单次对话最多处理图片数
+max_image_size_mb = 5           # 单张图片大小上限
+allow_remote_fetch = false      # 是否允许拉取远程图片 URL
+
+[media_pipeline]
+enabled = false                 # 是否启用媒体管道
+describe_images = true          # 自动描述图片内容
+```
+
+**模型选择**：
+- `openrouter/auto`：OpenRouter 自动路由，通常会选择支持 vision 的模型（推荐）
+- 明确指定支持 vision 的模型：`anthropic/claude-sonnet-4-20250514`、`openai/gpt-4o`、`google/gemini-2.0-flash`
+- **不支持 vision 的模型**：`deepseek/deepseek-chat` 等纯文本模型无法处理图片
+
+如需图像识别能力，确保 `default_model` 或 `model_routes` 指向支持 vision 的模型。
+
+### 11.4 上下文与成本控制
+
+```toml
+[agent]
+max_tool_iterations = 10        # 单次调用最大工具轮数（防止失控循环）
+max_history_messages = 50       # 上下文中保留的历史消息数
+max_context_tokens = 32000      # 上下文窗口大小
+max_tool_result_chars = 50000   # 工具返回结果的最大字符数
+
+[agent.context_compression]
+enabled = true                  # 启用上下文压缩（长对话时自动摘要）
+threshold_ratio = 0.5           # 触发压缩的阈值（占 max_context_tokens 的比例）
+summary_max_chars = 4000        # 摘要最大长度
+
+[agent.thinking]
+default_level = "medium"        # 思考深度：none / low / medium / high
+                                # 更高 = 更准确但更贵
+```
+
+**生产建议**：
+- 如果模型成本是考量因素，`default_level = "low"` 可显著降低 token 消耗
+- `max_tool_iterations = 10` 足够大多数场景；如果 agent 经常截断，可调到 15
+- `max_context_tokens` 根据模型上下文窗口调整（OpenRouter auto 通常 128k+）
+
+### 11.5 速率限制与成本保护
+
+```toml
+[autonomy]
+max_actions_per_hour = 20       # 每小时最大工具执行次数
+max_cost_per_day_cents = 500    # 每日成本上限（美分），即 $5/天
+```
+
+**按场景调整**：
+
+| 场景 | max_actions_per_hour | max_cost_per_day_cents |
+|---|---|---|
+| 单用户轻度使用 | 20 | 200 |
+| 单用户重度使用 | 50 | 500 |
+| 多用户共享 | 100 | 1000 |
+| 开发调试 | 200 | 2000 |
+
+> **注意**：这些限制是**全局**的（不是 per-user），因为所有用户共享同一个 config.toml。如果需要 per-user 限流，需要在 Sparkbox 层实现。
+
+### 11.6 安全加固
+
+#### 基本安全（已默认启用）
+
+```toml
+[autonomy]
+workspace_only = true               # 限制文件操作在 workspace 内
+forbidden_paths = [                  # 禁止访问的系统路径
+    "/etc", "/root", "/home", "/usr",
+    "/bin", "/sbin", "/lib", "/opt",
+    "~/.ssh", "~/.gnupg", "~/.aws",
+]
+
+[security.audit]
+enabled = true                       # 审计日志
+log_path = "audit.log"
+max_size_mb = 100
+```
+
+#### 可选加固
+
+```toml
+# 沙盒（如果系统支持 Landlock / Bubblewrap）
+[security.sandbox]
+backend = "auto"                     # auto | landlock | bubblewrap | none
+
+# 一次性密码（高安全场景，需要人工输入 OTP 才能执行敏感操作）
+[security.otp]
+enabled = false                      # 生产环境通常关闭（Sparkbox 非交互式调用）
+```
+
+> **重要**：`security.otp.enabled = false` 在生产环境必须关闭。如果开启，`shell`、`file_write` 等操作会弹出 OTP 挑战，Sparkbox 无法自动回应，导致所有工具调用超时。
+
+### 11.7 记忆系统调优
+
+```toml
+[memory]
+backend = "sqlite"
+auto_save = true                     # 自动保存对话中获取的重要信息
+auto_hydrate = true                  # 启动时自动加载相关记忆到上下文
+hygiene_enabled = true               # 定期清理过期/冗余记忆
+archive_after_days = 7               # 7 天后归档
+purge_after_days = 30                # 30 天后彻底删除
+conversation_retention_days = 30     # 对话记录保留天数
+```
+
+**注意**：每个用户的记忆存储在各自的 `data/zeroclaw_workspaces/{user_id}/memory/brain.db`，互相隔离。全局 `~/.zeroclaw/` 下的记忆**不会**被 Sparkbox 用到。
+
+### 11.8 备份配置
+
+```toml
+[backup]
+enabled = true                       # 启用自动备份
+max_keep = 10                        # 最多保留 10 份
+include_dirs = ["config", "memory", "audit", "knowledge"]
+destination_dir = "state/backups"
+compress = true
+encrypt = false                      # 按需开启
+```
+
+备份存储在每用户的 `data/zeroclaw_workspaces/{user_id}/state/backups/`。
+
+## 12. ZeroClaw 版本升级
+
+### 12.1 检查当前版本
+
+```bash
+~/.cargo/bin/zeroclaw --version
+# → zeroclaw 0.6.8
+
+# 检查是否有新版本
+~/.cargo/bin/zeroclaw update --check
+```
+
+### 12.2 升级操作
+
+```bash
+# 方法 A：使用内置更新（如果支持）
+~/.cargo/bin/zeroclaw update
+
+# 方法 B：重新源码编译（Jetson ARM64 推荐）
+cd /tmp
+git clone https://github.com/zeroclaw-labs/zeroclaw.git
+cd zeroclaw
+git checkout v0.6.9   # 指定目标版本
+cargo build --release --locked
+cp target/release/zeroclaw ~/.cargo/bin/zeroclaw
+
+# 方法 C：使用安装脚本
+curl -sSL https://get.zeroclaw.dev | bash -s -- --force-source-build
+```
+
+### 12.3 升级后验证
+
+```bash
+# 1. 版本确认
+~/.cargo/bin/zeroclaw --version
+
+# 2. 配置兼容性检查
+~/.cargo/bin/zeroclaw doctor
+
+# 3. 基本功能验证
+~/.cargo/bin/zeroclaw agent -m "Reply exactly: OK"
+
+# 4. 重启 Sparkbox 服务
+sudo systemctl restart clawbox
+journalctl -u clawbox -f --no-pager -n 20
+```
+
+### 12.4 回滚
+
+如果新版本有问题，提前备份旧二进制：
+
+```bash
+# 升级前备份
+cp ~/.cargo/bin/zeroclaw ~/.cargo/bin/zeroclaw.bak
+
+# 回滚
+cp ~/.cargo/bin/zeroclaw.bak ~/.cargo/bin/zeroclaw
+sudo systemctl restart clawbox
+```
+
+## 13. 生产运维日常操作
+
+### 13.1 日志查看
+
+```bash
+# Sparkbox 服务日志
+journalctl -u clawbox -f --no-pager
+
+# ZeroClaw 审计日志（每用户独立）
+cat data/zeroclaw_workspaces/{user_id}/audit.log | tail -20
+
+# ZeroClaw 记忆统计
+ZEROCLAW_WORKSPACE=$(pwd)/data/zeroclaw_workspaces/{user_id} \
+  ~/.cargo/bin/zeroclaw --config-dir ~/.zeroclaw memory stats
+```
+
+### 13.2 重置用户工作区
+
+如果某用户的工作区损坏或需要清空：
+
+```bash
+# 停止服务（避免并发写入）
+sudo systemctl stop clawbox
+
+# 备份后删除
+cp -r data/zeroclaw_workspaces/{user_id} /tmp/zeroclaw_backup_{user_id}
+rm -rf data/zeroclaw_workspaces/{user_id}
+
+# 重启服务（Sparkbox 会在下次聊天时自动重建工作区）
+sudo systemctl start clawbox
+```
+
+### 13.3 清理磁盘空间
+
+```bash
+# 查看各用户工作区大小
+du -sh data/zeroclaw_workspaces/*/
+
+# 清理旧会话（每用户）
+find data/zeroclaw_workspaces/*/sessions/ -mtime +30 -delete
+
+# 清理旧备份
+find data/zeroclaw_workspaces/*/state/backups/ -mtime +30 -delete
+```
+
+### 13.4 监控关键指标
+
+```bash
+# ZeroClaw 进程是否在运行（应该没有常驻进程，只有被调用时短暂存在）
+pgrep -a zeroclaw
+
+# 磁盘占用
+du -sh ~/.zeroclaw/ data/zeroclaw_workspaces/
+
+# 最近的 API 调用（通过审计日志）
+grep "tool_call" data/zeroclaw_workspaces/*/audit.log | tail -10
+```
