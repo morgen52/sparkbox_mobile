@@ -260,7 +260,7 @@ import {
   type OwnerConsoleContext,
 } from './src/constants/appRuntimeConstants';
 import { loadStoredSession, persistStoredSession } from './src/utils/sessionStorage';
-import { authenticateSession, revokeSession } from './src/utils/authApi';
+import { authenticateSession, revokeSession, deleteAccount as deleteAccountApi } from './src/utils/authApi';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -421,6 +421,7 @@ function App() {
   } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
 
   // Shell state fans out into presentational panes, but the coordination
   // between tabs, spaces, chats, files, tasks, and owner tooling still lives
@@ -2180,6 +2181,26 @@ function App() {
     setSkipOnboardingWhenNoDevice(false);
     await persistSession(null);
     resetFlow();
+  }
+
+  async function handleDeleteAccount(password: string): Promise<void> {
+    if (!session?.token) return;
+    setDeleteAccountBusy(true);
+    try {
+      await deleteAccountApi(session.token, password);
+      setSession(null);
+      setSpaceHomeMode('list');
+      setSpaceListViewMode('spaces');
+      setSkipOnboardingWhenNoDevice(false);
+      await persistSession(null);
+      resetFlow();
+      Alert.alert('账户已注销', '你的账户和所有数据已被永久删除。');
+    } catch (err: any) {
+      const msg = err?.message || '注销失败，请稍后重试。';
+      Alert.alert('注销失败', msg);
+    } finally {
+      setDeleteAccountBusy(false);
+    }
   }
 
   function openSpaceHome(spaceId: string): void {
@@ -4196,6 +4217,8 @@ function App() {
                   settingsError={settingsError}
                   onBeginNewDeviceOnboarding={beginNewDeviceOnboarding}
                   onLogout={() => void logout()}
+                  onDeleteAccount={handleDeleteAccount}
+                  deleteAccountBusy={deleteAccountBusy}
                 />
 
                 <SettingsDevicesPane

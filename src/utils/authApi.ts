@@ -45,3 +45,11 @@ export async function revokeSession(token?: string): Promise<void> {
     // ignore logout failures
   }
 }
+
+export async function deleteAccount(token: string, password: string): Promise<{ ok: boolean }> {
+  return apiJson<{ ok: boolean }>('/api/auth/account', {
+    method: 'DELETE',
+    token,
+    body: { password },
+  });
+}
