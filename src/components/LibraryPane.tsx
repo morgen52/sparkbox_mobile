@@ -39,6 +39,7 @@ export type LibrarySectionKey =
   | 'photos'
   | 'tasks'
   | 'raw_browser'
+  | 'external_import'
   | 'wiki_upload_file'
   | 'wiki_upload_image'
   | 'wiki_upload_text';
@@ -109,10 +110,28 @@ type LibraryPaneProps = {
   rawBrowserContent: string;
   rawBrowserActivePath: string;
   rawBrowserCurrentDir: string;
+  externalMounts: Array<{ id: string; label: string; path: string }>;
+  externalEntries: Array<{
+    name: string;
+    path: string;
+    sourcePath: string;
+    isDir: boolean;
+    size: number;
+    modifiedAt: string;
+  }>;
+  externalImportBusy: boolean;
+  externalImportRootPath: string;
+  externalImportCurrentPath: string;
+  selectedExternalImportPaths: string[];
   onRefreshRawBrowser: (subpath?: string) => void;
   onNavigateRawBrowserDir: (subpath: string) => void;
   onReadRawBrowserFile: (path: string) => void;
   onCloseRawBrowserReader: () => void;
+  onRefreshExternalDevices: () => void;
+  onBrowseExternalStorage: (rootPath: string, subpath?: string) => void;
+  onToggleExternalSelection: (sourcePath: string) => void;
+  onClearExternalSelection: () => void;
+  onImportSelectedExternalItems: () => void;
 
   onChangeActiveSection: (section: LibrarySectionKey) => void;
   onChangeWikiSourceTitle: (value: string) => void;
@@ -206,10 +225,21 @@ export function LibraryPane(props: LibraryPaneProps) {
     rawBrowserContent,
     rawBrowserActivePath,
     rawBrowserCurrentDir,
+    externalMounts,
+    externalEntries,
+    externalImportBusy,
+    externalImportRootPath,
+    externalImportCurrentPath,
+    selectedExternalImportPaths,
     onRefreshRawBrowser,
     onNavigateRawBrowserDir,
     onReadRawBrowserFile,
     onCloseRawBrowserReader,
+    onRefreshExternalDevices,
+    onBrowseExternalStorage,
+    onToggleExternalSelection,
+    onClearExternalSelection,
+    onImportSelectedExternalItems,
 
     onChangeActiveSection,
     onChangeWikiSourceTitle,
@@ -331,6 +361,14 @@ export function LibraryPane(props: LibraryPaneProps) {
           >
             <Text style={styles.librarySectionTitle}>Raw 资源查阅</Text>
             <Text style={styles.librarySectionCopy}>浏览当前空间的 raw 文件资源。</Text>
+          </Pressable>
+          <Pressable
+            style={styles.librarySectionCard}
+            onPress={() => onChangeActiveSection('external_import')}
+            disabled={!activeSpace}
+          >
+            <Text style={styles.librarySectionTitle}>外接存储导入</Text>
+            <Text style={styles.librarySectionCopy}>把 U 盘或移动硬盘里的资料导入到当前空间。</Text>
           </Pressable>
 
         </View>
@@ -686,6 +724,116 @@ export function LibraryPane(props: LibraryPaneProps) {
     );
   }
 
+  function renderExternalImport(): React.ReactNode {
+    const currentFolderLabel = externalImportCurrentPath ? `已进入：${externalImportCurrentPath}` : '请选择一个外接存储设备';
+    const hasSelection = selectedExternalImportPaths.length > 0;
+
+    return (
+      <>
+        {renderSectionHeader('从外接存储导入', currentFolderLabel)}
+        <View style={styles.settingsCard}>
+          <View style={styles.inlineActions}>
+            <Pressable
+              style={[styles.secondaryButtonSmall, !onlineDeviceAvailable ? styles.networkRowDisabled : null]}
+              onPress={onRefreshExternalDevices}
+              disabled={!onlineDeviceAvailable || externalImportBusy}
+            >
+              <Text style={styles.secondaryButtonText}>{externalImportBusy ? '扫描中…' : '扫描设备'}</Text>
+            </Pressable>
+            {externalImportRootPath ? (
+              <Pressable
+                style={styles.secondaryButtonSmall}
+                onPress={() => {
+                  const parent = externalImportCurrentPath.includes('/')
+                    ? externalImportCurrentPath.slice(0, externalImportCurrentPath.lastIndexOf('/'))
+                    : '';
+                  onBrowseExternalStorage(externalImportRootPath, parent || undefined);
+                }}
+                disabled={externalImportBusy}
+              >
+                <Text style={styles.secondaryButtonText}>↑ 返回上级</Text>
+              </Pressable>
+            ) : null}
+            {hasSelection ? (
+              <Pressable style={styles.secondaryButtonSmall} onPress={onClearExternalSelection} disabled={externalImportBusy}>
+                <Text style={styles.secondaryButtonText}>清空勾选</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={[styles.primaryButtonSmall, (!onlineDeviceAvailable || !hasSelection) ? styles.networkRowDisabled : null]}
+              onPress={onImportSelectedExternalItems}
+              disabled={!onlineDeviceAvailable || !hasSelection || externalImportBusy}
+            >
+              <Text style={styles.primaryButtonText}>{externalImportBusy ? '导入中…' : `导入已选${hasSelection ? ` (${selectedExternalImportPaths.length})` : ''}`}</Text>
+            </Pressable>
+          </View>
+          {!onlineDeviceAvailable ? (
+            <Text style={styles.cardCopy}>请先让 Sparkbox 在线，然后再从外接存储导入资料。</Text>
+          ) : null}
+          {!externalImportRootPath ? (
+            externalMounts.length === 0 && !externalImportBusy ? (
+              <Text style={styles.cardCopy}>还没有发现可导入的设备。把 U 盘或移动硬盘插上后，再点一次“扫描设备”。</Text>
+            ) : (
+              externalMounts.map((mount) => (
+                <View key={mount.id} style={styles.deviceRowCard}>
+                  <Text style={styles.networkName}>💾 {mount.label}</Text>
+                  <Text style={styles.cardCopy}>{mount.path}</Text>
+                  <View style={styles.inlineActions}>
+                    <Pressable style={styles.primaryButtonSmall} onPress={() => onBrowseExternalStorage(mount.path)}>
+                      <Text style={styles.primaryButtonText}>浏览内容</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )
+          ) : (
+            <>
+              <Text style={styles.cardCopy}>勾选文件或文件夹后，Sparkbox 会按正常 Raw 导入流程写入并维护资料索引。</Text>
+              {externalEntries.length === 0 && !externalImportBusy ? (
+                <Text style={styles.cardCopy}>当前目录为空。</Text>
+              ) : null}
+              {externalEntries.map((entry) => {
+                const selected = selectedExternalImportPaths.includes(entry.sourcePath);
+                return (
+                  <View
+                    key={entry.sourcePath}
+                    style={[
+                      styles.deviceRowCard,
+                      selected ? { borderColor: '#0b6e4f', backgroundColor: '#f3fbf7' } : null,
+                    ]}
+                  >
+                    <Pressable onPress={() => onToggleExternalSelection(entry.sourcePath)} pressFeedback="scale">
+                      <Text style={styles.networkName}>
+                        {selected ? '☑ ' : '☐ '}{entry.isDir ? '📁 ' : '📄 '}{entry.name}
+                      </Text>
+                      <Text style={styles.cardCopy}>
+                        {entry.isDir ? '文件夹' : formatByteSize(entry.size || 0)}
+                        {entry.modifiedAt ? ` · ${describeFileTimestamp(entry.modifiedAt)}` : ''}
+                      </Text>
+                    </Pressable>
+                    <View style={styles.inlineActions}>
+                      {entry.isDir ? (
+                        <Pressable
+                          style={styles.secondaryButtonSmall}
+                          onPress={() => onBrowseExternalStorage(externalImportRootPath, entry.path)}
+                        >
+                          <Text style={styles.secondaryButtonText}>进入</Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable style={styles.secondaryButtonSmall} onPress={() => onToggleExternalSelection(entry.sourcePath)}>
+                        <Text style={styles.secondaryButtonText}>{selected ? '取消勾选' : '勾选导入'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </>
+          )}
+        </View>
+      </>
+    );
+  }
+
   function renderMemories(): React.ReactNode {
     return (
       <>
@@ -975,6 +1123,9 @@ export function LibraryPane(props: LibraryPaneProps) {
   }
   if (activeSection === 'raw_browser') {
     return <>{renderRawBrowser()}</>;
+  }
+  if (activeSection === 'external_import') {
+    return <>{renderExternalImport()}</>;
   }
   if (activeSection === 'memories') {
     return <>{renderMemories()}</>;

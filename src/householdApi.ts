@@ -591,6 +591,21 @@ export type RawPromoteResult = {
   rawPath: string;
 };
 
+export type ExternalStorageMount = {
+  id: string;
+  label: string;
+  path: string;
+};
+
+export type ExternalStorageEntry = {
+  name: string;
+  path: string;
+  sourcePath: string;
+  isDir: boolean;
+  size: number;
+  modifiedAt: string;
+};
+
 export type WikiChatTranscriptEntryInput = {
   role: string;
   sender: string;
@@ -2122,6 +2137,78 @@ export async function deleteRawFile(
     method: 'DELETE',
     token,
   });
+}
+
+export async function listExternalStorageDevices(
+  token: string,
+): Promise<{ mounts: ExternalStorageMount[] }> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/external-devices', { token });
+  return {
+    mounts: Array.isArray(response.mounts)
+      ? (response.mounts as Array<Record<string, unknown>>).map((item) => ({
+          id: String(item.id ?? ''),
+          label: String(item.label ?? ''),
+          path: String(item.path ?? ''),
+        }))
+      : [],
+  };
+}
+
+export async function browseExternalStorage(
+  token: string,
+  rootPath: string,
+  subpath?: string,
+): Promise<{ rootPath: string; currentPath: string; entries: ExternalStorageEntry[] }> {
+  const params = new URLSearchParams({ root_path: rootPath });
+  if (subpath) params.set('subpath', subpath);
+  const response = await cloudJson<Record<string, unknown>>(`/api/raw/external-browse?${params.toString()}`, { token });
+  return {
+    rootPath: String(response.root_path ?? rootPath),
+    currentPath: String(response.current_path ?? ''),
+    entries: Array.isArray(response.entries)
+      ? (response.entries as Array<Record<string, unknown>>).map((item) => ({
+          name: String(item.name ?? ''),
+          path: String(item.path ?? ''),
+          sourcePath: String(item.source_path ?? ''),
+          isDir: Boolean(item.is_dir),
+          size: Number(item.size ?? 0),
+          modifiedAt: String(item.modified_at ?? ''),
+        }))
+      : [],
+  };
+}
+
+export async function importExternalStorageItems(
+  token: string,
+  input: { sourcePaths: string[]; spaceId?: string | null; owners?: string[] },
+): Promise<{
+  ok: boolean;
+  count: number;
+  imported: Array<{ sourcePath: string; filename: string; fileId: string; size: number; owners: string[] }>;
+}> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/external-import', {
+    method: 'POST',
+    token,
+    body: {
+      source_paths: input.sourcePaths,
+      space_id: input.spaceId || undefined,
+      owners: input.owners || undefined,
+    },
+  });
+
+  return {
+    ok: Boolean(response.ok),
+    count: Number(response.count ?? 0),
+    imported: Array.isArray(response.imported)
+      ? (response.imported as Array<Record<string, unknown>>).map((item) => ({
+          sourcePath: String(item.source_path ?? ''),
+          filename: String(item.filename ?? ''),
+          fileId: String(item.file_id ?? ''),
+          size: Number(item.size ?? 0),
+          owners: Array.isArray(item.owners) ? item.owners.map(String) : [],
+        }))
+      : [],
+  };
 }
 
 export async function getRawWorkspace(token: string): Promise<RawWorkspaceInfo> {

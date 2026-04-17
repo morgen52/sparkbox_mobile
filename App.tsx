@@ -163,6 +163,11 @@ import {
   promoteRawWorkFile,
   deleteRawWorkFile,
   readHouseholdFileText,
+  listExternalStorageDevices,
+  browseExternalStorage,
+  importExternalStorageItems,
+  type ExternalStorageEntry,
+  type ExternalStorageMount,
   type RawWorkFile,
 } from './src/householdApi';
 import {
@@ -440,6 +445,12 @@ function App() {
   const [rawBrowserContent, setRawBrowserContent] = useState('');
   const [rawBrowserActivePath, setRawBrowserActivePath] = useState('');
   const [rawBrowserCurrentDir, setRawBrowserCurrentDir] = useState('');
+  const [externalMounts, setExternalMounts] = useState<ExternalStorageMount[]>([]);
+  const [externalEntries, setExternalEntries] = useState<ExternalStorageEntry[]>([]);
+  const [externalImportBusy, setExternalImportBusy] = useState(false);
+  const [externalImportRootPath, setExternalImportRootPath] = useState('');
+  const [externalImportCurrentPath, setExternalImportCurrentPath] = useState('');
+  const [selectedExternalImportPaths, setSelectedExternalImportPaths] = useState<string[]>([]);
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
@@ -2755,8 +2766,11 @@ function App() {
       activeChatSession,
       overrideContent: promptWithAttachmentContext,
     });
-    if (!overrideContent && attached.length) {
-      setChatAttachedFiles({});
+    if (!overrideContent) {
+      setChatDraft('');
+      if (attached.length) {
+        setChatAttachedFiles({});
+      }
     }
   }
 
@@ -3907,6 +3921,80 @@ function App() {
     }
   }
 
+  async function refreshExternalDevices(): Promise<void> {
+    if (!session?.token) return;
+    setExternalImportBusy(true);
+    setLibraryError('');
+    try {
+      const result = await listExternalStorageDevices(session.token);
+      setExternalMounts(result.mounts);
+      if (result.mounts.length === 0) {
+        setLibraryNotice('暂未发现可导入的外接存储设备。请先插入 U 盘或移动硬盘。');
+      }
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '扫描外接存储失败。');
+      setExternalMounts([]);
+    } finally {
+      setExternalImportBusy(false);
+    }
+  }
+
+  async function browseExternalImportPath(rootPath: string, subpath?: string): Promise<void> {
+    if (!session?.token) return;
+    setExternalImportBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await browseExternalStorage(session.token, rootPath, subpath);
+      setExternalImportRootPath(result.rootPath);
+      setExternalImportCurrentPath(result.currentPath);
+      setExternalEntries(result.entries);
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '读取外接存储目录失败。');
+      setExternalEntries([]);
+    } finally {
+      setExternalImportBusy(false);
+    }
+  }
+
+  function toggleExternalImportSelection(sourcePath: string): void {
+    setSelectedExternalImportPaths((current) =>
+      current.includes(sourcePath)
+        ? current.filter((item) => item !== sourcePath)
+        : [...current, sourcePath],
+    );
+  }
+
+  async function importSelectedExternalEntries(): Promise<void> {
+    if (!session?.token || !activeSpace) {
+      setLibraryError('请先进入一个空间，再导入外接存储中的资料。');
+      return;
+    }
+    if (selectedExternalImportPaths.length === 0) {
+      setLibraryError('请先勾选要导入的文件或文件夹。');
+      return;
+    }
+
+    setExternalImportBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      const result = await importExternalStorageItems(session.token, {
+        sourcePaths: selectedExternalImportPaths,
+        spaceId: activeSpace.kind === 'shared' ? activeSpace.id : undefined,
+        owners: [session.user.id],
+      });
+      setLibraryNotice(`已导入 ${result.count} 个文件到当前空间的 raw。`);
+      setSelectedExternalImportPaths([]);
+      void refreshRawBrowser();
+      void refreshWikiDirectory();
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : '导入外接存储失败。');
+    } finally {
+      setExternalImportBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!session?.token) {
       return;
@@ -3969,6 +4057,14 @@ function App() {
     if (!session?.token || !activeSpaceId) return;
     if (rawBrowserFiles.length === 0) {
       void refreshRawBrowser(rawBrowserCurrentDir || undefined);
+    }
+  }, [libraryActiveSection, session?.token, activeSpaceId]);
+
+  useEffect(() => {
+    if (libraryActiveSection !== 'external_import') return;
+    if (!session?.token || !activeSpaceId) return;
+    if (externalMounts.length === 0) {
+      void refreshExternalDevices();
     }
   }, [libraryActiveSection, session?.token, activeSpaceId]);
 
@@ -4641,10 +4737,21 @@ function App() {
                 rawBrowserContent={rawBrowserContent}
                 rawBrowserActivePath={rawBrowserActivePath}
                 rawBrowserCurrentDir={rawBrowserCurrentDir}
+                externalMounts={externalMounts}
+                externalEntries={externalEntries}
+                externalImportBusy={externalImportBusy}
+                externalImportRootPath={externalImportRootPath}
+                externalImportCurrentPath={externalImportCurrentPath}
+                selectedExternalImportPaths={selectedExternalImportPaths}
                 onRefreshRawBrowser={(sub?: string) => void refreshRawBrowser(sub)}
                 onNavigateRawBrowserDir={navigateRawBrowserDir}
                 onReadRawBrowserFile={(path: string) => void openRawBrowserFile(path)}
                 onCloseRawBrowserReader={() => { setRawBrowserActivePath(''); setRawBrowserContent(''); }}
+                onRefreshExternalDevices={() => void refreshExternalDevices()}
+                onBrowseExternalStorage={(rootPath, subpath) => void browseExternalImportPath(rootPath, subpath)}
+                onToggleExternalSelection={toggleExternalImportSelection}
+                onClearExternalSelection={() => setSelectedExternalImportPaths([])}
+                onImportSelectedExternalItems={() => void importSelectedExternalEntries()}
                 onChangeActiveSection={setLibraryActiveSection}
                 onChangeWikiSourceTitle={setWikiSourceTitle}
                 onChangeWikiSourceContent={setWikiSourceContent}
