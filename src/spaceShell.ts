@@ -14,6 +14,8 @@ import type {
   SpaceTemplate,
 } from './householdApi';
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
 export function resolveActiveSpaceId(
   spaces: HouseholdSpaceSummary[],
   currentActiveSpaceId: string,
@@ -56,11 +58,26 @@ export function resolveTaskSpaceId(space: HouseholdSpaceSummary | null): string 
 
 export type ChatSendPhase = 'idle' | 'sending' | 'streaming' | 'timed_out' | 'failed';
 
-export function describeSpaceKind(kind: SpaceKind): string {
-  return kind === 'private' ? '仅自己可见' : '家庭共享';
+export function describeSpaceKind(kind: SpaceKind, t?: TranslateFn): string {
+  if (t) {
+    return kind === 'private' ? t('spaceShell.spaceKind.private') : t('spaceShell.spaceKind.shared');
+  }
+  return kind === 'private' ? 'Just you + Sparkbox' : 'Shared space';
 }
 
-export function describeSpaceCounts(kind: SpaceKind, threadCount: number, memberCount: number): string {
+export function describeSpaceCounts(kind: SpaceKind, threadCount: number, memberCount: number, t?: TranslateFn): string {
+  if (t) {
+    const memberLabel = t('spaceShell.spaceCounts.member');
+    const conversationLabel =
+      kind === 'shared'
+        ? threadCount === 1
+          ? t('spaceShell.spaceCounts.sharedChatOne', { count: threadCount })
+          : t('spaceShell.spaceCounts.sharedChatMany', { count: threadCount })
+        : threadCount === 1
+          ? t('spaceShell.spaceCounts.topicOne', { count: threadCount })
+          : t('spaceShell.spaceCounts.topicMany', { count: threadCount });
+    return `${conversationLabel} · ${memberCount}${memberLabel}`;
+  }
   const memberLabel = '人';
   const conversationLabel =
     kind === 'shared'
@@ -73,8 +90,11 @@ export function describeTopicCount(threadCount: number): string {
   return `${threadCount} 个话题`;
 }
 
-export function describeSpaceOverviewCopy(): string {
-  return '先确定参与成员，每个空间都会独立保存聊天、记忆和历史。';
+export function describeSpaceOverviewCopy(t?: TranslateFn): string {
+  if (t) {
+    return t('spaceShell.spaceOverview.copy');
+  }
+  return 'Pick the participants first. Each space keeps its own chats, memories, and history.';
 }
 
 export type SpaceCopyContext = Pick<HouseholdSpaceSummary, 'kind' | 'name'> | Pick<HouseholdSpaceDetail, 'kind' | 'name'> | null;
@@ -100,7 +120,23 @@ export function describeCurrentSpaceSummaryCopy(
   spaceKindLabel: string,
   spaceKind: SpaceKind,
   threadCount: number,
+  t?: TranslateFn,
 ): string {
+  if (t) {
+    const conversationLabel =
+      spaceKind === 'shared'
+        ? threadCount === 1
+          ? t('spaceShell.currentSpace.sharedChatOne', { count: threadCount })
+          : t('spaceShell.currentSpace.sharedChatMany', { count: threadCount })
+        : threadCount === 1
+          ? t('spaceShell.currentSpace.topicOne', { count: threadCount })
+          : t('spaceShell.currentSpace.topicMany', { count: threadCount });
+    return t('spaceShell.currentSpace.copy', {
+      spaceName,
+      spaceKindLabel,
+      conversationLabel,
+    });
+  }
   const conversationLabel =
     spaceKind === 'shared'
       ? `${threadCount} 个话题入口`
@@ -108,8 +144,11 @@ export function describeCurrentSpaceSummaryCopy(
   return `当前查看：${spaceName}（${spaceKindLabel}），已包含 ${conversationLabel}。`;
 }
 
-export function describeChatAccess(scope: ChatSessionScope): string {
-  return scope === 'private' ? '仅自己' : '空间共享';
+export function describeChatAccess(scope: ChatSessionScope, t?: TranslateFn): string {
+  if (t) {
+    return scope === 'private' ? t('spaceShell.chatAccess.private') : t('spaceShell.chatAccess.shared');
+  }
+  return scope === 'private' ? 'Just you' : 'Shared here';
 }
 
 export function shouldAppendAssistantReply(message: string): boolean {
@@ -205,17 +244,29 @@ function usesChatLanguage(spaceDetail: SpaceCopyContext, scope: ChatSessionScope
 export function describeChatSessionPrimaryActionLabel(
   spaceDetail: SpaceCopyContext,
   scope: ChatSessionScope,
+  t?: TranslateFn,
 ): string {
-  return usesChatLanguage(spaceDetail, scope) ? '新建聊天' : '新建话题';
+  if (t) {
+    return usesChatLanguage(spaceDetail, scope)
+      ? t('spaceShell.chatSession.primaryAction.shared')
+      : t('spaceShell.chatSession.primaryAction.private');
+  }
+  return usesChatLanguage(spaceDetail, scope) ? 'New chat' : 'New topic';
 }
 
 export function describeChatSessionEmptyStateCopy(
   spaceDetail: SpaceCopyContext,
   scope: ChatSessionScope,
+  t?: TranslateFn,
 ): string {
+  if (t) {
+    return usesChatLanguage(spaceDetail, scope)
+      ? t('spaceShell.chatSession.emptyState.shared')
+      : t('spaceShell.chatSession.emptyState.private');
+  }
   return usesChatLanguage(spaceDetail, scope)
-    ? '还没有聊天，点击创建即可开始。'
-    : '还没有话题，点击创建即可开始。';
+    ? 'No chats yet. Start one when this space needs Sparkbox.'
+    : 'No topics yet. Start one when this space needs Sparkbox.';
 }
 
 export function describeChatSessionOpenError(spaceDetail: SpaceCopyContext): string {
@@ -231,31 +282,61 @@ export function describeChatSessionCreatePermissionError(
     : '仅管理员可以创建共享话题。';
 }
 
-export function describeChatEditorVerb(spaceDetail: SpaceCopyContext, scope: ChatSessionScope): string {
-  return usesChatLanguage(spaceDetail, scope) ? '聊天' : '话题';
+export function describeChatEditorVerb(spaceDetail: SpaceCopyContext, scope: ChatSessionScope, t?: TranslateFn): string {
+  if (t) {
+    return usesChatLanguage(spaceDetail, scope)
+      ? t('spaceShell.chatEditor.verb.shared')
+      : t('spaceShell.chatEditor.verb.private');
+  }
+  return usesChatLanguage(spaceDetail, scope) ? 'chat' : 'topic';
 }
 
 export function describeChatEditorTitle(
   spaceDetail: SpaceCopyContext,
   scope: ChatSessionScope,
   editing: boolean,
+  t?: TranslateFn,
 ): string {
+  if (t) {
+    if (editing) {
+      return usesChatLanguage(spaceDetail, scope)
+        ? t('spaceShell.chatEditor.title.editShared')
+        : t('spaceShell.chatEditor.title.editPrivate');
+    }
+    if (scope === 'private') {
+      return t('spaceShell.chatEditor.title.startPrivate');
+    }
+    return usesChatLanguage(spaceDetail, scope)
+      ? t('spaceShell.chatEditor.title.startSharedChat')
+      : t('spaceShell.chatEditor.title.startSharedTopic');
+  }
   if (editing) {
-    return usesChatLanguage(spaceDetail, scope) ? '编辑聊天信息' : '编辑话题信息';
+    return usesChatLanguage(spaceDetail, scope) ? 'Keep this chat clear for everyone' : 'Keep this topic clear for everyone';
   }
   if (scope === 'private') {
-    return '新建私密话题';
+    return 'Start a private topic with Sparkbox';
   }
-  return usesChatLanguage(spaceDetail, scope) ? '为该共享空间新建聊天' : '为该共享空间新建话题';
+  return usesChatLanguage(spaceDetail, scope) ? 'Start a chat for this shared space' : 'Start a topic for this shared space';
 }
 
 export function describeChatEditorPrimaryActionLabel(
   spaceDetail: SpaceCopyContext,
   scope: ChatSessionScope,
   editing: boolean,
+  t?: TranslateFn,
 ): string {
+  if (t) {
+    if (editing) {
+      return usesChatLanguage(spaceDetail, scope)
+        ? t('spaceShell.chatEditor.primaryAction.saveShared')
+        : t('spaceShell.chatEditor.primaryAction.savePrivate');
+    }
+    return usesChatLanguage(spaceDetail, scope)
+      ? t('spaceShell.chatEditor.primaryAction.createShared')
+      : t('spaceShell.chatEditor.primaryAction.createPrivate');
+  }
   const verb = describeChatEditorVerb(spaceDetail, scope);
-  return `${editing ? '保存' : '创建'}${verb}`;
+  return `${editing ? 'Save' : 'Create'} ${verb}`;
 }
 
 export function describeChatNamePlaceholder(spaceDetail: SpaceCopyContext, scope: ChatSessionScope): string {

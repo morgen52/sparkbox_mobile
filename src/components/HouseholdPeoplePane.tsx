@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import {
   describeActivityEvent,
@@ -47,10 +48,11 @@ export function HouseholdPeoplePane({
   onGenerateInvite,
   onRevokeInvite,
 }: HouseholdPeoplePaneProps) {
+  const t = useT();
   return (
     <>
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>家庭成员</Text>
+        <Text style={styles.cardTitle}>{t('household.members')}</Text>
         <Text style={styles.cardCopy}>{householdMembersCopy}</Text>
         {homeMembers.map((member) => {
           const isSelf = member.id === currentUserId;
@@ -73,7 +75,7 @@ export function HouseholdPeoplePane({
                     disabled={settingsBusy || !canDemoteOrPromote}
                   >
                     <Text style={styles.secondaryButtonText}>
-                      {member.role === 'owner' ? '移除管理员权限' : '授予管理员权限'}
+                      {member.role === 'owner' ? t('household.revokeAdmin') : t('household.grantAdmin')}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -84,11 +86,11 @@ export function HouseholdPeoplePane({
                     onPress={() => onRemoveMember(member)}
                     disabled={settingsBusy || !canRemoveMemberEntry}
                   >
-                    <Text style={styles.secondaryButtonText}>移除</Text>
+                    <Text style={styles.secondaryButtonText}>{t('household.remove')}</Text>
                   </Pressable>
                 </View>
               ) : isSelf ? (
-                <Text style={styles.cardCopy}>这是你</Text>
+                <Text style={styles.cardCopy}>{t('household.isYou')}</Text>
               ) : null}
             </View>
           );
@@ -97,9 +99,9 @@ export function HouseholdPeoplePane({
 
       {canManage ? (
         <View style={styles.settingsCard}>
-          <Text style={styles.cardTitle}>邀请</Text>
+          <Text style={styles.cardTitle}>{t('household.inviteLabel')}</Text>
           <Text style={styles.cardCopy}>
-            在这里创建普通加入邀请，或邀请新的管理员。在空间的设置界面内发出的邀请会让对方进入对应的共享空间。
+            {t('household.inviteCopy')}
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -107,25 +109,25 @@ export function HouseholdPeoplePane({
               onPress={() => onGenerateInvite('member')}
               disabled={settingsBusy}
             >
-              <Text style={styles.secondaryButtonText}>邀请成员</Text>
+              <Text style={styles.secondaryButtonText}>{t('household.inviteMember')}</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryButtonSmall}
               onPress={() => onGenerateInvite('owner')}
               disabled={settingsBusy}
             >
-              <Text style={styles.secondaryButtonText}>邀请管理员</Text>
+              <Text style={styles.secondaryButtonText}>{t('household.inviteAdmin')}</Text>
             </Pressable>
           </View>
           {pendingInvites.length === 0 ? (
-            <Text style={styles.cardCopy}>当前没有有效邀请。</Text>
+            <Text style={styles.cardCopy}>{t('household.noInvites')}</Text>
           ) : (
             pendingInvites.map((invite) => (
               <View key={invite.id} style={styles.deviceRowCard}>
-                <Text style={styles.networkName}>{describeInviteRole(invite.role)}邀请</Text>
-                <Text style={styles.cardCopy}>邀请码：{invite.invite_code || '等待新邀请码'}</Text>
+                <Text style={styles.networkName}>{describeInviteRole(invite.role)}{t('household.inviteSuffix')}</Text>
+                <Text style={styles.cardCopy}>{t('household.inviteCode')}{invite.invite_code || t('household.waitingCode')}</Text>
                 {invite.space_name ? (
-                  <Text style={styles.cardCopy}>将加入到 {invite.space_name}</Text>
+                  <Text style={styles.cardCopy}>{t('household.joinSpace')} {invite.space_name}</Text>
                 ) : null}
                 <Text style={styles.cardCopy}>{describeInviteExpiry(invite.expires_at)}</Text>
                 <View style={styles.inlineActions}>
@@ -134,7 +136,7 @@ export function HouseholdPeoplePane({
                     onPress={() => onRevokeInvite(invite)}
                     disabled={settingsBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>撤销</Text>
+                    <Text style={styles.secondaryButtonText}>{t('household.revoke')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -144,9 +146,9 @@ export function HouseholdPeoplePane({
       ) : null}
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>最近活动</Text>
+        <Text style={styles.cardTitle}>{t('household.recentActivity')}</Text>
         {recentActivity.length === 0 ? (
-          <Text style={styles.cardCopy}>暂无家庭活动。</Text>
+          <Text style={styles.cardCopy}>{t('household.noActivity')}</Text>
         ) : (
           recentActivity.slice(0, 5).map((event) => (
             <View key={event.id} style={styles.deviceRowCard}>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useT } from '../i18n';
 
 type ViewedSpaceCardProps = {
   styles: Record<string, any>;
@@ -28,13 +29,14 @@ export function ViewedSpaceCard({
   onManageMembers,
   onInviteToSpace,
 }: ViewedSpaceCardProps) {
+  const t = useT();
   return (
     <View style={styles.settingsCard}>
-      <Text style={styles.cardTitle}>当前查看空间</Text>
+      <Text style={styles.cardTitle}>{t('viewedSpace.title')}</Text>
       <Text style={styles.cardCopy}>
         {activeSpaceName
           ? summaryCopy
-          : '先在聊天中选择一个空间，资料库和设置会跟随到同一个空间。'}
+          : t('viewedSpace.noSpaceCopy')}
       </Text>
       {activeSpaceName ? (
         <View style={styles.deviceRowCard}>
@@ -42,14 +44,14 @@ export function ViewedSpaceCard({
             <Text style={styles.networkName}>{activeSpaceName}</Text>
             <Text style={styles.tagMuted}>{activeSpaceKindLabel}</Text>
           </View>
-          <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || '家庭共享空间'}</Text>
+          <Text style={styles.cardCopy}>{activeSpaceTemplateLabel || t('viewedSpace.defaultTemplate')}</Text>
           <Text style={styles.cardCopy}>{countsCopy}</Text>
         </View>
       ) : null}
       {canManageSharedSpace ? (
         <>
           <Text style={styles.cardCopy}>
-            在这里调整这个空间的成员。你会自动保留在空间内。
+            {t('viewedSpace.membersCopy')}
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -57,10 +59,10 @@ export function ViewedSpaceCard({
               onPress={onManageMembers}
               disabled={spaceMembersEditorBusy}
             >
-              <Text style={styles.secondaryButtonText}>管理成员</Text>
+              <Text style={styles.secondaryButtonText}>{t('viewedSpace.manageMembers')}</Text>
             </Pressable>
             <Pressable style={styles.secondaryButtonSmall} onPress={onInviteToSpace} disabled={settingsBusy}>
-              <Text style={styles.secondaryButtonText}>邀请加入此空间</Text>
+              <Text style={styles.secondaryButtonText}>{t('viewedSpace.inviteToSpace')}</Text>
             </Pressable>
           </View>
         </>

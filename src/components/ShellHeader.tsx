@@ -1,5 +1,6 @@
 import React from 'react';
 import { Animated, Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { ShellTab } from '../householdState';
 
@@ -24,6 +25,7 @@ export function ShellHeader({
   tabs,
   onSelectTab,
 }: ShellHeaderProps) {
+  const t = useT();
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   const shellTabSliderTranslateX = React.useRef(new Animated.Value(0)).current;
   const tabCount = Math.max(tabs.length, 1);
@@ -53,7 +55,7 @@ export function ShellHeader({
         </View>
         {onBackToList ? (
           <Pressable style={styles.headerBackButton} onPress={onBackToList}>
-            <Text style={styles.headerBackButtonText}>{backToListLabel || '返回空间列表'}</Text>
+            <Text style={styles.headerBackButtonText}>{backToListLabel || t('shellHeader.backToList')}</Text>
           </Pressable>
         ) : null}
       </View>

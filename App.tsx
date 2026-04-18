@@ -35,6 +35,7 @@ import { SpaceCreatorModal } from './src/components/SpaceCreatorModal';
 import { SetupSurface } from './src/components/SetupSurface';
 import { ShellModals } from './src/components/ShellModals';
 import { SettingsSummaryPane } from './src/components/SettingsSummaryPane';
+import { DeleteAccountPane } from './src/components/DeleteAccountPane';
 import { ShellHeader } from './src/components/ShellHeader';
 import { ViewedSpaceCard } from './src/components/ViewedSpaceCard';
 import { styles } from './src/styles/appStyles';
@@ -61,7 +62,7 @@ import {
   describeTaskRunStatus,
   describeTaskSchedule,
   describeShellSubtitle,
-  PHASE_ONE_TABS,
+  buildPhaseOneTabs,
   resolvePhaseOneSurface,
   type PhaseOneSurface,
 } from './src/appShell';
@@ -166,8 +167,11 @@ import {
   listExternalStorageDevices,
   browseExternalStorage,
   importExternalStorageItems,
+  fetchLinkPreview,
+  importFromLink,
   type ExternalStorageEntry,
   type ExternalStorageMount,
+  type LinkPreview,
   type RawWorkFile,
 } from './src/householdApi';
 import {
@@ -266,6 +270,7 @@ import {
 } from './src/constants/appRuntimeConstants';
 import { loadStoredSession, persistStoredSession } from './src/utils/sessionStorage';
 import { authenticateSession, revokeSession, deleteAccount as deleteAccountApi } from './src/utils/authApi';
+import { I18nProvider, useT } from './src/i18n';
 
 
 const globalWithBuffer = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -406,6 +411,7 @@ function SwipeToDeleteSpaceRow({
 }
 
 function App() {
+  const t = useT();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   // Auth + onboarding state stays in App because the shell can hand back into
@@ -451,6 +457,11 @@ function App() {
   const [externalImportRootPath, setExternalImportRootPath] = useState('');
   const [externalImportCurrentPath, setExternalImportCurrentPath] = useState('');
   const [selectedExternalImportPaths, setSelectedExternalImportPaths] = useState<string[]>([]);
+  const [linkImportUrl, setLinkImportUrl] = useState('');
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const [linkPreviewBusy, setLinkPreviewBusy] = useState(false);
+  const [linkImportBusy, setLinkImportBusy] = useState(false);
+  const [linkPreviewError, setLinkPreviewError] = useState('');
   const [shellSurface, setShellSurface] = useState<PhaseOneSurface>('onboarding');
   const [skipOnboardingWhenNoDevice, setSkipOnboardingWhenNoDevice] = useState(false);
   const [homeBusy, setHomeBusy] = useState(false);
@@ -831,11 +842,11 @@ function App() {
       activeChatMessages.map((message, index) => ({
         id: String(index),
         checked: chatSaveDocSelection[String(index)] === true,
-        sender: message.role === 'user' ? message.senderDisplayName || '你' : 'Sparkbox',
+        sender: message.role === 'user' ? message.senderDisplayName || t('chat.sender.you') : 'Sparkbox',
         role: message.role,
         content: message.content,
       })),
-    [activeChatMessages, chatSaveDocSelection],
+    [activeChatMessages, chatSaveDocSelection, t],
   );
   const relayTargets = getRelayTargets(activeSpaceDetail, session?.user.id);
   const currentFilePath = fileListing?.path ?? '';
@@ -866,7 +877,7 @@ function App() {
   const sharedChatIsVisible = activeChatSession
     ? looksLikeSharedGroupChatSession(activeChatSession.name, activeChatSession.scope, activeSpaceCopyContext)
     : false;
-  const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind) : '';
+  const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind, t) : '';
   const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
   const waitingForSpaces =
     Boolean(session?.token) &&
@@ -877,8 +888,8 @@ function App() {
     !spacesError &&
     (!activeSpaceStorageKey || loadedActiveSpaceStorageKey === activeSpaceStorageKey);
   const householdMembersCopy = canManage
-    ? '管理员可在这里邀请成员、调整管理员权限并移除成员。系统会始终保留至少一位管理员。'
-    : '你可以在这里查看家庭成员。如需邀请、调整管理员权限或移除成员，请联系管理员处理。';
+    ? t('members.copy.admin')
+    : t('members.copy.member');
   const canMutateActiveSpaceLibrary = canMutateSpaceLibrary({
     spaceKind: activeSpace?.kind,
     currentUserRole: session?.user.role,
@@ -940,24 +951,24 @@ function App() {
   const activeTaskSpaceId = resolveTaskSpaceId(activeSpace);
   const libraryOverviewSections = [
     {
-      title: '文件',
-      copy: '当前空间的文档、上传资料与实用文件。',
+      title: t('library.section.files.title'),
+      copy: t('library.section.files.copy'),
     },
     {
-      title: '任务',
-      copy: '绑定在当前空间的例行任务、提醒与定时执行事项。',
+      title: t('library.section.tasks.title'),
+      copy: t('library.section.tasks.copy'),
     },
     {
-      title: '记忆',
-      copy: activeSpace ? `Sparkbox 为 ${activeSpace.name} 长期保留的关键记忆。` : 'Sparkbox 为当前空间长期保留的关键记忆。',
+      title: t('library.section.memories.title'),
+      copy: activeSpace ? t('library.section.memories.copyWithName', { name: activeSpace.name }) : t('library.section.memories.copyGeneric'),
     },
     {
-      title: '照片',
-      copy: '保存在当前空间中的照片与共享时刻。',
+      title: t('library.section.photos.title'),
+      copy: t('library.section.photos.copy'),
     },
     {
-      title: '摘要',
-      copy: '快速回顾当前空间聊天，不用逐条翻看也能了解重点。',
+      title: t('library.section.summaries.title'),
+      copy: t('library.section.summaries.copy'),
     },
   ];
   const availableFamilyApps = familyAppsCatalog.filter(
@@ -990,18 +1001,18 @@ function App() {
   );
   const authCardTitle =
     authMode === 'login'
-      ? '欢迎回来'
+      ? t('auth.title.login')
       : authMode === 'register'
-        ? '创建你的家庭'
-        : '输入邀请码加入家庭';
+        ? t('auth.title.register')
+        : t('auth.title.joinByInvite');
   const authCardCopy =
     authMode === 'login'
-      ? '使用你之前绑定 Sparkbox 的账号登录即可继续使用。'
+      ? t('auth.copy.login')
       : authMode === 'register'
-        ? '首次使用请先创建家庭，并成为首位管理员。'
-        : '请粘贴管理员分享的邀请码，系统会自动识别可加入的家庭。';
+        ? t('auth.copy.register')
+        : t('auth.copy.joinByInvite');
   const authSubmitLabel =
-    authMode === 'login' ? '登录并进入' : authMode === 'register' ? '创建并进入' : '加入并进入';
+    authMode === 'login' ? t('auth.submit.login') : authMode === 'register' ? t('auth.submit.register') : t('auth.submit.joinByInvite');
   const spaceMemberOptions = homeMembers.filter((member) => member.id !== session?.user.id);
   const activeSharedSpaceMemberOptions =
     activeSpace?.kind === 'shared' ? homeMembers.filter((member) => member.id !== session?.user.id) : [];
@@ -1086,7 +1097,7 @@ function App() {
     const source = (rawPath || '').trim();
     const sanitized = sanitizeWikiFileName(newName);
     if (!source || !sanitized) {
-      setLibraryError('请输入有效的新文件名。');
+      setLibraryError(t('raw.rename.invalidName'));
       return;
     }
     const sourceParts = source.split('/').filter(Boolean);
@@ -1100,7 +1111,7 @@ function App() {
     }
     const destination = sourceDir ? `${sourceDir}/${finalName}` : finalName;
     if (destination === source) {
-      setLibraryNotice('文件名未变化。');
+      setLibraryNotice(t('raw.rename.unchanged'));
       return;
     }
 
@@ -1115,10 +1126,10 @@ function App() {
         toDeviceFilePath(`.wiki/raw/${destination}`),
         { spaceId: activeFileSpaceId || undefined },
       );
-      setLibraryNotice(`已重命名 raw 文件：${source} -> ${destination}`);
+      setLibraryNotice(t('raw.rename.success', { source, destination }));
       await refreshWikiDirectory();
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '重命名 raw 文件失败。');
+      setLibraryError(error instanceof Error ? error.message : t('raw.rename.error'));
     } finally {
       setLibraryBusy(false);
     }
@@ -1142,10 +1153,10 @@ function App() {
         toDeviceFilePath(`.wiki/raw/${target}`),
         { spaceId: activeFileSpaceId || undefined },
       );
-      setLibraryNotice(`已删除 raw 文件：${target}`);
+      setLibraryNotice(t('raw.delete.success', { target }));
       await refreshWikiDirectory();
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '删除 raw 文件失败。');
+      setLibraryError(error instanceof Error ? error.message : t('raw.delete.error'));
     } finally {
       setLibraryBusy(false);
     }
@@ -1204,7 +1215,7 @@ function App() {
       const nextLibrary = await getSpaceLibrary(session.token, activeSpaceId);
       setSpaceLibrary(nextLibrary);
     } catch (error) {
-      setSummaryError(error instanceof Error ? error.message : '暂时无法刷新本空间摘要。');
+      setSummaryError(error instanceof Error ? error.message : t('summary.refreshError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -1295,12 +1306,12 @@ function App() {
     try {
       await captureSpaceSummaryFromSession(session.token, activeSpaceId, {
         chatSessionId: targetSessionId,
-        title: `${selectedSession?.name || '当前聊天'} snapshot`,
+        title: `${selectedSession?.name || t('summary.fallbackSessionName')} snapshot`,
       });
-      setSummaryNotice(`已从「${selectedSession?.name || '当前聊天'}」生成摘要。`);
+      setSummaryNotice(t('summary.captureSuccess', { name: selectedSession?.name || t('summary.fallbackSessionName') }));
       await refreshSummaryLibrary();
     } catch (error) {
-      setSummaryError(error instanceof Error ? error.message : '暂时无法生成摘要。');
+      setSummaryError(error instanceof Error ? error.message : t('summary.captureError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -1321,10 +1332,10 @@ function App() {
         title: summary.title,
         content: summary.content,
       });
-      setSummaryNotice(`已将「${summary.title}」保存为记忆。`);
+      setSummaryNotice(t('summary.saveAsMemorySuccess', { title: summary.title }));
       await refreshSummaryLibrary();
     } catch (error) {
-      setSummaryError(error instanceof Error ? error.message : '无法将该摘要保存为记忆。');
+      setSummaryError(error instanceof Error ? error.message : t('summary.saveAsMemoryError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -1342,10 +1353,10 @@ function App() {
     setSummaryError('');
     try {
       await deleteSpaceSummary(session.token, activeSpaceId, summaryId);
-      setSummaryNotice(`已删除摘要「${title}」。`);
+      setSummaryNotice(t('summary.deleteSuccess', { title }));
       await refreshSummaryLibrary();
     } catch (error) {
-      setSummaryError(error instanceof Error ? error.message : '无法删除该摘要。');
+      setSummaryError(error instanceof Error ? error.message : t('summary.deleteError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -2033,13 +2044,13 @@ function App() {
           familyResult.status === 'rejected' &&
           privateResult.status === 'rejected'
         ) {
-          setSummaryError('无法加载当前空间聊天列表，请稍后重试。');
+          setSummaryError(t('summary.loadSessionsError'));
         }
       } catch (error) {
         if (cancelled) {
           return;
         }
-        setSummaryError(error instanceof Error ? error.message : '无法加载当前空间聊天列表，请稍后重试。');
+        setSummaryError(error instanceof Error ? error.message : t('summary.loadSessionsError'));
       } finally {
         if (!cancelled) {
           setSummaryCaptureSessionsBusy(false);
@@ -2205,10 +2216,10 @@ function App() {
       setSkipOnboardingWhenNoDevice(false);
       await persistSession(null);
       resetFlow();
-      Alert.alert('账户已注销', '你的账户和所有数据已被永久删除。');
+      Alert.alert(t('account.deleteSuccess.title'), t('account.deleteSuccess.message'));
     } catch (err: any) {
-      const msg = err?.message || '注销失败，请稍后重试。';
-      Alert.alert('注销失败', msg);
+      const msg = err?.message || t('account.deleteError.fallback');
+      Alert.alert(t('account.deleteError.title'), msg);
     } finally {
       setDeleteAccountBusy(false);
     }
@@ -2299,18 +2310,18 @@ function App() {
 
   async function enableInstalledFamilyAppForActiveSpace(slug: string, confirmed = false): Promise<void> {
     if (!session?.token) {
-      setSettingsError('登录已过期，请重新登录后再试。');
-      setChatAppActionError('登录已过期，请重新登录后再试。');
+      setSettingsError(t('auth.error.sessionExpired'));
+      setChatAppActionError(t('auth.error.sessionExpired'));
       return;
     }
     if (!canManage) {
-      setSettingsError('仅管理员可以在空间中启用家庭应用。');
-      setChatAppActionError('仅管理员可以在空间中启用家庭应用。');
+      setSettingsError(t('familyApps.error.adminOnly'));
+      setChatAppActionError(t('familyApps.error.adminOnly'));
       return;
     }
     if (!activeSpaceId || !activeSpace) {
-      setSettingsError('请先选择一个 Space，再启用应用。');
-      setChatAppActionError('请先选择一个 Space，再启用应用。');
+      setSettingsError(t('spaces.error.noSpaceForApp'));
+      setChatAppActionError(t('spaces.error.noSpaceForApp'));
       return;
     }
     const app = installedFamilyApps.find((item) => item.slug === slug) ?? null;
@@ -2541,12 +2552,12 @@ function App() {
   function requestDeleteChatSession(sessionId: string): void {
     const targetSession = chatSessions.find((sessionItem) => sessionItem.id === sessionId);
     Alert.alert(
-      '确认删除会话？',
-      `删除「${targetSession?.name || '这个会话'}」后将无法恢复。`,
+      t('chat.deleteSession.alertTitle'),
+      t('chat.deleteSession.alertMessage', { name: targetSession?.name || '' }),
       [
-        { text: '取消', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '确认删除',
+          text: t('common.confirmDelete'),
           style: 'destructive',
           onPress: () => {
             void runDeleteCurrentChatSession(sessionId);
@@ -2561,17 +2572,17 @@ function App() {
       return;
     }
     if (targetSpace.kind !== 'shared' || isSystemManagedSpace(targetSpace)) {
-      setSettingsError('系统内置空间不支持删除。');
+      setSettingsError(t('spaces.delete.systemSpaceError'));
       return;
     }
 
     Alert.alert(
-      '确认删除此空间？',
-      `你即将删除「${targetSpace.name}」。该空间下聊天、文件和任务会同步清理，且无法恢复。`,
+      t('spaces.delete.alertTitle'),
+      t('spaces.delete.alertMessage', { name: targetSpace.name }),
       [
-        { text: '取消', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '确认删除',
+          text: t('common.confirmDelete'),
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -2590,7 +2601,7 @@ function App() {
                 ]);
                 await runRefreshChatSessions({ force: true });
               } catch (error) {
-                setSettingsError(error instanceof Error ? error.message : '删除空间失败。');
+                setSettingsError(error instanceof Error ? error.message : t('spaces.delete.error'));
               } finally {
                 setSettingsBusy(false);
               }
@@ -2808,7 +2819,7 @@ function App() {
       });
       setChatAttachmentPickerPath(displayPath);
     } catch (error) {
-      setChatAttachmentPickerError(error instanceof Error ? error.message : '读取文件失败。');
+      setChatAttachmentPickerError(error instanceof Error ? error.message : t('chat.attachmentPicker.error'));
     } finally {
       setChatAttachmentPickerBusy(false);
     }
@@ -2855,7 +2866,7 @@ function App() {
       defaultSelection[String(index)] = true;
     });
     setChatSaveDocSelection(defaultSelection);
-    setChatSaveDocTitle(`聊天记录-${new Date().toISOString().slice(0, 10)}`);
+    setChatSaveDocTitle(t('chat.saveDoc.defaultTitle', { date: new Date().toISOString().slice(0, 10) }));
     setChatSaveDocModalOpen(true);
   }
 
@@ -2865,7 +2876,7 @@ function App() {
     }
     const title = chatSaveDocTitle.trim();
     if (!title) {
-      setChatError('请先填写文档标题。');
+      setChatError(t('chat.saveDoc.noTitle'));
       return;
     }
     const entries = activeChatMessages
@@ -2873,13 +2884,13 @@ function App() {
       .filter(({ index }) => chatSaveDocSelection[String(index)] === true)
       .map(({ message }) => ({
         role: message.role,
-        sender: message.role === 'user' ? message.senderDisplayName || '你' : 'Sparkbox',
+        sender: message.role === 'user' ? message.senderDisplayName || t('chat.sender.you') : 'Sparkbox',
         content: message.content,
         createdAt: message.createdAt || undefined,
       }));
 
     if (!entries.length) {
-      setChatError('请至少选择一条聊天内容。');
+      setChatError(t('chat.saveDoc.noSelection'));
       return;
     }
     setChatBusy(true);
@@ -2891,10 +2902,10 @@ function App() {
         spaceId: activeWikiSpaceId || undefined,
       });
       setChatSaveDocModalOpen(false);
-      Alert.alert('已保存', `已保存到 raw：${saved.rawPath}`);
+      Alert.alert(t('chat.saveDoc.successTitle'), t('chat.saveDoc.successMessage', { path: saved.rawPath }));
       await refreshWikiDirectory();
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : '保存聊天文档失败。');
+      setChatError(error instanceof Error ? error.message : t('chat.saveDoc.error'));
     } finally {
       setChatBusy(false);
     }
@@ -3470,14 +3481,14 @@ function App() {
       return;
     }
     if (!activeSpaceId) {
-      setLibraryError('请先进入一个空间，再导入 Wiki 内容。');
+      setLibraryError(t('spaces.error.noSpaceForWikiIngest'));
       setLibraryNotice('');
       return;
     }
     const title = wikiSourceTitle.trim();
     const content = wikiSourceContent.trim();
     if (!title || !content) {
-      setLibraryError('请先填写 Raw 标题和 Raw 内容。');
+      setLibraryError(t('wiki.ingest.noContent'));
       setLibraryNotice('');
       return;
     }
@@ -3491,7 +3502,7 @@ function App() {
         sourceType: 'note',
         spaceId: activeWikiSpaceId || undefined,
       });
-      setLibraryNotice(`已导入并编译页面：${result.title}`);
+      setLibraryNotice(t('wiki.ingest.success', { title: result.title }));
       setWikiLastIngest({
         operationId: result.operationId,
         pageId: result.pageId,
@@ -3506,7 +3517,7 @@ function App() {
         directoryProviderTimeoutSeconds: result.directoryProviderTimeoutSeconds,
       });
       if (result.directoryMode === 'deterministic') {
-        setLibraryNotice(`已导入并编译页面：${result.title}（directory 回退：${result.directoryFallbackReason || 'model_unavailable'}）`);
+        setLibraryNotice(t('wiki.ingest.successWithFallback', { title: result.title, reason: result.directoryFallbackReason || 'model_unavailable' }));
       }
       const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
@@ -3514,7 +3525,7 @@ function App() {
       setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : 'Wiki 导入失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.ingest.error'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3525,7 +3536,7 @@ function App() {
       return;
     }
     if (!activeSpaceId) {
-      setFilesError('请先进入一个空间，再执行目录一致性检查。');
+      setFilesError(t('spaces.error.noSpaceForConsistencyCheck'));
       setFilesNotice('');
       return;
     }
@@ -3541,16 +3552,16 @@ function App() {
       const lackCount = result.initialLack.length;
       if (result.directoryMode === 'deterministic') {
         setFilesNotice(
-          `目录一致性检查已完成（extra ${extraCount}，lack ${lackCount}），directory 走了回退路径：${result.directoryFallbackReason || 'model_unavailable'}。`,
+          t('wiki.consistency.successWithFallback', { extra: String(extraCount), lack: String(lackCount), reason: result.directoryFallbackReason || 'model_unavailable' }),
         );
       } else {
-        setFilesNotice(`目录一致性检查已完成：extra ${extraCount}，lack ${lackCount}。`);
+        setFilesNotice(t('wiki.consistency.success', { extra: String(extraCount), lack: String(lackCount) }));
       }
       const directoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiDirectoryLastUpdatedAt(String((directoryPayload.directory.updated_at as string) || ''));
       setWikiRawFileCount(directoryPayload.rawFiles.length);
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : '目录一致性检查失败。');
+      setFilesError(error instanceof Error ? error.message : t('wiki.consistency.error'));
     } finally {
       setFilesBusy(false);
     }
@@ -3561,7 +3572,7 @@ function App() {
       return;
     }
     if (!activeSpaceId) {
-      setLibraryError('请先进入一个空间，再刷新 Wiki 页面。');
+      setLibraryError(t('spaces.error.noSpaceForWikiRefresh'));
       setLibraryNotice('');
       return;
     }
@@ -3571,9 +3582,9 @@ function App() {
     try {
       const pages = await listWikiPages(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiPages(pages.map((item) => ({ id: item.id, title: item.title, summary: item.summary, tags: item.tags })));
-      setLibraryNotice(`已刷新 ${pages.length} 个本空间 Wiki 页面。`);
+      setLibraryNotice(t('wiki.refreshPages.success', { count: String(pages.length) }));
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '读取本地 Wiki 页面失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.refreshPages.error'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3581,7 +3592,7 @@ function App() {
 
   async function openWikiRawRoot(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间。');
+      setLibraryError(t('spaces.error.noActiveSpace'));
       setLibraryNotice('');
       return;
     }
@@ -3593,12 +3604,12 @@ function App() {
       await createHouseholdDirectory(session.token, fileSpace, toDeviceFilePath('raw'), {
         spaceId: activeFileSpaceId || undefined,
       }).catch(() => null);
-      setLibraryNotice(`已打开 Raw 目录：${targetPath}`);
+      setLibraryNotice(t('wiki.rawRoot.success', { path: targetPath }));
       setLibraryError('');
       setLibraryActiveSection('wiki');
       await refreshFiles(targetPath, { force: true });
     } catch (error) {
-      setFilesError(error instanceof Error ? error.message : '无法打开 Raw 目录。');
+      setFilesError(error instanceof Error ? error.message : t('wiki.rawRoot.error'));
     } finally {
       setFilesBusy(false);
     }
@@ -3606,7 +3617,7 @@ function App() {
 
   async function refreshWikiDirectory(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再读取目录。');
+      setLibraryError(t('spaces.error.noSpaceForDirectory'));
       setLibraryNotice('');
       return;
     }
@@ -3617,9 +3628,9 @@ function App() {
       const payload: WikiDirectoryPayload = await getWikiDirectory(session.token, { spaceId: activeWikiSpaceId || undefined });
       setWikiDirectoryLastUpdatedAt(String((payload.directory.updated_at as string) || ''));
       setWikiRawFileCount(payload.rawFiles.length);
-      setLibraryNotice(`目录已刷新，raw 文件 ${payload.rawFiles.length} 个。`);
+      setLibraryNotice(t('wiki.directory.refreshSuccess', { count: String(payload.rawFiles.length) }));
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '读取 directory.json 失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.directory.refreshError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3627,7 +3638,7 @@ function App() {
 
   async function startPersonalWikiOrganize(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行个人画像与Wiki整理。');
+      setLibraryError(t('spaces.error.noSpaceForOrganize'));
       setLibraryNotice('');
       return;
     }
@@ -3647,9 +3658,9 @@ function App() {
         finishedAt: null,
         message: 'organize running',
       });
-      setLibraryNotice('个人画像与Wiki整理已启动，正在后台运行。');
+      setLibraryNotice(t('wiki.organize.started'));
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '启动个人画像与Wiki整理失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.organize.startError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3657,7 +3668,7 @@ function App() {
 
   async function startWikiQualityOptimizeAction(): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再执行 Wiki质量优化。');
+      setLibraryError(t('spaces.error.noSpaceForQualityOptimize'));
       setLibraryNotice('');
       return;
     }
@@ -3680,9 +3691,9 @@ function App() {
         finishedAt: null,
         message: 'wiki quality optimize running',
       });
-      setLibraryNotice('Wiki质量优化已启动，正在后台运行。');
+      setLibraryNotice(t('wiki.qualityOptimize.started'));
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '启动 Wiki质量优化失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.qualityOptimize.startError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3690,7 +3701,7 @@ function App() {
 
   async function startUserSkillDistill(): Promise<void> {
     if (!session?.token) {
-      setLibraryError('请先登录。');
+      setLibraryError(t('userSkill.error.notLoggedIn'));
       return;
     }
     setUserSkillBusy(true);
@@ -3699,13 +3710,13 @@ function App() {
     try {
       const result = await distillUserSkill(session.token);
       if (result.ok) {
-        setLibraryNotice('用户 Skill 提炼完成。');
+        setLibraryNotice(t('userSkill.distill.success'));
         await refreshUserSkill();
       } else {
-        setLibraryError(result.error || '提炼用户 Skill 失败。');
+        setLibraryError(result.error || t('userSkill.distill.error'));
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '提炼用户 Skill 失败。');
+      setLibraryError(error instanceof Error ? error.message : t('userSkill.distill.error'));
     } finally {
       setUserSkillBusy(false);
     }
@@ -3728,7 +3739,7 @@ function App() {
     }
     const jobId = wikiOrganizeStatus?.jobId;
     if (!jobId) {
-      setLibraryError('当前没有可查询的整理任务。');
+      setLibraryError(t('organize.noJob'));
       setLibraryNotice('');
       return;
     }
@@ -3738,15 +3749,15 @@ function App() {
       const next = await getWikiOrganizeStatus(session.token, jobId);
       setWikiOrganizeStatus(next);
       if (next.status === 'completed') {
-        setLibraryNotice(`整理完成：${next.iterations} 轮，耗时 ${Math.round(next.durationMs / 1000)} 秒。`);
+        setLibraryNotice(t('organize.completed', { iterations: String(next.iterations), seconds: String(Math.round(next.durationMs / 1000)) }));
         await refreshWikiDirectory();
       } else if (next.status === 'failed') {
-        setLibraryError(next.message || '整理任务失败。');
+        setLibraryError(next.message || t('organize.failed'));
       } else {
-        setLibraryNotice('整理任务仍在后台运行。');
+        setLibraryNotice(t('organize.running'));
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '读取整理任务状态失败。');
+      setLibraryError(error instanceof Error ? error.message : t('organize.statusError'));
     } finally {
       setLibraryBusy(false);
     }
@@ -3756,7 +3767,7 @@ function App() {
     const silent = Boolean(options?.silent);
     if (!session?.token || !activeSpaceId) {
       if (!silent) {
-        setLibraryError('请先进入一个空间，再读取 Wiki 预览。');
+        setLibraryError(t('spaces.error.noSpaceForWikiPreview'));
         setLibraryNotice('');
       }
       return;
@@ -3779,11 +3790,11 @@ function App() {
         }));
       }
       if (!silent) {
-        setLibraryNotice(`已刷新 Wiki 预览，共 ${preview.wikiFiles.length} 个文件。`);
+        setLibraryNotice(t('wiki.preview.refreshSuccess', { count: String(preview.wikiFiles.length) }));
       }
     } catch (error) {
       if (!silent) {
-        setLibraryError(error instanceof Error ? error.message : '读取 Wiki 预览失败。');
+        setLibraryError(error instanceof Error ? error.message : t('wiki.preview.refreshError'));
       }
     } finally {
       if (!silent) {
@@ -3795,7 +3806,7 @@ function App() {
   // ── Work directory management ──────────────────────────────
   async function refreshWorkFiles(subpath?: string): Promise<void> {
     if (!session?.token) {
-      setLibraryError('未登录。');
+      setLibraryError(t('userSkill.error.notLoggedInShort'));
       return;
     }
     setWorkFileBusy(true);
@@ -3805,7 +3816,7 @@ function App() {
       const files = await listRawWorkFiles(session.token, subpath);
       setWorkFiles(files);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '获取 work 文件列表失败。');
+      setLibraryError(err instanceof Error ? err.message : t('work.list.error'));
     } finally {
       setWorkFileBusy(false);
     }
@@ -3825,7 +3836,7 @@ function App() {
       setWorkFileContent(result.content || '');
       setWorkFileActivePath(path);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '读取工作区文件失败。');
+      setLibraryError(err instanceof Error ? err.message : t('work.read.error'));
     } finally {
       setWorkFileBusy(false);
     }
@@ -3842,7 +3853,7 @@ function App() {
         // Always promote to user's private space (no spaceId → private)
       });
       if (result.ok) {
-        setLibraryNotice(`已将 ${path} 转入 raw（${result.filename}）。`);
+        setLibraryNotice(t('work.promote.success', { path, filename: result.filename }));
         // If we were reading this file, go back to list
         if (workFileActivePath === path) {
           setWorkFileActivePath('');
@@ -3851,10 +3862,10 @@ function App() {
         // Refresh list
         void refreshWorkFiles(workCurrentDir || undefined);
       } else {
-        setLibraryError('转入 raw 失败。');
+        setLibraryError(t('work.promote.error'));
       }
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '转入 raw 失败。');
+      setLibraryError(err instanceof Error ? err.message : t('work.promote.error'));
     } finally {
       setWorkFileBusy(false);
     }
@@ -3867,14 +3878,14 @@ function App() {
     setLibraryNotice('');
     try {
       await deleteRawWorkFile(session.token, path);
-      setLibraryNotice(`已删除 ${path}。`);
+      setLibraryNotice(t('work.delete.success', { path }));
       if (workFileActivePath === path) {
         setWorkFileActivePath('');
         setWorkFileContent('');
       }
       void refreshWorkFiles(workCurrentDir || undefined);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '删除工作区文件失败。');
+      setLibraryError(err instanceof Error ? err.message : t('work.delete.error'));
     } finally {
       setWorkFileBusy(false);
     }
@@ -3892,7 +3903,7 @@ function App() {
       const listing = await getHouseholdFiles(session.token, space, devicePath, { spaceId });
       setRawBrowserFiles(listing.entries);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '获取 raw 文件列表失败。');
+      setLibraryError(err instanceof Error ? err.message : t('raw.list.error'));
       setRawBrowserFiles([]);
     } finally {
       setRawBrowserBusy(false);
@@ -3915,7 +3926,7 @@ function App() {
       setRawBrowserContent(content);
       setRawBrowserActivePath(filePath);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '读取 raw 文件失败。');
+      setLibraryError(err instanceof Error ? err.message : t('raw.read.error'));
     } finally {
       setRawBrowserBusy(false);
     }
@@ -3929,10 +3940,10 @@ function App() {
       const result = await listExternalStorageDevices(session.token);
       setExternalMounts(result.mounts);
       if (result.mounts.length === 0) {
-        setLibraryNotice('暂未发现可导入的外接存储设备。请先插入 U 盘或移动硬盘。');
+        setLibraryNotice(t('external.noDevices'));
       }
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '扫描外接存储失败。');
+      setLibraryError(err instanceof Error ? err.message : t('external.scanError'));
       setExternalMounts([]);
     } finally {
       setExternalImportBusy(false);
@@ -3950,7 +3961,7 @@ function App() {
       setExternalImportCurrentPath(result.currentPath);
       setExternalEntries(result.entries);
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '读取外接存储目录失败。');
+      setLibraryError(err instanceof Error ? err.message : t('external.browseError'));
       setExternalEntries([]);
     } finally {
       setExternalImportBusy(false);
@@ -3967,11 +3978,11 @@ function App() {
 
   async function importSelectedExternalEntries(): Promise<void> {
     if (!session?.token || !activeSpace) {
-      setLibraryError('请先进入一个空间，再导入外接存储中的资料。');
+      setLibraryError(t('spaces.error.noSpaceForExternalImport'));
       return;
     }
     if (selectedExternalImportPaths.length === 0) {
-      setLibraryError('请先勾选要导入的文件或文件夹。');
+      setLibraryError(t('external.noSelection'));
       return;
     }
 
@@ -3984,15 +3995,68 @@ function App() {
         spaceId: activeSpace.kind === 'shared' ? activeSpace.id : undefined,
         owners: [session.user.id],
       });
-      setLibraryNotice(`已导入 ${result.count} 个文件到当前空间的 raw。`);
+      setLibraryNotice(t('external.importSuccess', { count: String(result.count) }));
       setSelectedExternalImportPaths([]);
       void refreshRawBrowser();
       void refreshWikiDirectory();
     } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : '导入外接存储失败。');
+      setLibraryError(err instanceof Error ? err.message : t('external.importError'));
     } finally {
       setExternalImportBusy(false);
     }
+  }
+
+  async function previewLinkImport(url: string): Promise<void> {
+    if (!session?.token) return;
+    setLinkPreviewBusy(true);
+    setLinkPreviewError('');
+    setLinkPreview(null);
+    try {
+      const result = await fetchLinkPreview(session.token, url);
+      if (result.error) {
+        setLinkPreviewError(result.error);
+      } else {
+        setLinkPreview(result);
+      }
+    } catch (err) {
+      setLinkPreviewError(err instanceof Error ? err.message : t('linkImport.previewError'));
+    } finally {
+      setLinkPreviewBusy(false);
+    }
+  }
+
+  async function confirmLinkImport(): Promise<void> {
+    if (!session?.token || !linkPreview || !activeSpace) {
+      setLibraryError(t('spaces.error.noSpaceForLinkImport'));
+      return;
+    }
+    setLinkImportBusy(true);
+    setLibraryError('');
+    setLibraryNotice('');
+    try {
+      await importFromLink(session.token, {
+        url: linkPreview.sourceUrl,
+        title: linkPreview.title,
+        contentMarkdown: linkPreview.contentMarkdown,
+        sourcePlatform: linkPreview.platform,
+        spaceId: activeSpace.kind === 'shared' ? activeSpace.id : undefined,
+        owners: [session.user.id],
+      });
+      setLibraryNotice(t('linkImport.success', { title: linkPreview.title }));
+      setLinkPreview(null);
+      setLinkImportUrl('');
+      void refreshRawBrowser();
+      void refreshWikiDirectory();
+    } catch (err) {
+      setLibraryError(err instanceof Error ? err.message : t('linkImport.error'));
+    } finally {
+      setLinkImportBusy(false);
+    }
+  }
+
+  function cancelLinkImport(): void {
+    setLinkPreview(null);
+    setLinkPreviewError('');
   }
 
   useEffect(() => {
@@ -4070,7 +4134,7 @@ function App() {
 
   async function pickAndIngestWikiRawFiles(forcedSourceType?: 'note' | 'document' | 'image'): Promise<void> {
     if (!session?.token || !activeSpaceId) {
-      setLibraryError('请先进入一个空间，再上传导入。');
+      setLibraryError(t('spaces.error.noSpaceForUpload'));
       setLibraryNotice('');
       return;
     }
@@ -4095,11 +4159,11 @@ function App() {
         spaceId: activeWikiSpaceId || undefined,
         sourceType: ingestSourceType,
       });
-      setLibraryNotice(`上传即导入完成：${ingested.saved.length} 个文件。`);
+      setLibraryNotice(t('wiki.upload.success', { count: String(ingested.saved.length) }));
       setWikiLastIngest({
         operationId: ingested.operationId,
         pageId: '',
-        title: `批量上传 ${ingested.saved.length} 个文件`,
+        title: t('wiki.upload.batchTitle', { count: String(ingested.saved.length) }),
         summary: ingested.saved.map((item) => item.name).slice(0, 4).join('、'),
         sourceType: ingestSourceType,
         directoryMode: ingested.directoryMode,
@@ -4111,12 +4175,12 @@ function App() {
       });
       if (ingested.directoryMode === 'deterministic') {
         setLibraryNotice(
-          `上传即导入完成：${ingested.saved.length} 个文件（directory 回退：${ingested.directoryFallbackReason || 'model_unavailable'}）`,
+          t('wiki.upload.successWithFallback', { count: String(ingested.saved.length), reason: ingested.directoryFallbackReason || 'model_unavailable' }),
         );
       }
       await Promise.all([refreshWikiPages(), refreshWikiDirectory()]);
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : '上传导入失败。');
+      setLibraryError(error instanceof Error ? error.message : t('wiki.upload.error'));
     } finally {
       setLibraryBusy(false);
     }
@@ -4139,7 +4203,7 @@ function App() {
         <StatusBar style="dark" />
         <View style={styles.centered}>
           <ActivityIndicator color="#0b6e4f" />
-          <Text style={styles.loadingText}>正在准备设备引导…</Text>
+          <Text style={styles.loadingText}>{t('loading.bootingDevice')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -4151,8 +4215,8 @@ function App() {
         <StatusBar style="dark" />
         <View style={styles.centered}>
           <ActivityIndicator color="#0b6e4f" />
-          <Text style={styles.loadingText}>正在打开 {session.household.name}…</Text>
-          <Text style={styles.cardCopy}>正在加载空间、聊天和设备状态。</Text>
+          <Text style={styles.loadingText}>{t('loading.openingHousehold', { name: session.household.name })}</Text>
+          <Text style={styles.cardCopy}>{t('loading.loadingSpaces')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -4167,7 +4231,7 @@ function App() {
             <View style={styles.heroTopRow}>
               <View style={styles.heroTextWrap}>
                 <Text style={styles.eyebrow}>Sparkbox</Text>
-                <Text style={styles.title}>我的空间</Text>
+                <Text style={styles.title}>{t('spaces.title')}</Text>
                 <Text style={styles.subtitle}>{householdName}</Text>
               </View>
               <Pressable
@@ -4182,7 +4246,7 @@ function App() {
                 }}
               >
                 <Text style={styles.headerBackButtonText}>
-                  {spaceListViewMode === 'spaces' ? '全局设置' : '返回我的空间'}
+                  {spaceListViewMode === 'spaces' ? t('spaces.globalSettings') : t('spaces.backToSpaces')}
                 </Text>
               </Pressable>
             </View>
@@ -4224,10 +4288,10 @@ function App() {
                 ))}
                 {canManage ? (
                   <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={openSpaceCreator} disabled={spacesBusy}>
-                    <Text style={styles.primaryButtonText}>新建 Space</Text>
+                    <Text style={styles.primaryButtonText}>{t('spaces.createButton')}</Text>
                   </Pressable>
                 ) : null}
-                {!spaces.length && !spacesBusy ? <Text style={styles.cardCopy}>还没有 Space，可先创建一个。</Text> : null}
+                {!spaces.length && !spacesBusy ? <Text style={styles.cardCopy}>{t('spaces.emptyState')}</Text> : null}
                 {spacesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                 {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
                 <Pressable
@@ -4240,17 +4304,17 @@ function App() {
                 >
                   <View style={styles.chatTreeFolderHeader}>
                     <View style={styles.chatTreeFolderHeaderBody}>
-                      <Text style={styles.chatTreeFolderTitle}>个人工具</Text>
-                      <Text style={styles.chatTreeFolderMeta}>画像整理 · Skill 提炼 · Wiki 预览</Text>
+                      <Text style={styles.chatTreeFolderTitle}>{t('userTools.title')}</Text>
+                      <Text style={styles.chatTreeFolderMeta}>{t('userTools.subtitle')}</Text>
                     </View>
                     <View style={styles.spaceListCardRightRail}>
-                      <Text style={styles.spaceTemplateBadge}>用户级</Text>
+                      <Text style={styles.spaceTemplateBadge}>{t('userTools.badge')}</Text>
                       <Text style={styles.chatTreeFolderChevron}>›</Text>
                     </View>
                   </View>
                 </Pressable>
                 <Pressable style={styles.secondaryButton} onPress={() => void logout()}>
-                  <Text style={styles.secondaryButtonText}>退出登录</Text>
+                  <Text style={styles.secondaryButtonText}>{t('auth.logout')}</Text>
                 </Pressable>
               </ScrollView>
             ) : spaceListViewMode === 'user-tools' ? (
@@ -4313,8 +4377,6 @@ function App() {
                   settingsError={settingsError}
                   onBeginNewDeviceOnboarding={beginNewDeviceOnboarding}
                   onLogout={() => void logout()}
-                  onDeleteAccount={handleDeleteAccount}
-                  deleteAccountBusy={deleteAccountBusy}
                 />
 
                 <SettingsDevicesPane
@@ -4404,6 +4466,13 @@ function App() {
                   onGenerateInvite={(role) => void generateInvite(role)}
                   onRevokeInvite={(invite) => void revokeInvite(invite)}
                 />
+
+                <DeleteAccountPane
+                  styles={styles}
+                  onlineDeviceAvailable={onlineDeviceAvailable}
+                  onDeleteAccount={handleDeleteAccount}
+                  deleteAccountBusy={deleteAccountBusy}
+                />
               </ScrollView>
             )}
 
@@ -4439,9 +4508,9 @@ function App() {
           <ShellHeader
             styles={styles}
             householdName={activeSpace?.name || householdName}
-            backToListLabel="返回空间列表"
+            backToListLabel={t('spaces.backToList')}
             onBackToList={returnToSpaceList}
-            tabs={PHASE_ONE_TABS.map((tab) => ({
+            tabs={buildPhaseOneTabs(t).map((tab) => ({
               id: tab.key,
               label: tab.label,
               active: tab.key === shellTab,
@@ -4463,9 +4532,9 @@ function App() {
                   headerCopy: describeShellSubtitle({
                     shellTab: 'chats',
                     activeSpaceName: activeSpace?.name || '',
-                    activeSpaceKindLabel: activeSpaceKindLabel || '空间',
+                    activeSpaceKindLabel: activeSpaceKindLabel || t('spaces.kindFallback'),
                     spacesReady: !waitingForSpaces,
-                  }),
+                  }, t),
                   singleSpaceMode: true,
                   spacesError,
                   spacesBusy,
@@ -4479,21 +4548,21 @@ function App() {
                     chatListLastSyncedAt > 0
                       ? `${
                           chatListSyncSource === 'cache'
-                            ? '已从本地缓存读取'
+                            ? t('chat.sync.fromCache')
                             : chatListSyncSource === 'network'
-                              ? '已与云端同步'
-                              : '聊天列表已就绪'
-                        } · 最近同步 ${formatChatSyncDateTime(chatListLastSyncedAt)}`
+                              ? t('chat.sync.fromNetwork')
+                              : t('chat.sync.ready')
+                        } · ${t('chat.sync.lastSyncPrefix')} ${formatChatSyncDateTime(chatListLastSyncedAt)}`
                       : '',
                   chatError,
                   scopeOptions: (['family', 'private'] as ChatSessionScope[]).map((scope) => ({
                     id: scope,
-                    label: describeChatAccess(scope),
+                    label: describeChatAccess(scope, t),
                     active: chatScope === scope,
                   })),
                   chatBusy,
                   canCreateChat: canCreateActiveChat,
-                  createChatLabel: describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope),
+                  createChatLabel: describeChatSessionPrimaryActionLabel(activeSpaceCopyContext, chatScope, t),
                   sessions: chatSessions.map((sessionItem) => {
                     const active = sessionItem.id === activeChatSessionId;
                     const sharedGroupSession = looksLikeSharedGroupChatSession(
@@ -4542,7 +4611,7 @@ function App() {
                       avatarTone: sharedGroupSession ? 'group' : sessionItem.scope === 'private' ? 'private' : 'shared',
                     };
                   }),
-                  emptyStateCopy: describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope),
+                  emptyStateCopy: describeChatSessionEmptyStateCopy(activeSpaceCopyContext, chatScope, t),
                   spaceChips: spaces.map((space) => ({
                     id: space.id,
                     name: space.name,
@@ -4752,6 +4821,15 @@ function App() {
                 onToggleExternalSelection={toggleExternalImportSelection}
                 onClearExternalSelection={() => setSelectedExternalImportPaths([])}
                 onImportSelectedExternalItems={() => void importSelectedExternalEntries()}
+                linkImportUrl={linkImportUrl}
+                linkPreview={linkPreview}
+                linkPreviewBusy={linkPreviewBusy}
+                linkImportBusy={linkImportBusy}
+                linkPreviewError={linkPreviewError}
+                onChangeLinkImportUrl={setLinkImportUrl}
+                onPreviewLink={(url: string) => void previewLinkImport(url)}
+                onConfirmLinkImport={() => void confirmLinkImport()}
+                onCancelLinkImport={cancelLinkImport}
                 onChangeActiveSection={setLibraryActiveSection}
                 onChangeWikiSourceTitle={setWikiSourceTitle}
                 onChangeWikiSourceContent={setWikiSourceContent}
@@ -4763,7 +4841,7 @@ function App() {
                 onRenameWikiRawRecord={(rawPath, newName) => void renameWikiRawRecord(rawPath, newName)}
                 onDeleteWikiRawRecord={(rawPath) => void deleteWikiRawRecord(rawPath)}
                 onChangeWikiUploadSourceType={setWikiUploadSourceType}
-                taskEditorQuickActionsCopy="需要新增例行任务时，请使用上方快捷操作。"
+                taskEditorQuickActionsCopy={t('tasks.quickActionsCopy')}
                 onOpenTaskEditor={() => openTaskEditor()}
                 onRefreshLibrary={() => void refreshLibrary()}
                 onOpenMemoryEditor={() => openMemoryEditor()}
@@ -4807,12 +4885,13 @@ function App() {
                           activeSpaceKindLabel,
                           activeSpace.kind,
                           activeSpace.threadCount,
+                          t,
                         )
-                      : '请先在“我的空间”中选择一个空间。'
+                      : t('spaces.selectSpaceHint')
                   }
                   countsCopy={
                     activeSpace
-                      ? describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount)
+                      ? describeSpaceCounts(activeSpace.kind, activeSpace.threadCount, activeSpace.memberCount, t)
                       : ''
                   }
                   canManageSharedSpace={canManage && activeSpace?.kind === 'shared'}
@@ -4839,9 +4918,9 @@ function App() {
                 ) : null}
 
                 <View style={styles.settingsCard}>
-                  <Text style={styles.cardTitle}>删除此空间</Text>
+                  <Text style={styles.cardTitle}>{t('spaces.delete.title')}</Text>
                   <Text style={styles.cardCopy}>
-                    删除空间后，其关联聊天、资料和任务将无法恢复。系统内置私人空间与家庭空间不可删除。
+                    {t('spaces.delete.copy')}
                   </Text>
                   <Pressable
                     style={[
@@ -4856,7 +4935,7 @@ function App() {
                     }}
                     disabled={!canDeleteActiveSpace || settingsBusy}
                   >
-                    <Text style={[styles.secondaryButtonText, styles.spaceDeleteButtonText]}>删除此空间</Text>
+                    <Text style={[styles.secondaryButtonText, styles.spaceDeleteButtonText]}>{t('spaces.delete.button')}</Text>
                   </Pressable>
                 </View>
               </>
@@ -5088,4 +5167,12 @@ function App() {
   );
 }
 
-export default App;
+function AppWithProviders() {
+  return (
+    <I18nProvider>
+      <App />
+    </I18nProvider>
+  );
+}
+
+export default AppWithProviders;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import {
   describeAiProvider,
@@ -115,6 +116,8 @@ export function OwnerSettingsPane({
     return null;
   }
 
+  const t = useT();
+
   const activeOwnerDeviceIndex = Math.max(
     0,
     homeDevices.findIndex((device) => device.device_id === ownerDeviceId),
@@ -124,9 +127,9 @@ export function OwnerSettingsPane({
   return (
     <>
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>设备工具</Text>
+        <Text style={styles.cardTitle}>{t('ownerSettings.deviceTools')}</Text>
         <Text style={styles.cardCopy}>
-          当 Sparkbox 需要进一步排查或恢复时，可使用这里的工具。
+          {t('ownerSettings.deviceToolsCopy')}
         </Text>
         <View style={styles.scopeRow}>
           {homeDevices.map((device, deviceIndex) => {
@@ -151,21 +154,21 @@ export function OwnerSettingsPane({
             onPress={onRefreshOwnerConsole}
             disabled={!ownerDeviceId || ownerConsoleBusy}
           >
-            <Text style={styles.secondaryButtonText}>刷新设备状态</Text>
+            <Text style={styles.secondaryButtonText}>{t('ownerSettings.refreshStatus')}</Text>
           </Pressable>
           <Pressable
             style={styles.secondaryButtonSmall}
             onPress={onReconnectOwnerDevice}
             disabled={!ownerDeviceId || ownerConsoleBusy}
           >
-            <Text style={styles.secondaryButtonText}>尝试重连 Sparkbox</Text>
+            <Text style={styles.secondaryButtonText}>{t('ownerSettings.reconnect')}</Text>
           </Pressable>
         </View>
         {renderOwnerConsoleFeedback('tools')}
         {ownerStatus ? (
           <View style={styles.deviceRowCard}>
             <Text style={styles.networkName}>
-              {describeDeviceLabel(ownerDeviceId, activeOwnerDeviceIndex, homeDevices.length || 1)} 概览
+              {describeDeviceLabel(ownerDeviceId, activeOwnerDeviceIndex, homeDevices.length || 1)} {t('ownerSettings.overview')}
             </Text>
             <Text style={styles.cardCopy}>
               {describeOwnerConsoleModelStatus(ownerStatus.ollama?.service, ownerStatus.ollama?.api)}
@@ -185,7 +188,7 @@ export function OwnerSettingsPane({
             </Text>
             {ownerStatus.system ? (
               <Text style={styles.cardCopy}>
-                CPU {ownerStatus.system.cpu_percent ?? 0}% · 内存 {ownerStatus.system.memory?.used_percent ?? 0}%/{ownerStatus.system.memory?.total_gb ?? 0} GB · 磁盘 {ownerStatus.system.disk?.used_percent ?? 0}%/{ownerStatus.system.disk?.total_gb ?? 0} GB
+                CPU {ownerStatus.system.cpu_percent ?? 0}% · {t('ownerSettings.memory')} {ownerStatus.system.memory?.used_percent ?? 0}%/{ownerStatus.system.memory?.total_gb ?? 0} GB · {t('ownerSettings.disk')} {ownerStatus.system.disk?.used_percent ?? 0}%/{ownerStatus.system.disk?.total_gb ?? 0} GB
               </Text>
             ) : null}
           </View>
@@ -193,13 +196,13 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>Sparkbox 的 AI 服务</Text>
+        <Text style={styles.cardTitle}>{t('ownerSettings.aiService')}</Text>
         <Text style={styles.cardCopy}>
-          为 Sparkbox 维护默认 AI 服务和模型；如登录信息变化，可在这里更新。
+          {t('ownerSettings.aiServiceCopy')}
         </Text>
-        <Text style={styles.selectionLabel}>默认 AI 服务</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.defaultProvider')}</Text>
         <TextInput
-          placeholder="默认 AI 服务"
+          placeholder={t('ownerSettings.defaultProviderPlaceholder')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={describeAiProvider(ownerProviderConfig.defaultProvider)}
@@ -223,22 +226,22 @@ export function OwnerSettingsPane({
             })}
           </View>
         ) : null}
-        <Text style={styles.selectionLabel}>默认模型</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.defaultModel')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="首选模型"
+          placeholder={t('ownerSettings.preferredModel')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerProviderConfig.defaultModel}
           onChangeText={onChangeDefaultModel}
         />
-        <Text style={styles.selectionLabel}>响应超时</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.responseTimeout')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="number-pad"
-          placeholder="超时秒数"
+          placeholder={t('ownerSettings.timeoutSeconds')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={String(ownerProviderConfig.providerTimeoutSecs)}
@@ -249,12 +252,12 @@ export function OwnerSettingsPane({
           onPress={onSaveOwnerProviderSettings}
           disabled={!ownerDeviceId || ownerConsoleBusy}
         >
-          <Text style={styles.primaryButtonText}>保存 AI 配置</Text>
+          <Text style={styles.primaryButtonText}>{t('ownerSettings.saveAiConfig')}</Text>
         </Pressable>
         {renderOwnerConsoleFeedback('provider')}
         {ownerModels.length ? (
           <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>此设备本地模型</Text>
+            <Text style={styles.networkName}>{t('ownerSettings.localModels')}</Text>
             {ownerModels.map((model) => (
               <Text key={model.name} style={styles.cardCopy}>
                 {model.name}
@@ -266,46 +269,46 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>添加其他 AI 服务</Text>
+        <Text style={styles.cardTitle}>{t('ownerSettings.addProvider')}</Text>
         <Text style={styles.cardCopy}>
-          当 Sparkbox 需要接入新的 AI 服务或刷新登录信息时，在这里操作。
+          {t('ownerSettings.addProviderCopy')}
         </Text>
-        <Text style={styles.selectionLabel}>AI 服务</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.providerLabel')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="服务名称"
+          placeholder={t('ownerSettings.providerName')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardProvider}
           onChangeText={onChangeOnboardProvider}
         />
-        <Text style={styles.selectionLabel}>模型名称</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.modelName')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="模型 ID"
+          placeholder={t('ownerSettings.modelId')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardModel}
           onChangeText={onChangeOnboardModel}
         />
-        <Text style={styles.selectionLabel}>访问密钥</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.accessKey')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
-          placeholder="访问密钥"
+          placeholder={t('ownerSettings.accessKeyPlaceholder')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardApiKey}
           onChangeText={onChangeOnboardApiKey}
         />
-        <Text style={styles.selectionLabel}>服务 URL（可选）</Text>
+        <Text style={styles.selectionLabel}>{t('ownerSettings.serviceUrl')}</Text>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="服务 URL（可选）"
+          placeholder={t('ownerSettings.serviceUrlPlaceholder')}
           placeholderTextColor="#7e8a83"
           style={styles.input}
           value={ownerOnboardApiUrl}
@@ -316,20 +319,20 @@ export function OwnerSettingsPane({
           onPress={onRunOwnerOnboard}
           disabled={!ownerDeviceId || ownerConsoleBusy}
         >
-          <Text style={styles.primaryButtonText}>连接服务</Text>
+          <Text style={styles.primaryButtonText}>{t('ownerSettings.connectService')}</Text>
         </Pressable>
         {renderOwnerConsoleFeedback('onboard')}
         {ownerServiceSummary ? <Text style={styles.cardCopy}>{ownerServiceSummary}</Text> : null}
       </View>
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>重启与恢复</Text>
+        <Text style={styles.cardTitle}>{t('ownerSettings.restartRecover')}</Text>
         <Text style={styles.cardCopy}>
-          如果 Sparkbox 状态异常，可在这里查看运行情况并重启关键服务。
+          {t('ownerSettings.restartRecoverCopy')}
         </Text>
         {ownerInference ? (
           <View style={styles.deviceRowCard}>
-            <Text style={styles.networkName}>Sparkbox 当前运行状态</Text>
+            <Text style={styles.networkName}>{t('ownerSettings.currentStatus')}</Text>
             <Text style={styles.cardCopy}>
               {describeOwnerRuntimeQueueSummary(
                 ownerInference.queued_requests,
@@ -409,9 +412,9 @@ export function OwnerSettingsPane({
       </View>
 
       <View style={styles.settingsCard}>
-        <Text style={styles.cardTitle}>设备健康与重置</Text>
+        <Text style={styles.cardTitle}>{t('ownerSettings.healthReset')}</Text>
         <Text style={styles.cardCopy}>
-          管理员可在这里查看 Sparkbox 健康状态，并将设备重置回配置流程。
+          {t('ownerSettings.healthResetCopy')}
         </Text>
         {diagnosticsError ? <Text style={styles.errorText}>{diagnosticsError}</Text> : null}
         {homeDevices.map((device, deviceIndex) => (
@@ -429,23 +432,23 @@ export function OwnerSettingsPane({
                 onPress={() => onLoadDiagnostics(device.device_id)}
                 disabled={diagnosticsBusy}
               >
-                <Text style={styles.secondaryButtonText}>立即检查 Sparkbox</Text>
+                <Text style={styles.secondaryButtonText}>{t('ownerSettings.checkNow')}</Text>
               </Pressable>
               <Pressable
                 style={styles.secondaryButtonSmall}
                 onPress={() =>
                   Alert.alert(
-                    '要重置这个 Sparkbox 吗？',
-                    '设备将回到配置状态，并暂时从当前家庭移除，直到重新完成接入。',
+                    t('ownerSettings.resetConfirmTitle'),
+                    t('ownerSettings.resetConfirmCopy'),
                     [
-                      { text: '取消', style: 'cancel' },
-                      { text: '重置', style: 'destructive', onPress: () => onFactoryResetDevice(device) },
+                      { text: t('common.cancel'), style: 'cancel' },
+                      { text: t('ownerSettings.reset'), style: 'destructive', onPress: () => onFactoryResetDevice(device) },
                     ],
                   )
                 }
                 disabled={diagnosticsBusy}
               >
-                <Text style={styles.secondaryButtonText}>重置 Sparkbox</Text>
+                <Text style={styles.secondaryButtonText}>{t('ownerSettings.resetSparkbox')}</Text>
               </Pressable>
             </View>
           </View>
@@ -461,10 +464,10 @@ export function OwnerSettingsPane({
                   homeDevices.findIndex((device) => device.device_id === diagnosticsDeviceId),
                 ),
                 homeDevices.length || 1,
-              )} 健康检查
+              )} {t('ownerSettings.healthCheck')}
             </Text>
             <Text style={styles.cardCopy}>
-              检查来源：{describeDiagnosticsSource(diagnosticsPayload.cache?.source || 'live')}
+              {t('ownerSettings.checkSource')}{describeDiagnosticsSource(diagnosticsPayload.cache?.source || 'live')}
               {diagnosticsPayload.cache?.summary
                 ? ` · ${describeDiagnosticsNetworkSummary(diagnosticsPayload.cache.summary)}`
                 : ''}
@@ -482,17 +485,17 @@ export function OwnerSettingsPane({
             ) : null}
             {diagnosticsPayload.network?.preflight?.reasons?.length ? (
               <Text style={styles.cardCopy}>
-                待处理项：{describeDiagnosticsPreflightReasons(diagnosticsPayload.network.preflight.reasons)}
+                {t('ownerSettings.pendingItems')}{describeDiagnosticsPreflightReasons(diagnosticsPayload.network.preflight.reasons)}
               </Text>
             ) : null}
             {diagnosticsPayload.self_heal?.plan?.issues?.length ? (
               <Text style={styles.cardCopy}>
-                当前需关注：{describeDiagnosticsIssueReasons(diagnosticsPayload.self_heal.plan.issues)}
+                {t('ownerSettings.attentionItems')}{describeDiagnosticsIssueReasons(diagnosticsPayload.self_heal.plan.issues)}
               </Text>
             ) : null}
             {diagnosticsPayload.system?.memory ? (
               <Text style={styles.cardCopy}>
-                内存：{diagnosticsPayload.system.memory.used_percent}% / {diagnosticsPayload.system.memory.total_gb} GB
+                {t('ownerSettings.memoryLabel')}{diagnosticsPayload.system.memory.used_percent}% / {diagnosticsPayload.system.memory.total_gb} GB
               </Text>
             ) : null}
           </View>

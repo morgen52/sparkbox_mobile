@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 type MarkdownCardViewerProps = {
@@ -8,10 +9,11 @@ type MarkdownCardViewerProps = {
 };
 
 export function MarkdownCardViewer({ markdown, styles }: MarkdownCardViewerProps) {
+  const t = useT();
   if (!markdown.trim()) {
     return (
       <View style={styles.deviceRowCard}>
-        <Text style={styles.cardCopy}>（Markdown 内容为空）</Text>
+        <Text style={styles.cardCopy}>{t('markdown.empty')}</Text>
       </View>
     );
   }

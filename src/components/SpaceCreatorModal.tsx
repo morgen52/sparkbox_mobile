@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SpaceTemplateOption = {
@@ -46,6 +47,7 @@ export function SpaceCreatorModal({
   onToggleMember,
   onSubmit,
 }: SpaceCreatorModalProps) {
+  const t = useT();
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onRequestClose}>
       <View style={styles.modalSurface}>
@@ -54,19 +56,19 @@ export function SpaceCreatorModal({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.spaceCreatorSheetContent}
           >
-            <Text style={styles.selectionLabel}>新建共享空间</Text>
-            <Text style={styles.selectionTitle}>创建新的共享空间</Text>
+            <Text style={styles.selectionLabel}>{t('spaceCreator.label')}</Text>
+            <Text style={styles.selectionTitle}>{t('spaceCreator.title')}</Text>
             <Text style={styles.selectionCopy}>
-              先确定这个空间的用途，再起一个清晰名称，并选择成员。你会默认包含在内。
+              {t('spaceCreator.copy')}
             </Text>
             <TextInput
-              placeholder="空间名称"
+              placeholder={t('spaceCreator.namePlaceholder')}
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={spaceName}
               onChangeText={onChangeSpaceName}
             />
-            <Text style={styles.selectionLabel}>空间类型</Text>
+            <Text style={styles.selectionLabel}>{t('spaceCreator.typeLabel')}</Text>
             <View style={styles.scopeRow}>
               {templateOptions.map((template) => (
                 <Pressable
@@ -80,13 +82,13 @@ export function SpaceCreatorModal({
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.selectionCopy}>推荐场景：{selectedTemplateLabel}</Text>
-            <Text style={styles.selectionLabel}>成员</Text>
+            <Text style={styles.selectionCopy}>{t('spaceCreator.scenarioPrefix', { label: selectedTemplateLabel })}</Text>
+            <Text style={styles.selectionLabel}>{t('spaceCreator.membersLabel')}</Text>
             <Text style={styles.selectionCopy}>
-              可以现在就添加成员，也可以先留空，稍后再邀请。
+              {t('spaceCreator.membersCopy')}
             </Text>
             {memberOptions.length === 0 ? (
-              <Text style={styles.cardCopy}>当前还没有其他成员加入这个家庭。</Text>
+              <Text style={styles.cardCopy}>{t('spaceCreator.noMembers')}</Text>
             ) : (
               <View style={styles.scopeRow}>
                 {memberOptions.map((member) => {
@@ -111,10 +113,10 @@ export function SpaceCreatorModal({
           <View style={styles.spaceCreatorFooter}>
             <View style={styles.inlineActions}>
               <Pressable style={styles.secondaryButtonSmall} onPress={onRequestClose} disabled={busy}>
-                <Text style={styles.secondaryButtonText}>取消</Text>
+                <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable style={styles.primaryButtonSmall} onPress={onSubmit} disabled={busy}>
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>创建空间</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('spaceCreator.submit')}</Text>}
               </Pressable>
             </View>
           </View>

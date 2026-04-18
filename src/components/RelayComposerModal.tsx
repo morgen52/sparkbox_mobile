@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 
 type RelayTarget = {
   id: string;
@@ -33,6 +34,7 @@ export function RelayComposerModal({
   onChangeRelayMessage,
   onSubmit,
 }: RelayComposerModalProps) {
+  const t = useT();
   return (
     <Modal
       animationType="slide"
@@ -43,12 +45,12 @@ export function RelayComposerModal({
     >
       <View style={styles.networkSheetBackdrop}>
         <View style={styles.networkSheetCard}>
-          <Text style={styles.selectionLabel}>转达消息</Text>
-          <Text style={styles.selectionTitle}>让 Sparkbox 私下转达</Text>
+          <Text style={styles.selectionLabel}>{t('relay.label')}</Text>
+          <Text style={styles.selectionTitle}>{t('relay.title')}</Text>
           <Text style={styles.selectionCopy}>
-            选择本共享空间中的一位成员，再填写要由 Sparkbox 私下转达的内容。
+            {t('relay.copy')}
           </Text>
-          <Text style={styles.selectionLabel}>发送给</Text>
+          <Text style={styles.selectionLabel}>{t('relay.sendToLabel')}</Text>
           <View style={styles.scopeRow}>
             {relayTargets.map((member) => {
               const active = relayTargetUserId === member.id;
@@ -70,7 +72,7 @@ export function RelayComposerModal({
             autoCorrect={false}
             multiline
             numberOfLines={4}
-            placeholder="输入要由 Sparkbox 转达的内容"
+            placeholder={t('relay.placeholder')}
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             value={relayMessage}
@@ -83,14 +85,14 @@ export function RelayComposerModal({
               onPress={onRequestClose}
               disabled={relayBusy}
             >
-              <Text style={styles.secondaryButtonText}>取消</Text>
+              <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable
               style={[styles.primaryButtonSmall, relayTargets.length === 0 ? styles.networkRowDisabled : null]}
               onPress={onSubmit}
               disabled={relayBusy || relayTargets.length === 0}
             >
-              {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>转达</Text>}
+              {relayBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('relay.submit')}</Text>}
             </Pressable>
           </View>
         </View>

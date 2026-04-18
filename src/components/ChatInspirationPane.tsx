@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useT } from '../i18n';
 
 type EnabledApp = {
   slug: string;
@@ -57,23 +58,24 @@ export function ChatInspirationPane({
   onInstallFamilyApp,
   onOpenAllFamilyApps,
 }: ChatInspirationPaneProps) {
+  const t = useT();
   return (
     <View style={embedded ? styles.chatTreeEmbeddedPanel : styles.card}>
-      <Text style={styles.cardTitle}>{activeSpaceName} 的灵感建议</Text>
+      <Text style={styles.cardTitle}>{t('inspiration.title', { name: activeSpaceName })}</Text>
       <Text style={styles.cardCopy}>
-        家庭应用能让 Sparkbox 更贴近日常场景。先在设备上安装，再按需在合适空间中启用。
+        {t('inspiration.copy')}
       </Text>
       {enabledApps.length > 0 ? (
         <>
-          <Text style={styles.selectionLabel}>已在这里协助</Text>
+          <Text style={styles.selectionLabel}>{t('inspiration.enabledLabel')}</Text>
           {enabledApps.map((app) => (
             <View key={`chat-enabled-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
                 <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                <Text style={styles.statusTagOnline}>已就绪</Text>
+                <Text style={styles.statusTagOnline}>{t('inspiration.ready')}</Text>
               </View>
               <Text style={styles.cardCopy}>
-                {app.meta?.entryCopy || app.meta?.description || 'Sparkbox 已在此空间启用这个家庭应用。'}
+                {app.meta?.entryCopy || app.meta?.description || t('inspiration.enabledFallback')}
               </Text>
               {app.meta?.starterPrompts?.length ? (
                 <View style={styles.scopeRow}>
@@ -94,12 +96,12 @@ export function ChatInspirationPane({
       ) : null}
       {canManage && readyInstalledApps.length > 0 ? (
         <>
-          <Text style={styles.selectionLabel}>可在这里启用</Text>
+          <Text style={styles.selectionLabel}>{t('inspiration.canEnableLabel')}</Text>
           {readyInstalledApps.map((app) => (
             <View key={`chat-ready-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
                 <Text style={styles.networkName}>{app.entryTitle || app.title}</Text>
-                <Text style={styles.tagMuted}>已安装到此设备</Text>
+                <Text style={styles.tagMuted}>{t('inspiration.installedTag')}</Text>
               </View>
               <Text style={styles.cardCopy}>{app.entryCopy || app.description}</Text>
               <View style={styles.inlineActions}>
@@ -108,7 +110,7 @@ export function ChatInspirationPane({
                   onPress={() => onEnableFamilyApp(app.slug)}
                   disabled={settingsBusy}
                 >
-                  <Text style={styles.primaryButtonText}>在此空间启用</Text>
+                  <Text style={styles.primaryButtonText}>{t('inspiration.enableHere')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -117,12 +119,12 @@ export function ChatInspirationPane({
       ) : null}
       {canManage && readyCatalogApps.length > 0 ? (
         <>
-          <Text style={styles.selectionLabel}>推荐下一步添加</Text>
+          <Text style={styles.selectionLabel}>{t('inspiration.recommendLabel')}</Text>
           {readyCatalogApps.map((app) => (
             <View key={`chat-catalog-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
                 <Text style={styles.networkName}>{app.title}</Text>
-                <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || '空间'}</Text>
+                <Text style={styles.tagMuted}>{activeSpaceTemplateLabel || t('inspiration.spaceFallback')}</Text>
               </View>
               {app.description ? <Text style={styles.cardCopy}>{app.description}</Text> : null}
               <View style={styles.inlineActions}>
@@ -131,7 +133,7 @@ export function ChatInspirationPane({
                   onPress={() => onInstallFamilyApp(app.slug)}
                   disabled={settingsBusy}
                 >
-                  <Text style={styles.primaryButtonText}>安装到此设备</Text>
+                  <Text style={styles.primaryButtonText}>{t('inspiration.installToDevice')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -140,7 +142,7 @@ export function ChatInspirationPane({
       ) : null}
       <View style={styles.inlineActions}>
         <Pressable style={styles.secondaryButtonSmall} onPress={onOpenAllFamilyApps}>
-          <Text style={styles.secondaryButtonText}>查看全部家庭应用</Text>
+          <Text style={styles.secondaryButtonText}>{t('inspiration.viewAll')}</Text>
         </Pressable>
       </View>
     </View>

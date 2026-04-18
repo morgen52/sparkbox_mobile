@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import {
   describeChatEditorPrimaryActionLabel,
   describeChatEditorTitle,
@@ -35,6 +36,7 @@ export function ChatSessionEditorModal({
   onChangeName,
   onSubmit,
 }: ChatSessionEditorModalProps) {
+  const t = useT();
   return (
     <Modal
       animationType="slide"
@@ -47,17 +49,17 @@ export function ChatSessionEditorModal({
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.spaceCreatorSheetContent}>
             <Text style={styles.selectionLabel}>
               {editingChatSession
-                ? `编辑${describeChatEditorVerb(activeSpaceDetail, chatScope)}`
-                : describeChatSessionPrimaryActionLabel(activeSpaceDetail, chatScope)}
+                ? `${t('chatEditor.editPrefix')}${describeChatEditorVerb(activeSpaceDetail, chatScope, t)}`
+                : describeChatSessionPrimaryActionLabel(activeSpaceDetail, chatScope, t)}
             </Text>
             <Text style={styles.selectionTitle}>
-              {describeChatEditorTitle(activeSpaceDetail, chatScope, editingChatSession)}
+              {describeChatEditorTitle(activeSpaceDetail, chatScope, editingChatSession, t)}
             </Text>
             <Text style={styles.selectionCopy}>
-              给这段会话起个清晰名字，方便大家理解 Sparkbox 在这里协助的主题。
+              {t('chatEditor.nameCopy')}
             </Text>
             <TextInput
-              placeholder={describeChatNamePlaceholder(activeSpaceDetail, chatScope)}
+              placeholder={describeChatNamePlaceholder(activeSpaceDetail, chatScope, t)}
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={chatSessionName}
@@ -73,7 +75,7 @@ export function ChatSessionEditorModal({
                 onPress={onRequestClose}
                 disabled={chatBusy}
               >
-                <Text style={styles.secondaryButtonText}>取消</Text>
+                <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryButtonSmall}
@@ -84,7 +86,7 @@ export function ChatSessionEditorModal({
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    {describeChatEditorPrimaryActionLabel(activeSpaceDetail, chatScope, editingChatSession)}
+                    {describeChatEditorPrimaryActionLabel(activeSpaceDetail, chatScope, editingChatSession, t)}
                   </Text>
                 )}
               </Pressable>

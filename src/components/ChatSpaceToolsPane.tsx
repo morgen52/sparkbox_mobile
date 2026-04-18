@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useT } from '../i18n';
 
 type EnabledFamilyApp = {
   slug: string;
@@ -65,6 +66,7 @@ export function ChatSpaceToolsPane({
   onDisableFamilyApp,
   onEnableFamilyApp,
 }: ChatSpaceToolsPaneProps) {
+  const t = useT();
   return (
     <View style={embedded ? styles.chatTreeEmbeddedPanel : styles.card}>
       {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
@@ -73,7 +75,7 @@ export function ChatSpaceToolsPane({
       {showRelayHelper ? (
         <>
           <Text style={styles.cardCopy}>
-            如果你不方便直接表达，Sparkbox 可以帮你把内容私下转达给本空间的一位成员。
+            {t('spaceTools.relayCopy')}
           </Text>
           <View style={styles.inlineActions}>
             <Pressable
@@ -81,7 +83,7 @@ export function ChatSpaceToolsPane({
               onPress={onOpenRelay}
               disabled={!canOpenRelay}
             >
-              <Text style={styles.primaryButtonText}>让 Sparkbox 私下转达</Text>
+              <Text style={styles.primaryButtonText}>{t('spaceTools.relayButton')}</Text>
             </Pressable>
           </View>
         </>
@@ -90,29 +92,29 @@ export function ChatSpaceToolsPane({
         <View style={styles.deviceRowCard}>
           <View style={styles.deviceRowHeadline}>
             <Text style={styles.networkName}>{privateSideChannelLabel}</Text>
-            <Text style={styles.tagMuted}>私密</Text>
+            <Text style={styles.tagMuted}>{t('spaceTools.privateTag')}</Text>
           </View>
           <Text style={styles.cardCopy}>
-            当你想先理清思路、再发回共享空间时，可以先在这个私密聊天里和 Sparkbox 沟通。
+            {t('spaceTools.privateCopy')}
           </Text>
           <View style={styles.inlineActions}>
             <Pressable style={styles.primaryButtonSmall} onPress={onOpenPrivateSideChannel}>
-              <Text style={styles.primaryButtonText}>与 Sparkbox 私聊</Text>
+              <Text style={styles.primaryButtonText}>{t('spaceTools.privateChat')}</Text>
             </Pressable>
           </View>
         </View>
       ) : null}
       {enabledFamilyApps.length ? (
         <>
-          <Text style={styles.selectionLabel}>本空间已启用</Text>
+          <Text style={styles.selectionLabel}>{t('spaceTools.enabledLabel')}</Text>
           {enabledFamilyApps.map((app) => (
             <View key={app.slug} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
                 <Text style={styles.networkName}>{app.meta?.entryTitle || app.title}</Text>
-                <Text style={styles.statusTagOnline}>已就绪</Text>
+                <Text style={styles.statusTagOnline}>{t('spaceTools.appReady')}</Text>
               </View>
               <Text style={styles.cardCopy}>
-                {app.meta?.entryCopy || app.meta?.description || '这个家庭应用已在本空间就绪。'}
+                {app.meta?.entryCopy || app.meta?.description || t('spaceTools.enabledFallback')}
               </Text>
               {app.meta?.starterPrompts?.length ? (
                 <View style={styles.scopeRow}>
@@ -135,7 +137,7 @@ export function ChatSpaceToolsPane({
                     onPress={() => onDisableFamilyApp(app.slug)}
                     disabled={settingsBusy}
                   >
-                    <Text style={styles.secondaryButtonText}>在此停用</Text>
+                    <Text style={styles.secondaryButtonText}>{t('spaceTools.disableHere')}</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -145,7 +147,7 @@ export function ChatSpaceToolsPane({
       ) : null}
       {readyInstalledFamilyApps.length ? (
         <>
-          <Text style={styles.selectionLabel}>可在本空间启用</Text>
+          <Text style={styles.selectionLabel}>{t('spaceTools.canEnableLabel')}</Text>
           {readyInstalledFamilyApps.map((app) => (
             <View key={`ready-${app.slug}`} style={styles.deviceRowCard}>
               <View style={styles.deviceRowHeadline}>
@@ -159,7 +161,7 @@ export function ChatSpaceToolsPane({
                   onPress={() => onEnableFamilyApp(app.slug)}
                   disabled={settingsBusy}
                 >
-                  <Text style={styles.primaryButtonText}>在此空间启用</Text>
+                  <Text style={styles.primaryButtonText}>{t('spaceTools.enableHere')}</Text>
                 </Pressable>
               </View>
             </View>

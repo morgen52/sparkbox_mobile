@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, LayoutChangeEvent, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { AuthMode } from '../authFlow';
 
@@ -67,18 +68,19 @@ export function AuthSetupCard({
   onSubmit,
   renderInvitePreviewSummary,
 }: AuthSetupCardProps) {
+  const t = useT();
   const modeMeta: Record<AuthMode, { modeLabel: string; modeHint: string }> = {
     login: {
-      modeLabel: '登录',
-      modeHint: '已经有账号了？直接登录吧！',
+      modeLabel: t('setupAccount.login'),
+      modeHint: t('setupAccount.loginCopy'),
     },
     register: {
-      modeLabel: '注册',
-      modeHint: '家人没有账号吗？注册一个新账号，创建家庭并邀请家人加入吧！',
+      modeLabel: t('setupAccount.register'),
+      modeHint: t('setupAccount.registerCopy'),
     },
     join: {
-      modeLabel: '加入家庭',
-      modeHint: '有邀请码吗？使用邀请码加入家人创建的家庭吧！',
+      modeLabel: t('setupAccount.joinHousehold'),
+      modeHint: t('setupAccount.joinCopy'),
     },
   };
 
@@ -88,16 +90,16 @@ export function AuthSetupCard({
       <Text style={styles.cardCopy}>{authCardCopy}</Text>
 
       <View style={styles.claimPreview}>
-        <Text style={styles.claimPreviewLabel}>第一步</Text>
-        <Text style={styles.claimPreviewValue}>账号登录</Text>
+        <Text style={styles.claimPreviewLabel}>{t('setupAccount.step1')}</Text>
+        <Text style={styles.claimPreviewValue}>{t('setupAccount.accountLogin')}</Text>
         <Text style={styles.cardCopy}>{modeMeta[authMode].modeHint}</Text>
       </View>
 
       <View style={styles.authModeRow}>
         {([
-          { id: 'login', label: '登录' },
-          { id: 'register', label: '注册' },
-          { id: 'join', label: '加入家庭' },
+          { id: 'login', label: t('setupAccount.loginLabel') },
+          { id: 'register', label: t('setupAccount.registerLabel') },
+          { id: 'join', label: t('setupAccount.joinLabel') },
         ] as Array<{ id: AuthMode; label: string }>).map((modeOption) => {
           const active = authMode === modeOption.id;
           return (
@@ -114,12 +116,12 @@ export function AuthSetupCard({
         })}
       </View>
 
-      <Text style={styles.selectionLabel}>邮箱</Text>
+      <Text style={styles.selectionLabel}>{t('setupAccount.email')}</Text>
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="email-address"
-        placeholder="邮箱"
+        placeholder={t('setupAccount.emailPlaceholder')}
         placeholderTextColor="#7e8a83"
         style={styles.input}
         value={email}
@@ -127,9 +129,9 @@ export function AuthSetupCard({
       />
       {authMode === 'register' || authMode === 'join' ? (
         <>
-          <Text style={styles.selectionLabel}>昵称</Text>
+          <Text style={styles.selectionLabel}>{t('setupAccount.nickname')}</Text>
           <TextInput
-            placeholder="昵称"
+            placeholder={t('setupAccount.nicknamePlaceholder')}
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={displayName}
@@ -139,18 +141,18 @@ export function AuthSetupCard({
       ) : null}
       {authMode === 'join' ? (
         <>
-          <Text style={styles.selectionLabel}>邀请码</Text>
+          <Text style={styles.selectionLabel}>{t('setupAccount.inviteCode')}</Text>
           <TextInput
             autoCapitalize="characters"
             autoCorrect={false}
-            placeholder="邀请码"
+            placeholder={t('setupAccount.inviteCodePlaceholder')}
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={inviteCode}
             onChangeText={onChangeInviteCode}
           />
           {invitePreviewBusy ? (
-            <Text style={styles.cardCopy}>正在校验邀请码...</Text>
+            <Text style={styles.cardCopy}>{t('setupAccount.validatingCode')}</Text>
           ) : invitePreview ? (
             <Text style={styles.cardCopy}>
               {renderInvitePreviewSummary(invitePreview.householdName, invitePreview.spaceName)}
@@ -160,12 +162,12 @@ export function AuthSetupCard({
           ) : null}
         </>
       ) : null}
-      <Text style={styles.selectionLabel}>密码</Text>
+      <Text style={styles.selectionLabel}>{t('setupAccount.password')}</Text>
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         secureTextEntry
-        placeholder="密码"
+        placeholder={t('setupAccount.passwordPlaceholder')}
         placeholderTextColor="#7e8a83"
         style={styles.input}
         value={password}
@@ -176,7 +178,7 @@ export function AuthSetupCard({
         {authBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{authSubmitLabel}</Text>}
       </Pressable>
       <Text style={styles.cardCopy}>
-        Tips：家人有账号吗？有的话直接使用邀请码加入吧！
+        {t('setupAccount.tip')}
       </Text>
     </View>
   );
@@ -190,19 +192,20 @@ export function SignedInSetupCard({
   onLogout,
   onResetFlow,
 }: SignedInSetupCardProps) {
+  const t = useT();
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>你已登录</Text>
+      <Text style={styles.cardTitle}>{t('setupAccount.loggedIn')}</Text>
       <Text style={styles.cardCopy}>
         {displayName} · {householdName}
       </Text>
       <View style={styles.inlineActions}>
         <Pressable style={styles.primaryButtonSmall} onPress={onLogout}>
-          <Text style={styles.primaryButtonText}>退出登录</Text>
+          <Text style={styles.primaryButtonText}>{t('setupAccount.logout')}</Text>
         </Pressable>
         {!canReturnToShell ? (
           <Pressable style={styles.secondaryButtonSmall} onPress={onResetFlow}>
-            <Text style={styles.secondaryButtonText}>重新开始</Text>
+            <Text style={styles.secondaryButtonText}>{t('setupAccount.restart')}</Text>
           </Pressable>
         ) : null}
       </View>

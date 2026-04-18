@@ -2211,6 +2211,84 @@ export async function importExternalStorageItems(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Link import (shared link → raw)
+// ---------------------------------------------------------------------------
+
+export type LinkPreview = {
+  platform: string;
+  sourceUrl: string;
+  title: string;
+  author: string;
+  contentMarkdown: string;
+  contentText: string;
+  images: string[];
+  error: string | null;
+};
+
+export type LinkImportResult = {
+  ok: boolean;
+  filename: string;
+  fileId: string;
+  owners: string[];
+  sourceUrl: string;
+  sourcePlatform: string;
+};
+
+export async function fetchLinkPreview(
+  token: string,
+  url: string,
+): Promise<LinkPreview> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/link-preview', {
+    method: 'POST',
+    token,
+    body: { url },
+  });
+  return {
+    platform: String(response.platform ?? ''),
+    sourceUrl: String(response.source_url ?? ''),
+    title: String(response.title ?? ''),
+    author: String(response.author ?? ''),
+    contentMarkdown: String(response.content_markdown ?? ''),
+    contentText: String(response.content_text ?? ''),
+    images: Array.isArray(response.images) ? response.images.map(String) : [],
+    error: response.error ? String(response.error) : null,
+  };
+}
+
+export async function importFromLink(
+  token: string,
+  input: {
+    url: string;
+    title: string;
+    contentMarkdown: string;
+    sourcePlatform: string;
+    spaceId?: string | null;
+    owners?: string[];
+  },
+): Promise<LinkImportResult> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/link-import', {
+    method: 'POST',
+    token,
+    body: {
+      url: input.url,
+      title: input.title,
+      content_markdown: input.contentMarkdown,
+      source_platform: input.sourcePlatform,
+      space_id: input.spaceId || undefined,
+      owners: input.owners || undefined,
+    },
+  });
+  return {
+    ok: Boolean(response.ok),
+    filename: String(response.filename ?? ''),
+    fileId: String(response.file_id ?? ''),
+    owners: Array.isArray(response.owners) ? response.owners.map(String) : [],
+    sourceUrl: String(response.source_url ?? ''),
+    sourcePlatform: String(response.source_platform ?? ''),
+  };
+}
+
 export async function getRawWorkspace(token: string): Promise<RawWorkspaceInfo> {
   const response = await cloudJson<Record<string, unknown>>('/api/raw/workspace', { token });
   return {

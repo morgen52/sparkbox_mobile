@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, type LayoutChangeEvent, Modal, ScrollView, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -120,6 +121,7 @@ export function ChatDetailPane({
   onConfirmSaveDoc,
   onSend,
 }: ChatDetailPaneProps) {
+  const t = useT();
   const { height: windowHeight } = useWindowDimensions();
   const timelineMaxHeight = Math.max(240, Math.min(560, Math.floor(windowHeight * 0.52)));
   const [markdownEnabled, setMarkdownEnabled] = React.useState(true);
@@ -139,7 +141,7 @@ export function ChatDetailPane({
               onPress={onBack}
               disabled={!hasActiveChatSession}
             >
-              <Text style={styles.secondaryButtonText}>返回聊天列表</Text>
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.backToList')}</Text>
             </Pressable>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Pressable onPress={() => setDebugBlocks((d) => !d)}>
@@ -157,7 +159,7 @@ export function ChatDetailPane({
             </View>
             {hasActiveChatSession ? (
               <Text style={onlineDeviceAvailable ? styles.statusTagOnline : styles.statusTagOffline}>
-                {onlineDeviceAvailable ? '设备在线' : '设备离线'}
+                {onlineDeviceAvailable ? t('chatDetail.deviceOnline') : t('chatDetail.deviceOffline')}
               </Text>
             ) : null}
           </View>
@@ -173,7 +175,7 @@ export function ChatDetailPane({
         {showParticipantPills ? (
           <View style={styles.scopeRow}>
             {participantLabels.map((label) => {
-              const isCurrentUser = label === '你';
+              const isCurrentUser = label === t('chatDetail.you');
               return (
                 <View
                   key={`shared-chat-member-${label}`}
@@ -202,7 +204,7 @@ export function ChatDetailPane({
                   onlineDeviceAvailable ? styles.groupParticipantLabelOnline : styles.groupParticipantLabelOffline,
                 ]}
               >
-                {onlineDeviceAvailable ? 'Sparkbox' : '设备离线'}
+                {onlineDeviceAvailable ? 'Sparkbox' : t('chatDetail.deviceOffline')}
               </Text>
             </View>
           </View>
@@ -210,27 +212,27 @@ export function ChatDetailPane({
         {showManageActions ? (
           <View style={styles.inlineActions}>
             <Pressable style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]} onPress={onEdit}>
-              <Text style={styles.secondaryButtonText}>编辑设置</Text>
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.editSettings')}</Text>
             </Pressable>
             <Pressable style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]} onPress={onClear} disabled={chatBusy}>
-              <Text style={styles.secondaryButtonText}>清空消息</Text>
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.clearMessages')}</Text>
             </Pressable>
             <Pressable
               style={[styles.secondaryButtonSmall, styles.chatDetailGhostButton]}
               onPress={() =>
-                Alert.alert('删除这个聊天？', '聊天历史将被清空且不可恢复。', [
-                  { text: '取消', style: 'cancel' },
-                  { text: '删除', style: 'destructive', onPress: onDelete },
+                Alert.alert(t('chatDetail.deleteConfirmTitle'), t('chatDetail.deleteConfirmCopy'), [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('chatDetail.delete'), style: 'destructive', onPress: onDelete },
                 ])
               }
               disabled={chatBusy}
             >
-              <Text style={styles.secondaryButtonText}>删除聊天</Text>
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.deleteChat')}</Text>
             </Pressable>
           </View>
         ) : null}
         {!hasMessages ? (
-          <Text style={styles.cardCopy}>当前聊天还没有消息。</Text>
+          <Text style={styles.cardCopy}>{t('chatDetail.emptyState')}</Text>
         ) : (
           <ScrollView
             style={[styles.chatTimelineViewport, { maxHeight: timelineMaxHeight }]}
@@ -273,7 +275,7 @@ export function ChatDetailPane({
                       onPress={() => onRetry(group.message.retryContent ?? undefined)}
                       disabled={chatBusy}
                     >
-                      <Text style={styles.secondaryButtonText}>重试</Text>
+                      <Text style={styles.secondaryButtonText}>{t('chatDetail.retry')}</Text>
                     </Pressable>
                   </View>
                 ) : null}
@@ -381,21 +383,21 @@ export function ChatDetailPane({
             onPress={onOpenAttachmentPicker}
             disabled={!hasActiveChatSession || chatBusy}
           >
-            <Text style={styles.secondaryButtonText}>＋ 文件</Text>
+            <Text style={styles.secondaryButtonText}>{t('chatDetail.attachFile')}</Text>
           </Pressable>
           <Pressable
             style={[styles.secondaryButtonSmall, !hasMessages ? styles.networkRowDisabled : null]}
             onPress={onOpenSaveDocModal}
             disabled={!hasMessages || chatBusy}
           >
-            <Text style={styles.secondaryButtonText}>保存为文档</Text>
+            <Text style={styles.secondaryButtonText}>{t('chatDetail.saveAsDoc')}</Text>
           </Pressable>
           <Pressable
             style={[styles.primaryButtonSmall, !canSend ? styles.networkRowDisabled : null]}
             onPress={onSend}
             disabled={!canSend}
           >
-            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>发送</Text>}
+            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('chatDetail.send')}</Text>}
           </Pressable>
         </View>
       </View>
@@ -403,8 +405,8 @@ export function ChatDetailPane({
       <Modal visible={attachmentPickerOpen} transparent animationType="slide" onRequestClose={onCloseAttachmentPicker}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>选择原始文件</Text>
-            <Text style={styles.cardCopy}>当前路径：raw/{attachmentPickerPath || ''}</Text>
+            <Text style={styles.modalTitle}>{t('chatDetail.selectRawFile')}</Text>
+            <Text style={styles.cardCopy}>{t('chatDetail.currentPath')}raw/{attachmentPickerPath || ''}</Text>
             {attachmentPickerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
             {attachmentPickerError ? <Text style={styles.errorText}>{attachmentPickerError}</Text> : null}
             <ScrollView style={styles.chatAttachmentPickerList}>
@@ -429,10 +431,10 @@ export function ChatDetailPane({
             </ScrollView>
             <View style={styles.inlineActions}>
               <Pressable style={styles.secondaryButtonSmall} onPress={() => onAttachmentPickerOpenPath('')}>
-                <Text style={styles.secondaryButtonText}>回到根目录</Text>
+                <Text style={styles.secondaryButtonText}>{t('chatDetail.backToRoot')}</Text>
               </Pressable>
               <Pressable style={styles.primaryButtonSmall} onPress={onCloseAttachmentPicker}>
-                <Text style={styles.primaryButtonText}>完成</Text>
+                <Text style={styles.primaryButtonText}>{t('chatDetail.done')}</Text>
               </Pressable>
             </View>
           </View>
@@ -442,9 +444,9 @@ export function ChatDetailPane({
       <Modal visible={saveDocModalOpen} transparent animationType="slide" onRequestClose={onCloseSaveDocModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>保存聊天为文档</Text>
+            <Text style={styles.modalTitle}>{t('chatDetail.saveChatAsDoc')}</Text>
             <TextInput
-              placeholder="文档标题"
+              placeholder={t('chatDetail.docTitle')}
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={saveDocTitle}
@@ -466,10 +468,10 @@ export function ChatDetailPane({
             </ScrollView>
             <View style={styles.inlineActions}>
               <Pressable style={styles.secondaryButtonSmall} onPress={onCloseSaveDocModal}>
-                <Text style={styles.secondaryButtonText}>取消</Text>
+                <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable style={styles.primaryButtonSmall} onPress={onConfirmSaveDoc}>
-                <Text style={styles.primaryButtonText}>保存到 raw</Text>
+                <Text style={styles.primaryButtonText}>{t('chatDetail.saveToRaw')}</Text>
               </Pressable>
             </View>
           </View>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Linking, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { Session } from '../authFlow';
 import { AuthSetupCard, SignedInSetupCard } from './SetupAccountCard';
@@ -172,11 +173,13 @@ export function SetupFlowPane({
   // SetupFlowPane owns only the onboarding presentation. The underlying
   // hotspot/pairing state machine still lives in App so reprovision and
   // first-run claim can share one source of truth.
+  const t = useT();
+
   if (!session) {
     return (
       <>
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>开始使用 Sparkbox</Text>
+          <Text style={styles.eyebrow}>{t('setup.getStarted')}</Text>
           <Text style={styles.authLogo}>SparkBox</Text>
         </View>
         <AuthSetupCard
@@ -210,19 +213,19 @@ export function SetupFlowPane({
   return (
     <>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>设备引导</Text>
-        <Text style={styles.title}>绑定设备，完成联网</Text>
+        <Text style={styles.eyebrow}>{t('setup.deviceGuide')}</Text>
+        <Text style={styles.title}>{t('setup.bindAndConnect')}</Text>
         <Text style={styles.subtitle}>
           {claimStepVisible
-            ? `先扫描设备标签，将 Sparkbox 绑定到 ${householdName}，再引导它连接家中 Wi-Fi。`
-            : '该设备已在你的家庭中，接下来只需重新配置 Wi-Fi。'}
+            ? t('setup.claimSubtitle', { householdName })
+            : t('setup.reprovisionSubtitle')}
         </Text>
       </View>
 
       {canReturnToShell ? (
         <View style={styles.inlineActions}>
           <Pressable style={styles.secondaryButtonSmall} onPress={returnToShell}>
-            <Text style={styles.secondaryButtonText}>返回家庭首页</Text>
+            <Text style={styles.secondaryButtonText}>{t('setup.returnHome')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -262,25 +265,25 @@ export function SetupFlowPane({
 
       {session && claimStepVisible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(1, event)}>
-          <Text style={styles.cardTitle}>1. 扫描设备标签</Text>
+          <Text style={styles.cardTitle}>{t('setup.step1ScanLabel')}</Text>
           {step1Collapsed ? (
             <View style={styles.stepSummary}>
               <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(claimPayload?.deviceId)}</Text>
               <Text style={styles.stepSummaryCopy}>
-                已为 {householdName} 预留，接下来可继续引导设备连接家中 Wi-Fi。
+                {t('setup.claimReserved', { householdName })}
               </Text>
             </View>
           ) : (
             <>
               <Text style={styles.cardCopy}>
-                该步骤会先将设备预绑定到你的家庭，然后再进行配网。
+                {t('setup.claimExplain')}
               </Text>
               <TextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 multiline
                 numberOfLines={4}
-                placeholder="请粘贴设备配置码或扫码获取"
+                placeholder={t('setup.claimInputPlaceholder')}
                 placeholderTextColor="#7e8a83"
                 style={[styles.input, styles.textArea]}
                 value={claimInput}
@@ -288,23 +291,23 @@ export function SetupFlowPane({
               />
               {claimPayload ? (
                 <View style={styles.claimPreview}>
-                  <Text style={styles.claimPreviewLabel}>识别到设备</Text>
+                  <Text style={styles.claimPreviewLabel}>{t('setup.deviceRecognized')}</Text>
                   <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(claimPayload.deviceId)}</Text>
-                  <Text style={styles.cardCopy}>配置码有效，下一步进入 Wi-Fi 配置。</Text>
+                  <Text style={styles.cardCopy}>{t('setup.claimCodeValid')}</Text>
                 </View>
               ) : null}
               {claimError ? <Text style={styles.errorText}>{claimError}</Text> : null}
               <View style={styles.inlineActions}>
                 <Pressable style={styles.primaryButtonSmall} onPress={onOpenScanner}>
-                  <Text style={styles.primaryButtonText}>扫码</Text>
+                  <Text style={styles.primaryButtonText}>{t('setup.scan')}</Text>
                 </Pressable>
                 {claimError === cameraPermissionRecoveryMessage ? (
                   <Pressable style={styles.secondaryButtonSmall} onPress={() => void Linking.openSettings()}>
-                    <Text style={styles.secondaryButtonText}>打开应用设置</Text>
+                    <Text style={styles.secondaryButtonText}>{t('setup.openAppSettings')}</Text>
                   </Pressable>
                 ) : null}
                 <Pressable style={styles.primaryButtonSmall} onPress={onStartClaim} disabled={claimBusy}>
-                  {claimBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>绑定设备</Text>}
+                  {claimBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('setup.bindDevice')}</Text>}
                 </Pressable>
               </View>
             </>
@@ -314,21 +317,21 @@ export function SetupFlowPane({
 
       {session && !claimStepVisible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(1, event)}>
-          <Text style={styles.cardTitle}>1. 准备设备</Text>
+          <Text style={styles.cardTitle}>{t('setup.step1Prepare')}</Text>
           {step1Collapsed ? (
             <View style={styles.stepSummary}>
               <Text style={styles.stepSummaryTitle}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
               <Text style={styles.stepSummaryCopy}>
-                该设备已在你的家庭中，只需让它进入可重新配网状态。
+                {t('setup.reprovisionReady')}
               </Text>
             </View>
           ) : (
             <>
               <Text style={styles.cardCopy}>
-                无需再次扫码。如果设备换了位置，请先通电并等待出现 {hotspotSsid}；若仍在旧网络，请在热点出现后继续本步骤。
+                {t('setup.reprovisionExplain', { hotspotSsid })}
               </Text>
               <View style={styles.claimPreview}>
-                <Text style={styles.claimPreviewLabel}>设备</Text>
+                <Text style={styles.claimPreviewLabel}>{t('setup.deviceLabel')}</Text>
                 <Text style={styles.claimPreviewValue}>{describeSetupDeviceLabel(setupDeviceId)}</Text>
               </View>
               {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
@@ -339,18 +342,18 @@ export function SetupFlowPane({
 
       {step2Visible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(2, event)}>
-          <Text style={styles.cardTitle}>2. 连接设备热点</Text>
+          <Text style={styles.cardTitle}>{t('setup.step2Hotspot')}</Text>
           {step2Collapsed ? (
             <View style={styles.stepSummary}>
               <Text style={styles.stepSummaryTitle}>{hotspotSsid}</Text>
               <Text style={styles.stepSummaryCopy}>
-                手机已连上设备热点，下一步配置家中 Wi-Fi。
+                {t('setup.hotspotConnectedCopy')}
               </Text>
             </View>
           ) : (
             <>
               <Text style={styles.cardCopy}>
-                设备已开启临时配置网络，应用会尝试协助你切换到该网络。
+                {t('setup.hotspotExplain')}
               </Text>
               {hotspotStage === 'joining_setup' || provisionBusy ? (
                 <View style={styles.row}>
@@ -365,7 +368,7 @@ export function SetupFlowPane({
                   onPress={onBeginHotspotOnboarding}
                   disabled={!setupDeviceId}
                 >
-                  <Text style={styles.primaryButtonText}>连接到 {hotspotSsid}</Text>
+                  <Text style={styles.primaryButtonText}>{t('setup.connectToHotspot', { hotspotSsid })}</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -380,7 +383,7 @@ export function SetupFlowPane({
                       : styles.primaryButtonText
                   }
                 >
-                  打开 Wi-Fi 设置
+                  {t('setup.openWifiSettings')}
                 </Text>
               </Pressable>
             </>
@@ -390,22 +393,22 @@ export function SetupFlowPane({
 
       {step3Visible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(3, event)}>
-          <Text style={styles.cardTitle}>3. 选择家中 Wi-Fi</Text>
+          <Text style={styles.cardTitle}>{t('setup.step3Wifi')}</Text>
           {step3Collapsed ? (
             <View style={styles.stepSummary}>
               <Text style={styles.stepSummaryTitle}>
-                {homeWifiTarget?.ssid || selectedSsid || previousInternetSsid || '已选择家中 Wi-Fi'}
+                {homeWifiTarget?.ssid || selectedSsid || previousInternetSsid || t('setup.wifiSelected')}
               </Text>
               <Text style={styles.stepSummaryCopy}>
-                设备正使用该网络完成退出配置与激活。
+                {t('setup.wifiActivating')}
               </Text>
             </View>
           ) : (
             <>
               <Text style={styles.cardCopy}>
                 {hotspotStage === 'local_setup'
-                  ? `手机已连接 ${hotspotSsid}，请选择设备要连接的家中 Wi-Fi。`
-                  : '设备已收到你的 Wi-Fi 选择，正在完成配置。'}
+                  ? t('setup.localSetupPrompt', { hotspotSsid })
+                  : t('setup.wifiConfiguring')}
               </Text>
               {hotspotStage === 'failed' && bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
               {hotspotStage === 'local_setup' ? (
@@ -416,14 +419,14 @@ export function SetupFlowPane({
                       onPress={onRefreshNetworks}
                       disabled={networksBusy || provisionBusy}
                     >
-                      {networksBusy ? <ActivityIndicator color="#17352a" /> : <Text style={styles.secondaryButtonText}>刷新附近 Wi-Fi</Text>}
+                      {networksBusy ? <ActivityIndicator color="#17352a" /> : <Text style={styles.secondaryButtonText}>{t('setup.refreshWifi')}</Text>}
                     </Pressable>
                     <Pressable
                       style={styles.secondaryButtonSmall}
                       onPress={onOpenManualEntry}
                       disabled={provisionBusy}
                     >
-                      <Text style={styles.secondaryButtonText}>手动输入</Text>
+                      <Text style={styles.secondaryButtonText}>{t('setup.manualEntry')}</Text>
                     </Pressable>
                   </View>
                   {networks.map((network) => {
@@ -443,17 +446,17 @@ export function SetupFlowPane({
                         <View style={styles.networkLeft}>
                           <Text style={styles.networkName}>{network.ssid}</Text>
                           <Text style={styles.networkMeta}>
-                            {network.requires_password ? String(network.security || 'secured').toUpperCase() : '开放网络'} · {Math.round(Number(network.signal_percent || 0))}%
+                            {network.requires_password ? String(network.security || 'secured').toUpperCase() : t('setup.openNetwork')} · {Math.round(Number(network.signal_percent || 0))}%
                           </Text>
                           {network.support_reason ? <Text style={styles.networkWarning}>{network.support_reason}</Text> : null}
                         </View>
                         <View style={styles.networkTags}>
-                          {network.known ? <Text style={styles.tag}>已保存</Text> : null}
-                          {network.support_level === 'warning' ? <Text style={styles.tagWarning}>可能需要网页登录</Text> : null}
-                          {unsupported ? <Text style={styles.tagMuted}>暂不支持</Text> : null}
+                          {network.known ? <Text style={styles.tag}>{t('setup.saved')}</Text> : null}
+                          {network.support_level === 'warning' ? <Text style={styles.tagWarning}>{t('setup.mayNeedPortal')}</Text> : null}
+                          {unsupported ? <Text style={styles.tagMuted}>{t('setup.unsupported')}</Text> : null}
                           {!unsupported ? (
                             <View style={[styles.rowAction, selected ? null : styles.rowActionDisabled]}>
-                              <Text style={[styles.linkText, !selected ? styles.linkTextDisabled : null]}>{selected ? '已选择' : '选择'}</Text>
+                              <Text style={[styles.linkText, !selected ? styles.linkTextDisabled : null]}>{selected ? t('setup.selected') : t('setup.select')}</Text>
                             </View>
                           ) : null}
                         </View>
@@ -469,10 +472,10 @@ export function SetupFlowPane({
 
       {step4Visible ? (
         <View style={styles.card} onLayout={(event) => onCaptureStepOffset(4, event)}>
-          <Text style={styles.cardTitle}>4. 激活设备</Text>
+          <Text style={styles.cardTitle}>{t('setup.step4Activate')}</Text>
           <Text style={styles.cardCopy}>{provisionMessage}</Text>
           {setupPageState?.status ? (
-            <Text style={styles.statusText}>当前进度：{describeActivationStatus(setupPageState.status)}</Text>
+            <Text style={styles.statusText}>{t('setup.currentProgress')}{describeActivationStatus(setupPageState.status)}</Text>
           ) : null}
           {provisionBusy && !portalUrl ? <ActivityIndicator color="#0b6e4f" /> : null}
           {portalUrl ? (
@@ -481,26 +484,26 @@ export function SetupFlowPane({
                 style={styles.primaryButton}
                 onPress={() => void Linking.openURL(portalUrl)}
               >
-                <Text style={styles.primaryButtonText}>打开登录页面</Text>
+                <Text style={styles.primaryButtonText}>{t('setup.openLoginPage')}</Text>
               </Pressable>
               <Pressable
                 style={styles.secondaryButton}
                 onPress={onStartCloudVerification}
               >
-                <Text style={styles.secondaryButtonText}>登录后重新检查</Text>
+                <Text style={styles.secondaryButtonText}>{t('setup.recheckAfterLogin')}</Text>
               </Pressable>
             </View>
           ) : null}
           {completedDeviceId ? (
             <View style={styles.successBox}>
-              <Text style={styles.successTitle}>设备已准备就绪</Text>
+              <Text style={styles.successTitle}>{t('setup.deviceReady')}</Text>
               <Text style={styles.successCopy}>
-                {describeSetupDeviceLabel(completedDeviceId)} 已在 {householdName} 上线。现在可以返回家庭首页正常使用。
+                {t('setup.deviceOnline', { deviceLabel: describeSetupDeviceLabel(completedDeviceId), householdName })}
               </Text>
               {canReturnToShell ? (
                 <View style={styles.inlineActions}>
                   <Pressable style={styles.primaryButtonSmall} onPress={returnToShell}>
-                    <Text style={styles.primaryButtonText}>返回家庭首页</Text>
+                    <Text style={styles.primaryButtonText}>{t('setup.returnHome')}</Text>
                   </Pressable>
                 </View>
               ) : null}

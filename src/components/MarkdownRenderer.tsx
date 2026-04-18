@@ -1,5 +1,6 @@
 import React from 'react';
 import { Linking, ScrollView, Text, View } from 'react-native';
+import { useT } from '../i18n';
 
 type InlineToken =
   | { type: 'text'; text: string }
@@ -410,6 +411,7 @@ function parseMarkdown(input: string): Block[] {
 }
 
 export function MarkdownRenderer({ markdown, styles, tone = 'default', debug = false }: MarkdownRendererProps) {
+  const t = useT();
   const blocks = React.useMemo(() => parseMarkdown(markdown), [markdown]);
   const baseColor = tone === 'chatUser' ? '#ffffff' : '#1f2d2a';
   const mutedColor = tone === 'chatUser' ? 'rgba(255,255,255,0.7)' : '#7c8f86';
@@ -465,7 +467,7 @@ export function MarkdownRenderer({ markdown, styles, tone = 'default', debug = f
       if (token.type === 'image') {
         return (
           <Text key={i} style={{ color: mutedColor, fontStyle: 'italic' }}>
-            {'[图片: '}{token.alt || token.src}{']'}
+            {t('markdown.imagePlaceholder')}{token.alt || token.src}{']'}
           </Text>
         );
       }

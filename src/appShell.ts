@@ -1,10 +1,22 @@
 import { describeOwnerServiceActionLabel, type ShellTab } from './householdState';
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
 export const PHASE_ONE_TABS: Array<{ key: ShellTab; label: string }> = [
   { key: 'chats', label: '聊天' },
   { key: 'library', label: '资料库' },
   { key: 'settings', label: '空间设置' },
 ];
+
+export function buildPhaseOneTabs(t?: TranslateFn): Array<{ key: ShellTab; label: string }> {
+  if (!t) {
+    return PHASE_ONE_TABS;
+  }
+  return PHASE_ONE_TABS.map((tab) => ({
+    key: tab.key,
+    label: t(`appShell.phaseOneTabs.${tab.key}`),
+  }));
+}
 
 export type PhaseOneSurface = 'onboarding' | 'shell';
 
@@ -59,18 +71,36 @@ export function describeShellSubtitle(options: {
   activeSpaceName: string;
   activeSpaceKindLabel: string;
   spacesReady?: boolean;
-}): string {
+}, t?: TranslateFn): string {
   if (options.shellTab === 'chats') {
     if (!options.activeSpaceName) {
       if (options.spacesReady === false) {
+        if (t) {
+          return t('appShell.shell.loadingSpaces');
+        }
         return '正在加载你的空间...';
       }
+      if (t) {
+        return t('appShell.shell.chooseSpaceFirst');
+      }
       return '请先选择一个空间，再进入该空间的聊天。';
+    }
+    if (t) {
+      return t('appShell.shell.chatsActive', {
+        name: options.activeSpaceName,
+        kind: options.activeSpaceKindLabel,
+      });
     }
     return `当前空间：${options.activeSpaceName}（${options.activeSpaceKindLabel}），下方可直接进入聊天。`;
   }
   if (options.shellTab === 'library') {
+    if (t) {
+      return t('appShell.shell.library');
+    }
     return '查看空间沉淀的内容，并在这里管理文件与任务。';
+  }
+  if (t) {
+    return t('appShell.shell.settings');
   }
   return '管理设备、当前空间、家庭应用与账号信息。';
 }
@@ -275,25 +305,55 @@ export function describeTaskSchedule(cronExpr: string): string {
   return '自定义重复规则';
 }
 
-export function describeTaskExecution(commandType: string, scope: string): string {
-  const executionLabel = commandType === 'zeroclaw' ? '由 Sparkbox 执行' : '在设备上执行';
-  const visibilityLabel = scope === 'family' ? '共享空间' : '仅自己可见';
+export function describeTaskExecution(commandType: string, scope: string, t?: TranslateFn): string {
+  const executionLabel = t
+    ? commandType === 'zeroclaw'
+      ? t('appShell.taskExecution.handledBySparkbox')
+      : t('appShell.taskExecution.runsOnDevice')
+    : commandType === 'zeroclaw'
+      ? 'Handled by Sparkbox'
+      : 'Runs on this device';
+  const visibilityLabel = t
+    ? scope === 'family'
+      ? t('appShell.taskExecution.sharedSpace')
+      : t('appShell.taskExecution.justYou')
+    : scope === 'family'
+      ? 'Shared space'
+      : 'Just you';
   return `${executionLabel} · ${visibilityLabel}`;
 }
 
-export function describeTaskEnabledState(enabled: boolean): string {
-  return enabled ? '启用中' : '已暂停';
+export function describeTaskEnabledState(enabled: boolean, t?: TranslateFn): string {
+  if (t) {
+    return enabled ? t('appShell.taskState.ready') : t('appShell.taskState.paused');
+  }
+  return enabled ? 'Ready' : 'Paused';
 }
 
-export function describeLibraryPhotoEmptyState(scope: 'family' | 'private'): string {
+export function describeLibraryPhotoEmptyState(scope: 'family' | 'private', t?: TranslateFn): string {
+  if (t) {
+    return scope === 'family'
+      ? t('appShell.library.photoEmpty.family')
+      : t('appShell.library.photoEmpty.private');
+  }
   return scope === 'family' ? '该空间还没有照片。' : '这里还没有照片。';
 }
 
-export function describeLibraryTaskListTitle(scope: 'family' | 'private'): string {
+export function describeLibraryTaskListTitle(scope: 'family' | 'private', t?: TranslateFn): string {
+  if (t) {
+    return scope === 'family'
+      ? t('appShell.library.taskListTitle.family')
+      : t('appShell.library.taskListTitle.private');
+  }
   return scope === 'family' ? '空间任务' : '我的任务';
 }
 
-export function describeLibraryTaskListEmptyState(scope: 'family' | 'private'): string {
+export function describeLibraryTaskListEmptyState(scope: 'family' | 'private', t?: TranslateFn): string {
+  if (t) {
+    return scope === 'family'
+      ? t('appShell.library.taskListEmpty.family')
+      : t('appShell.library.taskListEmpty.private');
+  }
   return scope === 'family' ? '该空间还没有任务。' : '这里还没有任务。';
 }
 

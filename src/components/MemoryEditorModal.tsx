@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 
 type MemoryEditorModalProps = {
   styles: Record<string, any>;
@@ -32,6 +33,7 @@ export function MemoryEditorModal({
   onTogglePinned,
   onSubmit,
 }: MemoryEditorModalProps) {
+  const t = useT();
   return (
     <Modal
       animationType="slide"
@@ -41,22 +43,22 @@ export function MemoryEditorModal({
     >
       <View style={styles.scannerOverlay}>
         <View style={[styles.card, { width: '100%', maxWidth: 560 }]}>
-          <Text style={styles.selectionLabel}>{editingMemory ? '编辑记忆' : '新建记忆'}</Text>
+          <Text style={styles.selectionLabel}>{editingMemory ? t('memoryEditor.editLabel') : t('memoryEditor.newLabel')}</Text>
           <Text style={styles.selectionTitle}>
-            {editingMemory ? '更新 Sparkbox 需要记住的内容' : '为此空间保存一条新记忆'}
+            {editingMemory ? t('memoryEditor.editTitle') : t('memoryEditor.newTitle')}
           </Text>
           <Text style={styles.selectionCopy}>
-            记忆是 Sparkbox 需要长期记住的关键信息。
+            {t('memoryEditor.copy')}
           </Text>
           <TextInput
-            placeholder="记忆标题"
+            placeholder={t('memoryEditor.titlePlaceholder')}
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={memoryTitle}
             onChangeText={onChangeTitle}
           />
           <TextInput
-            placeholder="希望 Sparkbox 记住什么？"
+            placeholder={t('memoryEditor.contentPlaceholder')}
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             value={memoryContent}
@@ -69,7 +71,7 @@ export function MemoryEditorModal({
               onPress={onTogglePinned}
             >
               <Text style={[styles.secondaryButtonText, memoryPinned ? styles.scopePillLabelActive : null]}>
-                {memoryPinned ? '已置顶' : '置顶记忆'}
+                {memoryPinned ? t('memoryEditor.pinned') : t('memoryEditor.pin')}
               </Text>
             </Pressable>
           </View>
@@ -80,7 +82,7 @@ export function MemoryEditorModal({
               onPress={onRequestClose}
               disabled={libraryBusy}
             >
-              <Text style={styles.secondaryButtonText}>取消</Text>
+              <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable
               style={styles.primaryButtonSmall}
@@ -91,7 +93,7 @@ export function MemoryEditorModal({
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {editingMemory ? '保存记忆' : '创建记忆'}
+                  {editingMemory ? t('memoryEditor.saveButton') : t('memoryEditor.createButton')}
                 </Text>
               )}
             </Pressable>

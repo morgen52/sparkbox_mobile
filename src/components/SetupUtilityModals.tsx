@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import type { LocalSetupNetwork } from '../localSetupApi';
 
@@ -34,6 +35,7 @@ export function SetupUtilityModals({
   onChangeWifiPassword,
   onSubmitWifi,
 }: SetupUtilityModalsProps) {
+  const t = useT();
   return (
     <>
       <Modal
@@ -45,19 +47,19 @@ export function SetupUtilityModals({
       >
         <View style={styles.networkSheetBackdrop}>
           <View style={styles.networkSheetCard}>
-            <Text style={styles.selectionLabel}>{manualEntry || !selectedNetwork ? '手动输入' : '连接 Sparkbox'}</Text>
+            <Text style={styles.selectionLabel}>{manualEntry || !selectedNetwork ? t('setupWifi.manualLabel') : t('setupWifi.connectLabel')}</Text>
             <Text style={styles.selectionTitle}>
-              {selectedSsid || previousInternetSsid || '输入家庭 Wi-Fi'}
+              {selectedSsid || previousInternetSsid || t('setupWifi.defaultTitle')}
             </Text>
             <Text style={styles.selectionCopy}>
               {selectedNetwork?.known
-                ? 'Sparkbox 之前连过这个 Wi-Fi。如密码未变，可留空。'
-                : '输入 Wi-Fi 密码后，Sparkbox 将退出配置模式并接入该网络。'}
+                ? t('setupWifi.knownCopy')
+                : t('setupWifi.newCopy')}
             </Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder="Wi-Fi 名称"
+              placeholder={t('setupWifi.ssidPlaceholder')}
               placeholderTextColor="#7e8a83"
               style={styles.input}
               value={selectedSsid}
@@ -69,7 +71,7 @@ export function SetupUtilityModals({
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry
-                placeholder={selectedNetwork?.known ? '密码（未变可选填）' : 'Wi-Fi 密码'}
+                placeholder={selectedNetwork?.known ? t('setupWifi.knownPasswordPlaceholder') : t('setupWifi.passwordPlaceholder')}
                 placeholderTextColor="#7e8a83"
                 style={styles.input}
                 value={wifiPassword}
@@ -82,14 +84,14 @@ export function SetupUtilityModals({
                 onPress={onCloseNetworkSheet}
                 disabled={provisionBusy}
               >
-                <Text style={styles.secondaryButtonText}>取消</Text>
+                <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.primaryButtonSmall, !canSubmitWifi ? styles.networkRowDisabled : null]}
                 onPress={onSubmitWifi}
                 disabled={!canSubmitWifi}
               >
-                {provisionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>连接</Text>}
+                {provisionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('setupWifi.connect')}</Text>}
               </Pressable>
             </View>
           </View>

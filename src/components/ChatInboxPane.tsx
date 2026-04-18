@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 
 type SpaceChip = {
@@ -252,6 +253,7 @@ export function ChatInboxPane({
   onOpenSession,
   onDeleteSession,
 }: ChatInboxPaneProps) {
+  const t = useT();
   type EnabledFamilyApp = {
     slug: string;
     title: string;
@@ -413,7 +415,7 @@ export function ChatInboxPane({
                     disabled={chatBusy}
                   >
                     <View style={styles.chatQuickStartButtonInner}>
-                      <Text style={styles.chatQuickStartButtonText}>快速开始话题</Text>
+                      <Text style={styles.chatQuickStartButtonText}>{t('inbox.quickStart')}</Text>
                       <Text style={styles.chatQuickStartButtonChevron}>{quickStartPanelOpen ? '∧' : '∨'}</Text>
                     </View>
                   </Pressable>
@@ -424,12 +426,12 @@ export function ChatInboxPane({
 
             {forcedExpanded ? (
               <View style={styles.chatTreeFolderBody}>
-                {!space.active ? <Text style={styles.cardCopy}>正在切换到该空间...</Text> : null}
+                {!space.active ? <Text style={styles.cardCopy}>{t('inbox.switchingSpace')}</Text> : null}
                 {forcedExpanded && space.active ? (
                   <>
                     {quickStartPanelOpen ? (
                       <View style={styles.chatQuickStartPopover}>
-                        <Text style={styles.chatQuickStartPopoverTitle}>话题入口</Text>
+                        <Text style={styles.chatQuickStartPopoverTitle}>{t('inbox.topicEntry')}</Text>
                         {threadRows.map((thread) => (
                           <Pressable
                             key={thread.id}
@@ -478,7 +480,7 @@ export function ChatInboxPane({
                             onPress={() => onSelectScope('private')}
                             pressFeedback="none"
                           >
-                            <Text style={[styles.chatScopeNavTabLabel, styles.chatScopeNavTabLabelActive]}>仅自己</Text>
+                            <Text style={[styles.chatScopeNavTabLabel, styles.chatScopeNavTabLabelActive]}>{t('inbox.privateOnly')}</Text>
                           </Pressable>
                         ) : (
                           scopeOptions.map((scope, index) => (
@@ -511,7 +513,7 @@ export function ChatInboxPane({
                         <Text style={styles.chatScopeRefreshIcon}>↻</Text>
                       </Pressable>
                     </View>
-                    {chatListRefreshing ? <Text style={styles.selectionLabel}>正在从云端刷新聊天列表...</Text> : null}
+                    {chatListRefreshing ? <Text style={styles.selectionLabel}>{t('inbox.refreshingList')}</Text> : null}
                     {chatListSyncCopy ? <Text style={styles.chatInboxStatusCopy}>{chatListSyncCopy}</Text> : null}
                     {chatBusy && sessions.length === 0 ? <ActivityIndicator color="#0b6e4f" /> : null}
                     {waitingForSpaces ? (
@@ -545,7 +547,7 @@ export function ChatInboxPane({
                         <View style={styles.chatTreeSectionDivider} />
                         <View style={styles.chatTreeAppList}>
                         <Pressable style={styles.chatTreeAppListHeader} onPress={() => toggleAppList(space.id)}>
-                          <Text style={styles.selectionLabel}>应用列表</Text>
+                          <Text style={styles.selectionLabel}>{t('inbox.appList')}</Text>
                           <Text style={styles.chatTreeAppListToggle}>{appListExpanded ? '∧' : '∨'}</Text>
                         </Pressable>
 
@@ -554,10 +556,10 @@ export function ChatInboxPane({
                             {!isDefaultPrivateSpace && toolsProps?.showRelayHelper ? (
                               <View style={styles.chatAppCard}>
                                 <View style={styles.chatAppHeader}>
-                                  <Text style={styles.chatAppTitle}>私下转达</Text>
-                                  <Text style={styles.tagMuted}>沟通辅助</Text>
+                                  <Text style={styles.chatAppTitle}>{t('inbox.relayTitle')}</Text>
+                                  <Text style={styles.tagMuted}>{t('inbox.relayTag')}</Text>
                                 </View>
-                                <Text style={styles.chatAppCopy}>当你不方便直接表达时，可让 Sparkbox 私下转达给本空间成员。</Text>
+                                <Text style={styles.chatAppCopy}>{t('inbox.relayCopy')}</Text>
                                 {toolsProps?.relayNotice ? <Text style={styles.noticeText}>{toolsProps.relayNotice}</Text> : null}
                                 <View style={styles.inlineActions}>
                                   <Pressable
@@ -568,7 +570,7 @@ export function ChatInboxPane({
                                     onPress={() => toolsProps?.onOpenRelay && toolsProps.onOpenRelay()}
                                     disabled={!toolsProps?.canOpenRelay}
                                   >
-                                    <Text style={styles.primaryButtonText}>让 Sparkbox 私下转达</Text>
+                                    <Text style={styles.primaryButtonText}>{t('inbox.relayButton')}</Text>
                                   </Pressable>
                                 </View>
                               </View>
@@ -578,10 +580,10 @@ export function ChatInboxPane({
                               <View key={`enabled-${app.slug}`} style={styles.chatAppCard}>
                                 <View style={styles.chatAppHeader}>
                                   <Text style={styles.chatAppTitle}>{app.meta?.entryTitle || app.title}</Text>
-                                  <Text style={styles.statusTagOnline}>已启用</Text>
+                                  <Text style={styles.statusTagOnline}>{t('inbox.enabled')}</Text>
                                 </View>
                                 <Text style={styles.chatAppCopy}>
-                                  {app.meta?.entryCopy || app.meta?.description || '这个应用已在当前 Space 启用。'}
+                                  {app.meta?.entryCopy || app.meta?.description || t('inbox.enabledFallback')}
                                 </Text>
                                 {app.meta?.starterPrompts?.length ? (
                                   <View style={styles.scopeRow}>
@@ -609,7 +611,7 @@ export function ChatInboxPane({
                                       onPress={() => toolsProps?.onDisableFamilyApp && toolsProps.onDisableFamilyApp(app.slug)}
                                       disabled={toolsProps?.settingsBusy}
                                     >
-                                      <Text style={styles.secondaryButtonText}>在此停用</Text>
+                                      <Text style={styles.secondaryButtonText}>{t('inbox.disableHere')}</Text>
                                     </Pressable>
                                   </View>
                                 ) : null}
@@ -618,22 +620,22 @@ export function ChatInboxPane({
 
                             <View style={styles.chatAppCard}>
                               <Pressable style={styles.chatTreeAppListHeader} onPress={() => toggleEnableList(space.id)}>
-                                <Text style={styles.chatAppTitle}>应用启用</Text>
+                                <Text style={styles.chatAppTitle}>{t('inbox.appEnable')}</Text>
                                 <Text style={styles.chatTreeAppListToggle}>
                                   {expandedEnableLists[space.id] ? '∧' : '∨'}
                                 </Text>
                               </Pressable>
-                              <Text style={styles.chatAppCopy}>管理已安装到设备、但尚未在当前 Space 启用的应用。</Text>
+                              <Text style={styles.chatAppCopy}>{t('inbox.appEnableCopy')}</Text>
                               {toolsProps?.appActionNotice ? <Text style={styles.noticeText}>{toolsProps.appActionNotice}</Text> : null}
                               {toolsProps?.appActionError ? <Text style={styles.errorText}>{toolsProps.appActionError}</Text> : null}
                               {!toolsProps?.canManageActiveSpaceFamilyApps ? (
-                                <Text style={styles.tagMuted}>仅管理员可在此空间启用应用。</Text>
+                                <Text style={styles.tagMuted}>{t('inbox.adminOnly')}</Text>
                               ) : null}
 
                               {expandedEnableLists[space.id] ? (
                                 <>
                                   {readyInstalledFamilyApps.length === 0 ? (
-                                    <Text style={styles.cardCopy}>当前设备中的家庭应用都已在这个 Space 启用。</Text>
+                                    <Text style={styles.cardCopy}>{t('inbox.allEnabled')}</Text>
                                   ) : (
                                     readyInstalledFamilyApps.map((app) => (
                                       <View key={`ready-installed-${app.slug}`} style={styles.chatAppCard}>
@@ -653,12 +655,12 @@ export function ChatInboxPane({
                                           <Text style={styles.tagMuted}>
                                             {toolsProps?.describeFamilyAppRiskLevel
                                               ? toolsProps.describeFamilyAppRiskLevel(app.riskLevel)
-                                              : '可启用'}
+                                              : t('inbox.canEnable')}
                                           </Text>
                                         </View>
-                                        <Text style={styles.chatAppCopy}>{app.entryCopy || app.description || '可在此 Space 启用。'}</Text>
+                                        <Text style={styles.chatAppCopy}>{app.entryCopy || app.description || t('inbox.canEnableFallback')}</Text>
                                         {!supportsCurrentTemplate ? (
-                                          <Text style={styles.tagMuted}>当前 Space 类型暂不支持此应用。</Text>
+                                          <Text style={styles.tagMuted}>{t('inbox.unsupportedTemplate')}</Text>
                                         ) : null}
                                         <View style={styles.inlineActions}>
                                           <Pressable
@@ -673,7 +675,7 @@ export function ChatInboxPane({
                                               !supportsCurrentTemplate
                                             }
                                           >
-                                            <Text style={styles.primaryButtonText}>在此空间启用</Text>
+                                            <Text style={styles.primaryButtonText}>{t('inbox.enableHere')}</Text>
                                           </Pressable>
                                         </View>
                                             </>
@@ -687,7 +689,7 @@ export function ChatInboxPane({
                                     style={styles.primaryButton}
                                     onPress={() => toolsProps?.onOpenAllFamilyApps && toolsProps.onOpenAllFamilyApps()}
                                   >
-                                    <Text style={styles.primaryButtonText}>更多应用安装与卸载</Text>
+                                    <Text style={styles.primaryButtonText}>{t('inbox.moreApps')}</Text>
                                   </Pressable>
                                 </>
                               ) : null}
@@ -707,11 +709,11 @@ export function ChatInboxPane({
 
       {canManage && !singleSpaceMode ? (
         <Pressable style={[styles.primaryButton, spacesBusy ? styles.networkRowDisabled : null]} onPress={onOpenSpaceCreator} disabled={spacesBusy}>
-          <Text style={styles.primaryButtonText}>新建 Space</Text>
+          <Text style={styles.primaryButtonText}>{t('inbox.createSpace')}</Text>
         </Pressable>
       ) : null}
 
-      {!spaceChips.length && !spacesBusy ? <Text style={styles.cardCopy}>还没有 Space，可先创建一个。</Text> : null}
+      {!spaceChips.length && !spacesBusy ? <Text style={styles.cardCopy}>{t('inbox.noSpaces')}</Text> : null}
     </View>
   );
 }

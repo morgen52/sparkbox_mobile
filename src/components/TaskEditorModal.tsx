@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Animated, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import type { HouseholdTaskSummary } from '../householdApi';
 
 type TaskEditorModalProps = {
@@ -49,6 +50,7 @@ export function TaskEditorModal({
   onToggleTaskEnabled,
   onSubmit,
 }: TaskEditorModalProps) {
+  const t = useT();
   const commandSliderX = React.useRef(new Animated.Value(0)).current;
   const enabledSliderX = React.useRef(new Animated.Value(0)).current;
   const [commandSegmentWidth, setCommandSegmentWidth] = React.useState(0);
@@ -97,21 +99,21 @@ export function TaskEditorModal({
     >
       <View style={styles.networkSheetBackdrop}>
         <View style={styles.networkSheetCard}>
-          <Text style={styles.selectionLabel}>{editingTask ? '编辑任务' : '新建任务'}</Text>
+          <Text style={styles.selectionLabel}>{editingTask ? t('taskEditor.editTitle') : t('taskEditor.newTitle')}</Text>
           <Text style={styles.selectionTitle}>
             {editingTask
               ? editingTask.name
               : activeSpaceName
-                ? `${activeSpaceName} 例行任务`
+                ? t('taskEditor.sharedTask', { name: activeSpaceName })
                 : taskScope === 'family'
-                  ? '共享 Sparkbox 例行任务'
-                  : '私密 Sparkbox 例行任务'}
+                  ? t('taskEditor.sharedGeneric')
+                  : t('taskEditor.privateTask')}
           </Text>
           <Text style={styles.selectionCopy}>{taskEditorCopy}</Text>
           <TextInput
             autoCapitalize="sentences"
             autoCorrect={false}
-            placeholder="任务名称"
+            placeholder={t('taskEditor.taskName')}
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={taskName}
@@ -120,7 +122,7 @@ export function TaskEditorModal({
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="什么时候执行？"
+            placeholder={t('taskEditor.whenToRun')}
             placeholderTextColor="#7e8a83"
             style={styles.input}
             value={taskCronExpr}
@@ -129,7 +131,7 @@ export function TaskEditorModal({
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder={canManage ? '让 Sparkbox 做什么？' : '希望 Sparkbox 帮你做什么？'}
+            placeholder={canManage ? t('taskEditor.whatToDo') : t('taskEditor.whatToDoPlaceholder')}
             placeholderTextColor="#7e8a83"
             style={[styles.input, styles.textArea]}
             multiline
@@ -158,7 +160,7 @@ export function TaskEditorModal({
                 onPress={() => onChangeTaskCommandType('zeroclaw')}
               >
                 <Text style={[styles.segmentedOptionLabel, commandIndex === 0 ? styles.segmentedOptionLabelActive : null]}>
-                  Sparkbox 例行任务
+                  {t('taskEditor.routineTask')}
                 </Text>
               </Pressable>
               <Pressable
@@ -166,12 +168,12 @@ export function TaskEditorModal({
                 onPress={() => onChangeTaskCommandType('shell')}
               >
                 <Text style={[styles.segmentedOptionLabel, commandIndex === 1 ? styles.segmentedOptionLabelActive : null]}>
-                  自定义命令
+                  {t('taskEditor.customCommand')}
                 </Text>
               </Pressable>
             </View>
           ) : (
-            <Text style={styles.cardCopy}>运行模式：Sparkbox 例行任务</Text>
+            <Text style={styles.cardCopy}>{t('taskEditor.runMode')}</Text>
           )}
           <View
             style={styles.segmentedControl}
@@ -193,7 +195,7 @@ export function TaskEditorModal({
               onPress={() => setTaskEnabled(false)}
             >
               <Text style={[styles.segmentedOptionLabel, enabledIndex === 0 ? styles.segmentedOptionLabelActive : null]}>
-                先暂停
+                {t('taskEditor.pause')}
               </Text>
             </Pressable>
             <Pressable
@@ -201,7 +203,7 @@ export function TaskEditorModal({
               onPress={() => setTaskEnabled(true)}
             >
               <Text style={[styles.segmentedOptionLabel, enabledIndex === 1 ? styles.segmentedOptionLabelActive : null]}>
-                立即启用
+                {t('taskEditor.enableNow')}
               </Text>
             </Pressable>
           </View>
@@ -212,14 +214,14 @@ export function TaskEditorModal({
               onPress={onRequestClose}
               disabled={tasksBusy}
             >
-              <Text style={styles.secondaryButtonText}>取消</Text>
+              <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable
               style={styles.primaryButtonSmall}
               onPress={onSubmit}
               disabled={tasksBusy}
             >
-              {tasksBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingTask ? '保存' : '创建任务'}</Text>}
+              {tasksBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{editingTask ? t('taskEditor.save') : t('taskEditor.create')}</Text>}
             </Pressable>
           </View>
         </View>
