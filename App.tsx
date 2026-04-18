@@ -4593,7 +4593,7 @@ function App() {
                               sessionName: sessionItem.name,
                               scope: sessionItem.scope,
                               spaceDetail: activeSpaceCopyContext,
-                            });
+                            }, t);
                     return {
                       id: sessionItem.id,
                       name: sessionItem.name,

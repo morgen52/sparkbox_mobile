@@ -187,20 +187,35 @@ export function describeChatSessionPurpose(options: {
   sessionName?: string;
   scope: ChatSessionScope;
   spaceDetail: SpaceCopyContext;
-}): string {
+}, t?: TranslateFn): string {
   if (options.sessionName && looksLikeSharedGroupChatSession(options.sessionName, options.scope, options.spaceDetail)) {
-    return 'Sparkbox 正在帮助大家保持同步。';
+    if (t) {
+      return t('space.purpose.groupChat');
+    }
+    return 'Sparkbox helping everyone stay in sync.';
   }
   if (options.scope === 'private' && options.spaceDetail?.kind === 'shared') {
-    return '先在私密对话中整理想法，再决定是否同步到共享空间。';
+    if (t) {
+      return t('space.purpose.privateSideChannel');
+    }
+    return 'Private side chat with Sparkbox before you bring anything back to the shared space.';
   }
   if (options.scope === 'private') {
-    return '与你专属的私密话题。';
+    if (t) {
+      return t('space.purpose.privateTopic');
+    }
+    return 'Private topic with Sparkbox, just for you.';
   }
   if (options.spaceDetail?.kind === 'shared' && options.scope === 'family') {
-    return '该空间内的共享聊天。';
+    if (t) {
+      return t('space.purpose.sharedChat');
+    }
+    return 'Shared chat with Sparkbox for this space.';
   }
-  return '在该空间中与 Sparkbox 对话。';
+  if (t) {
+    return t('space.purpose.default');
+  }
+  return 'Chat with Sparkbox in this space.';
 }
 
 function summarizeChatPreviewText(content: string): string {
