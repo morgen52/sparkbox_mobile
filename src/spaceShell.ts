@@ -463,20 +463,20 @@ export function describeSummaryEmptyStateCopy(
     : '仅管理员可生成话题摘要，你仍可阅读已保存内容。';
 }
 
-export function describeSpaceTemplate(template: SpaceTemplate | string): string {
+export function describeSpaceTemplate(template: SpaceTemplate | string, t?: TranslateFn): string {
   switch (template) {
     case 'private':
-      return '仅自己可见';
+      return t ? t('spaceShell.spaceKind.private') : '仅自己可见';
     case 'household':
-      return '家庭共享';
+      return t ? t('spaceShell.spaceKind.shared') : '家庭共享';
     case 'partner':
-      return '伴侣';
+      return t ? t('space.template.partner') : '伴侣';
     case 'parents':
-      return '父母';
+      return t ? t('space.template.parents') : '父母';
     case 'child':
-      return '孩子';
+      return t ? t('space.template.child') : '孩子';
     case 'household_ops':
-      return '家庭事务';
+      return t ? t('space.template.householdOps') : '家庭事务';
     default:
       return String(template)
         .replace(/_/g, ' ')
@@ -485,8 +485,8 @@ export function describeSpaceTemplate(template: SpaceTemplate | string): string 
   }
 }
 
-export function formatSpaceTemplateList(spaceTemplates: string[]): string {
-  return spaceTemplates.map((template) => describeSpaceTemplate(template)).join(' · ');
+export function formatSpaceTemplateList(spaceTemplates: string[], t?: TranslateFn): string {
+  return spaceTemplates.map((template) => describeSpaceTemplate(template, t)).join(' · ');
 }
 
 const FAMILY_APP_CAPABILITY_LABELS: Record<string, string> = {

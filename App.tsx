@@ -297,6 +297,7 @@ function SwipeToDeleteSpaceRow({
   onOpenSpace: (spaceId: string) => void;
   onDeleteSpace: (space: HouseholdSpaceSummary) => void;
 }) {
+  const t = useT();
   const translateX = useRef(new Animated.Value(0)).current;
   const pressOverlayOpacity = useRef(new Animated.Value(0)).current;
   const offsetRef = useRef(0);
@@ -400,7 +401,7 @@ function SwipeToDeleteSpaceRow({
               </Text>
             </View>
             <View style={styles.spaceListCardRightRail}>
-              <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
+              <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template, t)}</Text>
               <Text style={styles.chatTreeFolderChevron}>›</Text>
             </View>
           </View>
@@ -878,7 +879,7 @@ function App() {
     ? looksLikeSharedGroupChatSession(activeChatSession.name, activeChatSession.scope, activeSpaceCopyContext)
     : false;
   const activeSpaceKindLabel = activeSpace ? describeSpaceKind(activeSpace.kind, t) : '';
-  const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template) : '';
+  const activeSpaceTemplateLabel = activeSpace?.template ? describeSpaceTemplate(activeSpace.template, t) : '';
   const waitingForSpaces =
     Boolean(session?.token) &&
     shellSurface === 'shell' &&
@@ -4279,7 +4280,7 @@ function App() {
                           </Text>
                         </View>
                         <View style={styles.spaceListCardRightRail}>
-                          <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template)}</Text>
+                          <Text style={styles.spaceTemplateBadge}>{describeSpaceTemplate(space.template, t)}</Text>
                           <Text style={styles.chatTreeFolderChevron}>›</Text>
                         </View>
                       </View>
@@ -4481,10 +4482,10 @@ function App() {
               busy={spaceCreatorBusy}
               error={spaceCreatorError}
               spaceName={spaceName}
-              selectedTemplateLabel={describeSpaceTemplate(spaceTemplate)}
+              selectedTemplateLabel={describeSpaceTemplate(spaceTemplate, t)}
               templateOptions={SPACE_TEMPLATE_OPTIONS.map((template) => ({
                 id: template,
-                label: describeSpaceTemplate(template),
+                label: describeSpaceTemplate(template, t),
                 active: spaceTemplate === template,
               }))}
               memberOptions={spaceMemberOptions}
@@ -4948,10 +4949,10 @@ function App() {
             spaceCreatorBusy={spaceCreatorBusy}
             spaceCreatorError={spaceCreatorError}
             spaceName={spaceName}
-            selectedTemplateLabel={describeSpaceTemplate(spaceTemplate)}
+            selectedTemplateLabel={describeSpaceTemplate(spaceTemplate, t)}
             templateOptions={SPACE_TEMPLATE_OPTIONS.map((template) => ({
               id: template,
-              label: describeSpaceTemplate(template),
+              label: describeSpaceTemplate(template, t),
               active: spaceTemplate === template,
             }))}
             memberOptions={spaceMemberOptions}
