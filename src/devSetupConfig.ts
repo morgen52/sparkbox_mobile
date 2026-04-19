@@ -1,4 +1,10 @@
 const DEFAULT_LOCAL_SETUP_BASE_URL = 'http://192.168.4.1:8080';
+const RELEASE_BYPASS_ENV = 'EXPO_PUBLIC_RELEASE_BYPASS_HOTSPOT_CONNECT';
+const DEV_BYPASS_ENV = 'EXPO_PUBLIC_DEV_BYPASS_HOTSPOT_CONNECT';
+const LOCAL_SETUP_BASE_ENV = 'EXPO_PUBLIC_LOCAL_SETUP_BASE_URL';
+
+let runtimeReleaseBypassOverride: boolean | null = null;
+let runtimeLocalSetupBaseOverride: string | null = null;
 
 function isDevBuild(): boolean {
   if (typeof __DEV__ !== 'undefined') {
@@ -24,18 +30,50 @@ function normalizeBaseUrl(value: string): string {
   return value.replace(/\/$/, '');
 }
 
-export function isDevOnboardingBypassEnabled(): boolean {
-  if (!isDevBuild()) {
-    return false;
+function normalizeOptionalBaseUrl(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
   }
-  return asEnabledFlag(readEnv('EXPO_PUBLIC_DEV_BYPASS_HOTSPOT_CONNECT'));
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  return normalizeBaseUrl(trimmed);
+}
+
+export function initializeSetupRuntimeConfig(config: {
+  releaseBypassHotspotConnect?: boolean | null;
+  localSetupBaseUrl?: string | null;
+}): void {
+  runtimeReleaseBypassOverride =
+    typeof config.releaseBypassHotspotConnect === 'boolean'
+      ? config.releaseBypassHotspotConnect
+      : null;
+  runtimeLocalSetupBaseOverride = normalizeOptionalBaseUrl(config.localSetupBaseUrl);
+}
+
+function isReleaseBypassEnabled(): boolean {
+  if (runtimeReleaseBypassOverride !== null) {
+    return runtimeReleaseBypassOverride;
+  }
+  return asEnabledFlag(readEnv(RELEASE_BYPASS_ENV));
+}
+
+export function isDevOnboardingBypassEnabled(): boolean {
+  if (isDevBuild()) {
+    return asEnabledFlag(readEnv(DEV_BYPASS_ENV));
+  }
+  return isReleaseBypassEnabled();
 }
 
 export function resolveLocalSetupBaseUrl(): string {
-  if (!isDevBuild()) {
+  if (!isDevBuild() && !isReleaseBypassEnabled()) {
     return DEFAULT_LOCAL_SETUP_BASE_URL;
   }
-  const configured = readEnv('EXPO_PUBLIC_LOCAL_SETUP_BASE_URL');
+  if (runtimeLocalSetupBaseOverride) {
+    return runtimeLocalSetupBaseOverride;
+  }
+  const configured = readEnv(LOCAL_SETUP_BASE_ENV);
   if (!configured) {
     return DEFAULT_LOCAL_SETUP_BASE_URL;
   }

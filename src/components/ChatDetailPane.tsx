@@ -1,5 +1,20 @@
 import React from 'react';
-import { ActivityIndicator, Alert, type LayoutChangeEvent, Modal, ScrollView, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  type KeyboardEvent,
+  Keyboard,
+  KeyboardAvoidingView,
+  type LayoutChangeEvent,
+  Modal,
+  Platform,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import { decodeChatMessageContent, describeChatMessageTimestamp } from '../appShell';
@@ -127,6 +142,35 @@ export function ChatDetailPane({
   const [markdownEnabled, setMarkdownEnabled] = React.useState(true);
   const [debugBlocks, setDebugBlocks] = React.useState(false);
   const [layoutInfo, setLayoutInfo] = React.useState<Record<string, { w: number; h: number }>>({});
+  const [keyboardInset, setKeyboardInset] = React.useState(0);
+
+  React.useEffect(() => {
+    const onKeyboardShow = (event: KeyboardEvent) => {
+      setKeyboardInset(event.endCoordinates?.height ?? 0);
+    };
+    const onKeyboardHide = () => {
+      setKeyboardInset(0);
+    };
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, onKeyboardShow);
+    const hideSub = Keyboard.addListener(hideEvent, onKeyboardHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const composerLift =
+    keyboardInset > 0
+      ? {
+          marginBottom: Math.max(10, Math.min(28, Math.round(keyboardInset * 0.08))),
+        }
+      : null;
+
+  const keyboardVerticalOffset = Platform.OS === 'ios' ? 86 : 0;
   return (
     <>
       <View style={styles.card}>
@@ -351,56 +395,61 @@ export function ChatDetailPane({
         )}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{composerTitle}</Text>
-        <TextInput
-          placeholder={composerPlaceholder}
-          placeholderTextColor="#7e8a83"
-          style={[styles.input, styles.textArea]}
-          value={chatDraft}
-          onChangeText={onChangeDraft}
-          multiline
-          numberOfLines={4}
-          editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && hasActiveChatSession}
-        />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={keyboardVerticalOffset}
+      >
+        <View style={[styles.card, composerLift]}>
+          <Text style={styles.cardTitle}>{composerTitle}</Text>
+          <TextInput
+            placeholder={composerPlaceholder}
+            placeholderTextColor="#7e8a83"
+            style={[styles.input, styles.textArea]}
+            value={chatDraft}
+            onChangeText={onChangeDraft}
+            multiline
+            numberOfLines={4}
+            editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && hasActiveChatSession}
+          />
 
-        {chatAttachmentItems.length ? (
-          <View style={styles.chatAttachmentBadgeRow}>
-            {chatAttachmentItems.map((item) => (
-              <View key={`chat-attachment-${item.index}-${item.path}`} style={styles.chatAttachmentBadge}>
-                <Text style={styles.chatAttachmentBadgeText}>[{item.index}] {item.name}</Text>
-                <Pressable onPress={() => onRemoveAttachment(item.index)}>
-                  <Text style={styles.chatAttachmentBadgeRemove}>×</Text>
-                </Pressable>
-              </View>
-            ))}
+          {chatAttachmentItems.length ? (
+            <View style={styles.chatAttachmentBadgeRow}>
+              {chatAttachmentItems.map((item) => (
+                <View key={`chat-attachment-${item.index}-${item.path}`} style={styles.chatAttachmentBadge}>
+                  <Text style={styles.chatAttachmentBadgeText}>[{item.index}] {item.name}</Text>
+                  <Pressable onPress={() => onRemoveAttachment(item.index)}>
+                    <Text style={styles.chatAttachmentBadgeRemove}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.inlineActions}>
+            <Pressable
+              style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
+              onPress={onOpenAttachmentPicker}
+              disabled={!hasActiveChatSession || chatBusy}
+            >
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.attachFile')}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.secondaryButtonSmall, !hasMessages ? styles.networkRowDisabled : null]}
+              onPress={onOpenSaveDocModal}
+              disabled={!hasMessages || chatBusy}
+            >
+              <Text style={styles.secondaryButtonText}>{t('chatDetail.saveAsDoc')}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryButtonSmall, !canSend ? styles.networkRowDisabled : null]}
+              onPress={onSend}
+              disabled={!canSend}
+            >
+              {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('chatDetail.send')}</Text>}
+            </Pressable>
           </View>
-        ) : null}
-
-        <View style={styles.inlineActions}>
-          <Pressable
-            style={[styles.secondaryButtonSmall, !hasActiveChatSession ? styles.networkRowDisabled : null]}
-            onPress={onOpenAttachmentPicker}
-            disabled={!hasActiveChatSession || chatBusy}
-          >
-            <Text style={styles.secondaryButtonText}>{t('chatDetail.attachFile')}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.secondaryButtonSmall, !hasMessages ? styles.networkRowDisabled : null]}
-            onPress={onOpenSaveDocModal}
-            disabled={!hasMessages || chatBusy}
-          >
-            <Text style={styles.secondaryButtonText}>{t('chatDetail.saveAsDoc')}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.primaryButtonSmall, !canSend ? styles.networkRowDisabled : null]}
-            onPress={onSend}
-            disabled={!canSend}
-          >
-            {chatBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('chatDetail.send')}</Text>}
-          </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
       <Modal visible={attachmentPickerOpen} transparent animationType="slide" onRequestClose={onCloseAttachmentPicker}>
         <View style={styles.modalOverlay}>

@@ -254,6 +254,7 @@ import {
 } from './src/spaceShell';
 import { openInternetPanel } from './src/wifiOnboarding';
 import { initializeCloudApiBase } from './src/cloudApiBase';
+import { initializeSetupRuntimeConfig } from './src/devSetupConfig';
 import { buildInvitePreviewSummary, shouldLoadInvitePreview } from './src/invitePreview';
 import {
   buildActiveSpaceStorageKey,
@@ -284,7 +285,35 @@ if (!globalWithBuffer.Buffer) {
   globalWithBuffer.Buffer = Buffer;
 }
 
-initializeCloudApiBase(Constants.expoConfig?.extra?.cloudApiBase as string | undefined);
+function resolveConfiguredCloudApiBase(): string | undefined {
+  const fromExpoConfig = Constants.expoConfig?.extra?.cloudApiBase;
+  const fromExpoPublicEnv = process.env.EXPO_PUBLIC_CLOUD_API_BASE;
+  const fromLegacyManifest = (Constants as unknown as { manifest?: { extra?: { cloudApiBase?: string } } }).manifest?.extra?.cloudApiBase;
+
+  const raw = [fromExpoConfig, fromExpoPublicEnv, fromLegacyManifest].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  );
+
+  return raw?.trim();
+}
+
+initializeCloudApiBase(resolveConfiguredCloudApiBase());
+initializeSetupRuntimeConfig({
+  releaseBypassHotspotConnect:
+    Boolean(Constants.expoConfig?.extra?.releaseBypassHotspotConnect) ||
+    Boolean(
+      (Constants as unknown as {
+        manifest?: { extra?: { releaseBypassHotspotConnect?: boolean } };
+      }).manifest?.extra?.releaseBypassHotspotConnect,
+    ),
+  localSetupBaseUrl:
+    (Constants.expoConfig?.extra?.localSetupBaseUrl as string | undefined) ||
+    (
+      (Constants as unknown as {
+        manifest?: { extra?: { localSetupBaseUrl?: string } };
+      }).manifest?.extra?.localSetupBaseUrl as string | undefined
+    ),
+});
 
 const SPACE_TEMPLATE_OPTIONS: Array<Exclude<SpaceTemplate, 'private' | 'household'>> = [
   'partner',

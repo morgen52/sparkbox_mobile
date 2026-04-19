@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "site.morgen.sparkbox.mobile",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_WIFI_STATE",
@@ -50,7 +51,9 @@
       "expo-sharing"
     ],
     "extra": {
-      "cloudApiBase": "http://10.0.2.2:8010",
+      "cloudApiBase": "http://477fa511.r39.cpolar.top",
+      "releaseBypassHotspotConnect": true,
+      "localSetupBaseUrl": "http://300b9686.r39.cpolar.top",
       "eas": {
         "projectId": "aeabd579-045e-45bd-9ccd-fd00cdfc1369"
       }

@@ -184,6 +184,53 @@ npx expo run:android
 
 关闭旁路：重开终端或清空上述环境变量后再启动 APP。
 
+### 4.4 打包包跳过 Connect（远程测试开关）
+
+如果你需要让打包后的安装包也跳过 Connect 步骤，可以在构建时显式开启发布旁路开关。
+
+注意：该能力仅建议用于远程联调/测试包，不建议用于正式生产包。
+
+#### 方式 A：命令行构建（环境变量）
+
+构建前设置环境变量：
+
+```powershell
+$env:EXPO_PUBLIC_RELEASE_BYPASS_HOTSPOT_CONNECT="true"
+```
+
+可选：如果本地 setup API 不是默认热点地址 `http://192.168.4.1:8080`，可同时指定：
+
+```powershell
+$env:EXPO_PUBLIC_LOCAL_SETUP_BASE_URL="https://<your-setup-endpoint>"
+```
+
+然后正常打包（EAS 或本地 Gradle）即可。
+
+关闭该能力：删除 `EXPO_PUBLIC_RELEASE_BYPASS_HOTSPOT_CONNECT` 后重新打包。
+
+#### 方式 B：Android Studio Generate Signed APK/AAB（推荐）
+
+如果你是直接在 Android Studio 里点：
+
+- `Build` -> `Generate Signed App Bundle / APK`
+
+通常不会继承你终端里的环境变量。此时请直接改 `app.json` 的 `expo.extra`：
+
+```json
+{
+	"expo": {
+		"extra": {
+			"releaseBypassHotspotConnect": true,
+			"localSetupBaseUrl": "https://<your-setup-endpoint>"
+		}
+	}
+}
+```
+
+然后执行 Android Studio 打包流程即可。
+
+关闭该能力：把 `releaseBypassHotspotConnect` 改回 `false` 后重新打包。
+
 ---
 
 ## 5. 三端成功对接的最小配置清单
