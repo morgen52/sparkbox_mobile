@@ -1233,6 +1233,8 @@ export const zh: TranslationDict = {
   'household.noInvites': '当前没有有效邀请。',
   'household.inviteSuffix': '邀请',
   'household.inviteCode': '邀请码：',
+  'household.copyInviteCode': '复制邀请码',
+  'household.inviteCodeCopied': '已复制到剪切板。',
   'household.waitingCode': '等待新邀请码',
   'household.joinSpace': '将加入到',
   'household.revoke': '撤销',

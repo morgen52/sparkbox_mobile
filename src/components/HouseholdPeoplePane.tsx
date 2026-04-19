@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useT } from '../i18n';
 import { AnimatedPressable as Pressable } from './AnimatedPressable';
 import {
@@ -49,6 +50,17 @@ export function HouseholdPeoplePane({
   onRevokeInvite,
 }: HouseholdPeoplePaneProps) {
   const t = useT();
+  const [copiedInviteId, setCopiedInviteId] = React.useState<string | null>(null);
+
+  async function handleCopyInviteCode(invite: HouseholdInviteSummary): Promise<void> {
+    const code = String(invite.invite_code || '').trim();
+    if (!code) {
+      return;
+    }
+    await Clipboard.setStringAsync(code);
+    setCopiedInviteId(invite.id);
+  }
+
   return (
     <>
       <View style={styles.settingsCard}>
@@ -133,12 +145,22 @@ export function HouseholdPeoplePane({
                 <View style={styles.inlineActions}>
                   <Pressable
                     style={styles.secondaryButtonSmall}
+                    onPress={() => void handleCopyInviteCode(invite)}
+                    disabled={settingsBusy || !invite.invite_code}
+                  >
+                    <Text style={styles.secondaryButtonText}>{t('household.copyInviteCode')}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.secondaryButtonSmall}
                     onPress={() => onRevokeInvite(invite)}
                     disabled={settingsBusy}
                   >
                     <Text style={styles.secondaryButtonText}>{t('household.revoke')}</Text>
                   </Pressable>
                 </View>
+                {copiedInviteId === invite.id ? (
+                  <Text style={styles.cardCopy}>{t('household.inviteCodeCopied')}</Text>
+                ) : null}
               </View>
             ))
           )}

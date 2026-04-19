@@ -138,11 +138,12 @@ export function ChatDetailPane({
 }: ChatDetailPaneProps) {
   const t = useT();
   const { height: windowHeight } = useWindowDimensions();
-  const timelineMaxHeight = Math.max(240, Math.min(560, Math.floor(windowHeight * 0.52)));
+  const timelineBaseMaxHeight = Math.max(240, Math.min(560, Math.floor(windowHeight * 0.52)));
   const [markdownEnabled, setMarkdownEnabled] = React.useState(true);
   const [debugBlocks, setDebugBlocks] = React.useState(false);
   const [layoutInfo, setLayoutInfo] = React.useState<Record<string, { w: number; h: number }>>({});
   const [keyboardInset, setKeyboardInset] = React.useState(0);
+  const timelineScrollRef = React.useRef<ScrollView | null>(null);
 
   React.useEffect(() => {
     const onKeyboardShow = (event: KeyboardEvent) => {
@@ -163,12 +164,19 @@ export function ChatDetailPane({
     };
   }, []);
 
-  const composerLift =
+  const keyboardCompensation =
     keyboardInset > 0
+      ? Math.max(0, keyboardInset - (Platform.OS === 'ios' ? 96 : 72))
+      : 0;
+
+  const composerLift =
+    keyboardCompensation > 0
       ? {
-          marginBottom: Math.max(10, Math.min(28, Math.round(keyboardInset * 0.08))),
+          transform: [{ translateY: -keyboardCompensation }],
         }
       : null;
+
+  const timelineMaxHeight = Math.max(180, timelineBaseMaxHeight - Math.min(200, Math.round(keyboardCompensation * 0.55)));
 
   const keyboardVerticalOffset = Platform.OS === 'ios' ? 86 : 0;
   return (
@@ -279,6 +287,7 @@ export function ChatDetailPane({
           <Text style={styles.cardCopy}>{t('chatDetail.emptyState')}</Text>
         ) : (
           <ScrollView
+            ref={timelineScrollRef}
             style={[styles.chatTimelineViewport, { maxHeight: timelineMaxHeight }]}
             contentContainerStyle={styles.chatTimelineViewportContent}
             keyboardShouldPersistTaps="handled"
@@ -407,6 +416,11 @@ export function ChatDetailPane({
             style={[styles.input, styles.textArea]}
             value={chatDraft}
             onChangeText={onChangeDraft}
+            onFocus={() => {
+              requestAnimationFrame(() => {
+                timelineScrollRef.current?.scrollToEnd({ animated: true });
+              });
+            }}
             multiline
             numberOfLines={4}
             editable={!waitingForSpaces && onlineDeviceAvailable && !chatBusy && hasActiveChatSession}

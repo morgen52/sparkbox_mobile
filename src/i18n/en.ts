@@ -1233,6 +1233,8 @@ export const en: TranslationDict = {
   'household.noInvites': 'No active invitations.',
   'household.inviteSuffix': 'Invite',
   'household.inviteCode': 'Invite code: ',
+  'household.copyInviteCode': 'Copy code',
+  'household.inviteCodeCopied': 'Copied to clipboard.',
   'household.waitingCode': 'Waiting for new invite code',
   'household.joinSpace': 'Will join',
   'household.revoke': 'Revoke',
