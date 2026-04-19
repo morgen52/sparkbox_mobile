@@ -246,9 +246,17 @@ export const styles = StyleSheet.create({
   },
   cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  cardHeaderTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
+  },
+  cardHeaderActionFixed: {
+    flexShrink: 0,
   },
   summaryRefreshButton: {
     borderRadius: 12,
@@ -479,6 +487,26 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 54,
+  },
+  spaceUtilityPrimaryButton: {
+    borderRadius: 18,
+    backgroundColor: '#3f7d5f',
+    borderWidth: 1,
+    borderColor: '#2f7254',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    minHeight: 64,
+    gap: 4,
+  },
+  spaceUtilityPrimaryButtonTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  spaceUtilityPrimaryButtonCopy: {
+    color: '#e3f4ea',
+    fontSize: 13,
+    lineHeight: 18,
   },
   primaryButtonSmall: {
     borderRadius: 16,

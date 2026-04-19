@@ -27,6 +27,7 @@ import { ChatsPane } from './src/components/ChatsPane';
 import { HouseholdPeoplePane } from './src/components/HouseholdPeoplePane';
 import { LibraryPane } from './src/components/LibraryPane';
 import type { LibrarySectionKey } from './src/components/LibraryPane';
+import { MarkdownCardViewer } from './src/components/MarkdownCardViewer';
 import { UserToolsPane } from './src/components/UserToolsPane';
 import type { UserToolSection } from './src/components/UserToolsPane';
 import { OwnerSettingsPane } from './src/components/OwnerSettingsPane';
@@ -163,6 +164,10 @@ import {
   readRawWorkFile,
   promoteRawWorkFile,
   deleteRawWorkFile,
+  readWorkspaceFile,
+  updateWorkspaceUserMd,
+  listWorkspaceMemory,
+  readWorkspaceMemoryFile,
   readHouseholdFileText,
   listExternalStorageDevices,
   browseExternalStorage,
@@ -173,6 +178,7 @@ import {
   type ExternalStorageMount,
   type LinkPreview,
   type RawWorkFile,
+  type WorkspaceMemoryEntry,
 } from './src/householdApi';
 import {
   canChangeMemberRole,
@@ -440,8 +446,23 @@ function App() {
   // here so cross-surface resets happen in one place.
   const [shellTab, setShellTab] = useState<ShellTab>('chats');
   const [spaceHomeMode, setSpaceHomeMode] = useState<'list' | 'inside'>('list');
-  const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings' | 'user-tools'>('spaces');
+  const [spaceListViewMode, setSpaceListViewMode] = useState<'spaces' | 'global-settings' | 'user-tools' | 'agent-management'>('spaces');
   const [userToolsSection, setUserToolsSection] = useState<UserToolSection>('overview');
+  const [agentManagerSection, setAgentManagerSection] = useState<'overview' | 'user-md' | 'memory' | 'wiki'>('overview');
+  const [agentUserMdMode, setAgentUserMdMode] = useState<'preview' | 'edit'>('preview');
+  const [agentManagerBusy, setAgentManagerBusy] = useState(false);
+  const [agentManagerError, setAgentManagerError] = useState('');
+  const [agentManagerNotice, setAgentManagerNotice] = useState('');
+  const [agentUserMdContent, setAgentUserMdContent] = useState('');
+  const [agentUserMdDraft, setAgentUserMdDraft] = useState('');
+  const [agentUserMdUpdatedAt, setAgentUserMdUpdatedAt] = useState('');
+  const [agentWikiContent, setAgentWikiContent] = useState('');
+  const [agentWikiUpdatedAt, setAgentWikiUpdatedAt] = useState('');
+  const [agentMemoryEntries, setAgentMemoryEntries] = useState<WorkspaceMemoryEntry[]>([]);
+  const [agentMemoryCurrentDir, setAgentMemoryCurrentDir] = useState('');
+  const [agentMemoryActivePath, setAgentMemoryActivePath] = useState('');
+  const [agentMemoryActiveContent, setAgentMemoryActiveContent] = useState('');
+  const [agentMemoryActiveUpdatedAt, setAgentMemoryActiveUpdatedAt] = useState('');
   const [workFiles, setWorkFiles] = useState<RawWorkFile[]>([]);
   const [workFileBusy, setWorkFileBusy] = useState(false);
   const [workFileContent, setWorkFileContent] = useState('');
@@ -2973,6 +2994,25 @@ function App() {
           setSpaceListViewMode('spaces');
           return true;
         }
+        if (spaceListViewMode === 'agent-management') {
+          if (agentManagerSection === 'memory' && agentMemoryActivePath) {
+            closeAgentMemoryFile();
+            return true;
+          }
+          if (agentManagerSection === 'memory' && agentMemoryCurrentDir) {
+            const parent = agentMemoryCurrentDir.includes('/')
+              ? agentMemoryCurrentDir.slice(0, agentMemoryCurrentDir.lastIndexOf('/'))
+              : '';
+            void refreshAgentMemoryList(parent || undefined);
+            return true;
+          }
+          if (agentManagerSection !== 'overview') {
+            setAgentManagerSection('overview');
+            return true;
+          }
+          setSpaceListViewMode('spaces');
+          return true;
+        }
         // Space list root: allow Android to exit.
         return false;
       }
@@ -3047,6 +3087,9 @@ function App() {
     spaceCreatorOpen,
     spaceHomeMode,
     spaceListViewMode,
+    agentManagerSection,
+    agentMemoryCurrentDir,
+    agentMemoryActivePath,
     spaceMembersEditorOpen,
     taskEditorOpen,
     taskHistoryOpen,
@@ -3892,6 +3935,116 @@ function App() {
     }
   }
 
+  // ── Agent 管理 ────────────────────────────────────────────
+  async function refreshAgentUserMd(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    setAgentManagerBusy(true);
+    setAgentManagerError('');
+    setAgentManagerNotice('');
+    try {
+      const file = await readWorkspaceFile(session.token, 'USER.md');
+      setAgentUserMdContent(file.content || '');
+      setAgentUserMdDraft(file.content || '');
+      setAgentUserMdUpdatedAt(file.updatedAt || '');
+    } catch (error) {
+      setAgentManagerError(error instanceof Error ? error.message : t('agentManager.error.loadUserMd'));
+    } finally {
+      setAgentManagerBusy(false);
+    }
+  }
+
+  async function saveAgentUserMd(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    setAgentManagerBusy(true);
+    setAgentManagerError('');
+    setAgentManagerNotice('');
+    try {
+      const result = await updateWorkspaceUserMd(session.token, agentUserMdDraft);
+      if (result.ok) {
+        setAgentUserMdContent(agentUserMdDraft);
+        setAgentUserMdUpdatedAt(result.updatedAt || '');
+        setAgentManagerNotice(t('agentManager.userMd.saved'));
+      } else {
+        setAgentManagerError(t('agentManager.error.saveUserMd'));
+      }
+    } catch (error) {
+      setAgentManagerError(error instanceof Error ? error.message : t('agentManager.error.saveUserMd'));
+    } finally {
+      setAgentManagerBusy(false);
+    }
+  }
+
+  async function refreshAgentWikiMd(): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    setAgentManagerBusy(true);
+    setAgentManagerError('');
+    setAgentManagerNotice('');
+    try {
+      const file = await readWorkspaceFile(session.token, 'WIKI.md');
+      setAgentWikiContent(file.content || '');
+      setAgentWikiUpdatedAt(file.updatedAt || '');
+    } catch (error) {
+      setAgentManagerError(error instanceof Error ? error.message : t('agentManager.error.loadWikiMd'));
+    } finally {
+      setAgentManagerBusy(false);
+    }
+  }
+
+  async function refreshAgentMemoryList(subpath?: string): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    setAgentManagerBusy(true);
+    setAgentManagerError('');
+    setAgentManagerNotice('');
+    try {
+      const nextDir = (subpath || '').trim();
+      const entries = await listWorkspaceMemory(session.token, nextDir || undefined);
+      setAgentMemoryCurrentDir(nextDir);
+      setAgentMemoryEntries(entries);
+    } catch (error) {
+      setAgentManagerError(error instanceof Error ? error.message : t('agentManager.error.loadMemory'));
+    } finally {
+      setAgentManagerBusy(false);
+    }
+  }
+
+  async function openAgentMemoryFile(path: string, options?: { absolutePath?: boolean }): Promise<void> {
+    if (!session?.token) {
+      return;
+    }
+    setAgentManagerBusy(true);
+    setAgentManagerError('');
+    setAgentManagerNotice('');
+    try {
+      let result: { path: string; content: string; updatedAt: string };
+      if (options?.absolutePath) {
+        result = await readWorkspaceFile(session.token, path);
+      } else {
+        result = await readWorkspaceMemoryFile(session.token, path);
+      }
+      setAgentMemoryActivePath(result.path || path);
+      setAgentMemoryActiveContent(result.content || '');
+      setAgentMemoryActiveUpdatedAt(result.updatedAt || '');
+    } catch (error) {
+      setAgentManagerError(error instanceof Error ? error.message : t('agentManager.error.readMemoryFile'));
+    } finally {
+      setAgentManagerBusy(false);
+    }
+  }
+
+  function closeAgentMemoryFile(): void {
+    setAgentMemoryActivePath('');
+    setAgentMemoryActiveContent('');
+    setAgentMemoryActiveUpdatedAt('');
+  }
+
   // ── Raw browser (per-space raw/ file explorer) ─────────────
   async function refreshRawBrowser(subpath?: string): Promise<void> {
     if (!session?.token || !activeSpaceId) return;
@@ -4105,6 +4258,32 @@ function App() {
     wikiPreviewCacheLoadedAt,
   ]);
 
+  useEffect(() => {
+    if (spaceListViewMode !== 'agent-management') {
+      return;
+    }
+    if (!session?.token) {
+      return;
+    }
+    if (agentManagerSection === 'user-md') {
+      void refreshAgentUserMd();
+      return;
+    }
+    if (agentManagerSection === 'wiki') {
+      void refreshAgentWikiMd();
+      return;
+    }
+    if (agentManagerSection === 'memory' && !agentMemoryActivePath) {
+      void refreshAgentMemoryList(agentMemoryCurrentDir || undefined);
+    }
+  }, [
+    spaceListViewMode,
+    agentManagerSection,
+    session?.token,
+    agentMemoryCurrentDir,
+    agentMemoryActivePath,
+  ]);
+
   // Auto-load work files when entering workspace_manager section
   useEffect(() => {
     if (spaceListViewMode !== 'user-tools' || userToolsSection !== 'workspace_manager') {
@@ -4243,6 +4422,8 @@ function App() {
                   } else {
                     setSpaceListViewMode('spaces');
                     setUserToolsSection('overview');
+                    setAgentManagerSection('overview');
+                    closeAgentMemoryFile();
                   }
                 }}
               >
@@ -4296,27 +4477,255 @@ function App() {
                 {spacesBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
                 {spacesError ? <Text style={styles.errorText}>{spacesError}</Text> : null}
                 <Pressable
-                  style={styles.chatTreeFolder}
+                  style={styles.spaceUtilityPrimaryButton}
                   pressFeedback="none"
                   onPress={() => {
                     setSpaceListViewMode('user-tools');
                     setUserToolsSection('overview');
                   }}
                 >
-                  <View style={styles.chatTreeFolderHeader}>
-                    <View style={styles.chatTreeFolderHeaderBody}>
-                      <Text style={styles.chatTreeFolderTitle}>{t('userTools.title')}</Text>
-                      <Text style={styles.chatTreeFolderMeta}>{t('userTools.subtitle')}</Text>
-                    </View>
-                    <View style={styles.spaceListCardRightRail}>
-                      <Text style={styles.spaceTemplateBadge}>{t('userTools.badge')}</Text>
-                      <Text style={styles.chatTreeFolderChevron}>›</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.spaceUtilityPrimaryButtonTitle}>{t('userTools.title')}</Text>
+                  <Text style={styles.spaceUtilityPrimaryButtonCopy}>{t('userTools.subtitle')}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.spaceUtilityPrimaryButton}
+                  pressFeedback="none"
+                  onPress={() => {
+                    setSpaceListViewMode('agent-management');
+                    setAgentManagerSection('overview');
+                    closeAgentMemoryFile();
+                  }}
+                >
+                  <Text style={styles.spaceUtilityPrimaryButtonTitle}>{t('agentManager.title')}</Text>
+                  <Text style={styles.spaceUtilityPrimaryButtonCopy}>{t('agentManager.subtitle')}</Text>
                 </Pressable>
                 <Pressable style={styles.secondaryButton} onPress={() => void logout()}>
                   <Text style={styles.secondaryButtonText}>{t('auth.logout')}</Text>
                 </Pressable>
+              </ScrollView>
+            ) : spaceListViewMode === 'agent-management' ? (
+              <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>
+                {agentManagerSection === 'overview' ? (
+                  <View style={styles.settingsCard}>
+                    <Text style={styles.cardTitle}>{t('agentManager.title')}</Text>
+                    <Text style={styles.cardCopy}>{t('agentManager.overviewCopy')}</Text>
+                    <View style={styles.libraryGrid}>
+                      <Pressable
+                        style={styles.librarySectionCard}
+                        onPress={() => {
+                          setAgentManagerSection('user-md');
+                          setAgentUserMdMode('preview');
+                        }}
+                      >
+                        <Text style={styles.librarySectionTitle}>{t('agentManager.userMd.title')}</Text>
+                        <Text style={styles.librarySectionCopy}>{t('agentManager.userMd.copy')}</Text>
+                      </Pressable>
+                      <Pressable style={styles.librarySectionCard} onPress={() => setAgentManagerSection('memory')}>
+                        <Text style={styles.librarySectionTitle}>{t('agentManager.memory.title')}</Text>
+                        <Text style={styles.librarySectionCopy}>{t('agentManager.memory.copy')}</Text>
+                      </Pressable>
+                      <Pressable style={styles.librarySectionCard} onPress={() => setAgentManagerSection('wiki')}>
+                        <Text style={styles.librarySectionTitle}>{t('agentManager.wiki.title')}</Text>
+                        <Text style={styles.librarySectionCopy}>{t('agentManager.wiki.copy')}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+
+                {agentManagerSection === 'user-md' ? (
+                  <>
+                    <View style={styles.settingsCard}>
+                      <View style={styles.cardHeaderRow}>
+                        <Text style={styles.cardTitle}>{t('agentManager.userMd.title')}</Text>
+                        <Pressable style={styles.summaryRefreshButton} onPress={() => setAgentManagerSection('overview')}>
+                          <Text style={styles.summaryRefreshButtonText}>{t('common.back')}</Text>
+                        </Pressable>
+                      </View>
+                      <Text style={styles.cardCopy}>{t('agentManager.userMd.editHint')}</Text>
+                      <View style={styles.scopeRow}>
+                        <Pressable
+                          style={[styles.scopePill, agentUserMdMode === 'preview' ? styles.scopePillActive : null]}
+                          onPress={() => setAgentUserMdMode('preview')}
+                        >
+                          <Text
+                            style={[
+                              styles.scopePillLabel,
+                              agentUserMdMode === 'preview' ? styles.scopePillLabelActive : null,
+                            ]}
+                          >
+                            {t('agentManager.userMd.mode.preview')}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.scopePill, agentUserMdMode === 'edit' ? styles.scopePillActive : null]}
+                          onPress={() => setAgentUserMdMode('edit')}
+                        >
+                          <Text
+                            style={[
+                              styles.scopePillLabel,
+                              agentUserMdMode === 'edit' ? styles.scopePillLabelActive : null,
+                            ]}
+                          >
+                            {t('agentManager.userMd.mode.edit')}
+                          </Text>
+                        </Pressable>
+                      </View>
+                      {agentUserMdUpdatedAt ? (
+                        <Text style={styles.chatTreeFolderMeta}>{t('agentManager.lastUpdated', { value: describeFileTimestamp(agentUserMdUpdatedAt) })}</Text>
+                      ) : null}
+                      {agentUserMdMode === 'preview' ? (
+                        agentUserMdContent ? (
+                          <MarkdownCardViewer markdown={agentUserMdContent} styles={styles} />
+                        ) : (
+                          <Text style={styles.cardCopy}>{t('agentManager.userMd.empty')}</Text>
+                        )
+                      ) : (
+                        <>
+                          <TextInput
+                            style={[styles.input, styles.textArea, { minHeight: 180 }]}
+                            multiline
+                            value={agentUserMdDraft}
+                            onChangeText={setAgentUserMdDraft}
+                            placeholder={t('agentManager.userMd.placeholder')}
+                          />
+                          <View style={styles.inlineActions}>
+                            <Pressable style={styles.primaryButtonSmall} onPress={() => void saveAgentUserMd()} disabled={agentManagerBusy}>
+                              <Text style={styles.primaryButtonText}>{t('common.save')}</Text>
+                            </Pressable>
+                            <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshAgentUserMd()} disabled={agentManagerBusy}>
+                              <Text style={styles.secondaryButtonText}>{t('common.refresh')}</Text>
+                            </Pressable>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                    {agentManagerError ? <Text style={styles.errorText}>{agentManagerError}</Text> : null}
+                    {agentManagerNotice ? <Text style={styles.noticeText}>{agentManagerNotice}</Text> : null}
+                    {agentManagerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  </>
+                ) : null}
+
+                {agentManagerSection === 'memory' ? (
+                  <>
+                    <View style={styles.settingsCard}>
+                      <View style={styles.cardHeaderRow}>
+                        <View style={styles.cardHeaderTitleWrap}>
+                          <Text style={styles.cardTitle}>{t('agentManager.memory.title')}</Text>
+                        </View>
+                        <Pressable
+                          style={[styles.summaryRefreshButton, styles.cardHeaderActionFixed]}
+                          onPress={() => setAgentManagerSection('overview')}
+                        >
+                          <Text style={styles.summaryRefreshButtonText}>{t('common.back')}</Text>
+                        </Pressable>
+                      </View>
+                      <Text style={styles.cardCopy}>{t('agentManager.memory.readOnlyHint')}</Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable style={styles.secondaryButtonSmall} onPress={() => void openAgentMemoryFile('MEMORY.md', { absolutePath: true })}>
+                          <Text style={styles.secondaryButtonText}>{t('agentManager.memory.memoryIndex')}</Text>
+                        </Pressable>
+                        <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshAgentMemoryList(agentMemoryCurrentDir || undefined)}>
+                          <Text style={styles.secondaryButtonText}>{t('common.refresh')}</Text>
+                        </Pressable>
+                        {agentMemoryCurrentDir ? (
+                          <Pressable
+                            style={styles.secondaryButtonSmall}
+                            onPress={() => {
+                              const parent = agentMemoryCurrentDir.includes('/')
+                                ? agentMemoryCurrentDir.slice(0, agentMemoryCurrentDir.lastIndexOf('/'))
+                                : '';
+                              void refreshAgentMemoryList(parent || undefined);
+                            }}
+                          >
+                            <Text style={styles.secondaryButtonText}>{t('library.rawBrowser.goUp')}</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                      <Text style={styles.chatTreeFolderMeta}>
+                        {t('agentManager.memory.currentDir', {
+                          value: agentMemoryCurrentDir ? `memory/${agentMemoryCurrentDir}` : 'memory/',
+                        })}
+                      </Text>
+
+                      {agentMemoryActivePath ? (
+                        <>
+                          <View style={styles.inlineActions}>
+                            <Pressable style={styles.secondaryButtonSmall} onPress={closeAgentMemoryFile}>
+                              <Text style={styles.secondaryButtonText}>{t('library.rawBrowser.backToList')}</Text>
+                            </Pressable>
+                          </View>
+                          {agentMemoryActiveUpdatedAt ? (
+                            <Text style={styles.chatTreeFolderMeta}>{t('agentManager.lastUpdated', { value: describeFileTimestamp(agentMemoryActiveUpdatedAt) })}</Text>
+                          ) : null}
+                          <MarkdownCardViewer markdown={agentMemoryActiveContent || ''} styles={styles} />
+                        </>
+                      ) : (
+                        <>
+                          {agentMemoryEntries.length === 0 && !agentManagerBusy ? (
+                            <Text style={styles.cardCopy}>{t('agentManager.memory.empty')}</Text>
+                          ) : null}
+                          {agentMemoryEntries
+                            .filter((entry) => entry.name.toLowerCase() !== 'brain.db')
+                            .map((entry) => (
+                            <Pressable
+                              key={entry.path || entry.name}
+                              style={[styles.libraryExplorerRow, entry.isDir ? styles.libraryExplorerRowFolder : null]}
+                              onPress={() => {
+                                if (entry.isDir) {
+                                  void refreshAgentMemoryList(entry.path);
+                                } else {
+                                  void openAgentMemoryFile(entry.path);
+                                }
+                              }}
+                            >
+                              <View style={styles.libraryExplorerRowMain}>
+                                <Text style={styles.libraryExplorerIcon}>{entry.isDir ? 'DIR' : 'FILE'}</Text>
+                                <View style={styles.libraryExplorerMeta}>
+                                  <Text style={styles.libraryEntryTitle}>{entry.name}</Text>
+                                  <Text style={styles.libraryEntryCopy}>{entry.path}</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.chatTreeFolderChevron}>›</Text>
+                            </Pressable>
+                          ))}
+                        </>
+                      )}
+                    </View>
+                    {agentManagerError ? <Text style={styles.errorText}>{agentManagerError}</Text> : null}
+                    {agentManagerNotice ? <Text style={styles.noticeText}>{agentManagerNotice}</Text> : null}
+                    {agentManagerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  </>
+                ) : null}
+
+                {agentManagerSection === 'wiki' ? (
+                  <>
+                    <View style={styles.settingsCard}>
+                      <View style={styles.cardHeaderRow}>
+                        <Text style={styles.cardTitle}>{t('agentManager.wiki.title')}</Text>
+                        <Pressable style={styles.summaryRefreshButton} onPress={() => setAgentManagerSection('overview')}>
+                          <Text style={styles.summaryRefreshButtonText}>{t('common.back')}</Text>
+                        </Pressable>
+                      </View>
+                      <Text style={styles.cardCopy}>{t('agentManager.wiki.readOnlyHint')}</Text>
+                      <View style={styles.inlineActions}>
+                        <Pressable style={styles.secondaryButtonSmall} onPress={() => void refreshAgentWikiMd()} disabled={agentManagerBusy}>
+                          <Text style={styles.secondaryButtonText}>{t('common.refresh')}</Text>
+                        </Pressable>
+                      </View>
+                      {agentWikiUpdatedAt ? (
+                        <Text style={styles.chatTreeFolderMeta}>{t('agentManager.lastUpdated', { value: describeFileTimestamp(agentWikiUpdatedAt) })}</Text>
+                      ) : null}
+                      {agentWikiContent ? (
+                        <MarkdownCardViewer markdown={agentWikiContent} styles={styles} />
+                      ) : (
+                        <Text style={styles.cardCopy}>{t('agentManager.wiki.empty')}</Text>
+                      )}
+                    </View>
+                    {agentManagerError ? <Text style={styles.errorText}>{agentManagerError}</Text> : null}
+                    {agentManagerNotice ? <Text style={styles.noticeText}>{agentManagerNotice}</Text> : null}
+                    {agentManagerBusy ? <ActivityIndicator color="#0b6e4f" /> : null}
+                  </>
+                ) : null}
               </ScrollView>
             ) : spaceListViewMode === 'user-tools' ? (
               <ScrollView keyboardShouldPersistTaps="handled" removeClippedSubviews={false} contentContainerStyle={styles.chatContent}>

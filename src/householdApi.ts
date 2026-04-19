@@ -591,6 +591,20 @@ export type RawPromoteResult = {
   rawPath: string;
 };
 
+export type WorkspaceFileReadResult = {
+  path: string;
+  content: string;
+  updatedAt: string;
+};
+
+export type WorkspaceMemoryEntry = {
+  path: string;
+  name: string;
+  isDir: boolean;
+  size: number;
+  modifiedAt: string;
+};
+
 export type ExternalStorageMount = {
   id: string;
   label: string;
@@ -2391,6 +2405,63 @@ export async function promoteRawWorkFile(
     filename: String(response.filename ?? ''),
     fileId: String(response.file_id ?? ''),
     rawPath: String(response.raw_path ?? ''),
+  };
+}
+
+export async function readWorkspaceFile(token: string, path: string): Promise<WorkspaceFileReadResult> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/raw/workspace/file?path=${encodeURIComponent(path)}`,
+    { token },
+  );
+  return {
+    path: String(response.path ?? path),
+    content: String(response.content ?? ''),
+    updatedAt: String(response.updated_at ?? ''),
+  };
+}
+
+export async function updateWorkspaceUserMd(token: string, content: string): Promise<{ ok: boolean; path: string; updatedAt: string }> {
+  const response = await cloudJson<Record<string, unknown>>('/api/raw/workspace/file', {
+    method: 'PUT',
+    token,
+    body: {
+      path: 'USER.md',
+      content,
+    },
+  });
+  return {
+    ok: Boolean(response.ok),
+    path: String(response.path ?? 'USER.md'),
+    updatedAt: String(response.updated_at ?? ''),
+  };
+}
+
+export async function listWorkspaceMemory(token: string, path?: string): Promise<WorkspaceMemoryEntry[]> {
+  const url = path
+    ? `/api/raw/workspace/memory?path=${encodeURIComponent(path)}`
+    : '/api/raw/workspace/memory';
+  const response = await cloudJson<Record<string, unknown>>(url, { token });
+  if (!Array.isArray(response.files)) {
+    return [];
+  }
+  return (response.files as Array<Record<string, unknown>>).map((item) => ({
+    path: String(item.path ?? ''),
+    name: String(item.name ?? ''),
+    isDir: Boolean(item.is_dir),
+    size: Number(item.size ?? 0),
+    modifiedAt: String(item.modified_at ?? ''),
+  }));
+}
+
+export async function readWorkspaceMemoryFile(token: string, path: string): Promise<WorkspaceFileReadResult> {
+  const response = await cloudJson<Record<string, unknown>>(
+    `/api/raw/workspace/memory/read?path=${encodeURIComponent(path)}`,
+    { token },
+  );
+  return {
+    path: String(response.path ?? path),
+    content: String(response.content ?? ''),
+    updatedAt: String(response.updated_at ?? ''),
   };
 }
 
