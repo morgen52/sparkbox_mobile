@@ -4688,8 +4688,8 @@ function App() {
                     waitingForSpaces
                       ? 'Loading your spaces...'
                       : activeChatSession
-                        ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible)
-                        : describeActiveChatEmptyStateCopy(activeSpaceCopyContext),
+                        ? describeActiveChatSessionCopy(activeChatSession.name, activeSpaceCopyContext, sharedChatIsVisible, t)
+                        : describeActiveChatEmptyStateCopy(activeSpaceCopyContext, t),
                   participantSummary:
                     sharedChatIsVisible && activeSharedChatParticipantSummary && !waitingForSpaces
                       ? activeSharedChatParticipantSummary
@@ -4710,6 +4710,7 @@ function App() {
                           activeSpaceCopyContext,
                           Boolean(activeChatSession),
                           sharedChatIsVisible,
+                          t,
                         ),
                   chatDraft,
                   chatAttachmentItems,

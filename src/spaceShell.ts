@@ -415,16 +415,29 @@ export function describeActiveChatSessionCopy(
   activeChatSessionName: string,
   spaceDetail: SpaceCopyContext,
   sharedChatIsVisible: boolean,
+  t?: TranslateFn,
 ): string {
   if (sharedChatIsVisible && spaceDetail) {
+    if (t) {
+      return t('space.activeChat.groupCopy', { spaceName: spaceDetail.name });
+    }
     return `${spaceDetail.name} 当前采用群聊协作，Sparkbox 会帮助对话持续推进。`;
+  }
+  if (t) {
+    return `${t('space.activeChat.focusCopy')}${activeChatSessionName}。`;
   }
   return `当前聊天聚焦：${activeChatSessionName}。`;
 }
 
-export function describeActiveChatEmptyStateCopy(spaceDetail: SpaceCopyContext): string {
+export function describeActiveChatEmptyStateCopy(spaceDetail: SpaceCopyContext, t?: TranslateFn): string {
   if (spaceDetail?.kind === 'shared') {
+    if (t) {
+      return t('space.activeChat.sharedEmpty');
+    }
     return '请选择群聊或共享聊天，方便大家在同一线程沟通。';
+  }
+  if (t) {
+    return t('space.activeChat.privateEmpty');
   }
   return '请选择或创建话题，让对话更聚焦。';
 }
@@ -433,12 +446,22 @@ export function describeChatComposerPlaceholder(
   spaceDetail: SpaceCopyContext,
   hasActiveChatSession: boolean,
   sharedChatIsVisible: boolean,
+  t?: TranslateFn,
 ): string {
   if (hasActiveChatSession) {
     if (sharedChatIsVisible) {
+      if (t) {
+        return t('space.composer.groupChat');
+      }
       return '发送到群聊';
     }
+    if (t) {
+      return spaceDetail?.kind === 'shared' ? t('space.composer.sharedChat') : t('space.composer.privateTopic');
+    }
     return spaceDetail?.kind === 'shared' ? '在此聊天中提问' : '围绕此话题提问';
+  }
+  if (t) {
+    return spaceDetail?.kind === 'shared' ? t('space.composer.selectChat') : t('space.composer.selectTopic');
   }
   return spaceDetail?.kind === 'shared' ? '请先选择聊天' : '请先选择话题';
 }
