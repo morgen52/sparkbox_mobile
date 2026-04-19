@@ -341,9 +341,14 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderSectionHeader(title: string, copy: string): React.ReactNode {
     return (
       <View style={styles.settingsCard}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Pressable style={styles.summaryRefreshButton} onPress={() => onChangeActiveSection('overview')}>
+        <View style={[styles.cardHeaderRow, { alignItems: 'flex-start' }]}>
+          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+            <Text style={styles.cardTitle}>{title}</Text>
+          </View>
+          <Pressable
+            style={[styles.summaryRefreshButton, { flexShrink: 0, alignSelf: 'flex-start' }]}
+            onPress={() => onChangeActiveSection('overview')}
+          >
             <Text style={styles.summaryRefreshButtonText}>{t('library.backToOverview')}</Text>
           </Pressable>
         </View>
@@ -518,9 +523,14 @@ export function LibraryPane(props: LibraryPaneProps) {
   function renderWiki(): React.ReactNode {
     return (
       <View style={styles.settingsCard}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>{t('library.wikiBySpace')}</Text>
-          <Pressable style={styles.summaryRefreshButton} onPress={() => onChangeActiveSection('overview')}>
+        <View style={[styles.cardHeaderRow, { alignItems: 'flex-start' }]}>
+          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+            <Text style={styles.cardTitle}>{t('library.wikiBySpace')}</Text>
+          </View>
+          <Pressable
+            style={[styles.summaryRefreshButton, { flexShrink: 0, alignSelf: 'flex-start' }]}
+            onPress={() => onChangeActiveSection('overview')}
+          >
             <Text style={styles.summaryRefreshButtonText}>{t('library.backToOverview')}</Text>
           </Pressable>
         </View>

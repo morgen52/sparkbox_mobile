@@ -39,8 +39,19 @@ export function formatChatSyncDateTime(value: number): string {
   }).format(parsed);
 }
 
-export function describeSpaceSessionCountCopy(sessionCount: number | undefined, memberCount: number): string {
+export function describeSpaceSessionCountCopy(
+  sessionCount: number | undefined,
+  memberCount: number,
+  t?: (key: string, params?: Record<string, string | number>) => string,
+): string {
   const normalizedCount = typeof sessionCount === 'number' ? Math.max(0, sessionCount) : null;
+  if (t) {
+    const sessionsLabel =
+      normalizedCount === null
+        ? t('appRuntime.sessionsLoading')
+        : `${normalizedCount}${t('appRuntime.sessionsSuffix')}`;
+    return `${sessionsLabel} · ${memberCount}${t('spaceShell.spaceCounts.member')}`;
+  }
   const sessionsLabel = normalizedCount === null ? '会话数加载中' : `${normalizedCount}个会话`;
   return `${sessionsLabel} · ${memberCount}人`;
 }

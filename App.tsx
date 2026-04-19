@@ -397,7 +397,7 @@ function SwipeToDeleteSpaceRow({
             <View style={styles.chatTreeFolderHeaderBody}>
               <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
               <Text style={styles.chatTreeFolderMeta}>
-                {describeSpaceSessionCountCopy(space.threadCount, space.memberCount)}
+                {describeSpaceSessionCountCopy(space.threadCount, space.memberCount, t)}
               </Text>
             </View>
             <View style={styles.spaceListCardRightRail}>
@@ -4276,7 +4276,7 @@ function App() {
                         <View style={styles.chatTreeFolderHeaderBody}>
                           <Text style={styles.chatTreeFolderTitle}>{space.name}</Text>
                           <Text style={styles.chatTreeFolderMeta}>
-                            {describeSpaceSessionCountCopy(spaceSessionCounts[space.id] ?? space.threadCount, space.memberCount)}
+                            {describeSpaceSessionCountCopy(spaceSessionCounts[space.id] ?? space.threadCount, space.memberCount, t)}
                           </Text>
                         </View>
                         <View style={styles.spaceListCardRightRail}>
@@ -4619,6 +4619,7 @@ function App() {
                     countsCopy: describeSpaceSessionCountCopy(
                       spaceSessionCounts[space.id] ?? space.threadCount,
                       space.memberCount,
+                      t,
                     ),
                     active: space.id === activeSpaceId,
                   })),
