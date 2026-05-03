@@ -57,7 +57,7 @@ mkdir d:\temp\usb-demo\photos
 在**启动 Jetson 服务的同一个 PowerShell 终端**中执行：
 
 ```powershell
-$env:EXTERNAL_IMPORT_ROOTS="d:\temp\usb-demo"
+$env:EXTERNAL_IMPORT_ROOTS="d:\oldfiles"
 ```
 
 如果要一次模拟多个外接设备，可以用分号分隔多个目录：
